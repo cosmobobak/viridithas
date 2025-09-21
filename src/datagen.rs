@@ -14,31 +14,31 @@ use std::{
     ops::ControlFlow,
     path::{Path, PathBuf},
     sync::{
-        Mutex,
         atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+        Mutex,
     },
     time::Instant,
 };
 
-use anyhow::{Context, anyhow, bail};
+use anyhow::{anyhow, bail, Context};
 use bulletformat::ChessBoard;
 use dataformat::Filter;
 use rand::{rngs::ThreadRng, seq::IndexedRandom};
 
 use crate::{
     chess::{
-        CHESS960,
         board::{Board, DrawType, GameOutcome, WinType},
         chessmove::Move,
         piece::{Colour, PieceType},
         types::Square,
+        CHESS960,
     },
     datagen::dataformat::Game,
     evaluation::{is_game_theoretic_score, is_mate_score},
     nnue::network::NNUEParams,
     search::{search_position, static_exchange_eval},
     tablebases::{self, probe::WDL},
-    threadlocal::{ThreadData, make_thread_data},
+    threadlocal::{make_thread_data, ThreadData},
     threadpool,
     timemgmt::{SearchLimit, TimeManager},
     transpositiontable::TT,
@@ -511,10 +511,10 @@ fn generate_on_thread<'a>(
             if let Some(outcome) = thread_data.board.outcome() {
                 break outcome;
             }
-            if options.tablebases_path.is_some()
-                && let Some(wdl) = tablebases::probe::get_wdl_white(&thread_data.board)
-            {
-                break wdl.into();
+            if options.tablebases_path.is_some() {
+                if let Some(wdl) = tablebases::probe::get_wdl_white(&thread_data.board) {
+                    break wdl.into();
+                }
             }
 
             tt.increase_age();
@@ -827,9 +827,9 @@ pub fn run_splat(
                 |chess_board| {
                     // SAFETY: ChessBoard is composed entirely of integer types, which are safe to transmute into bytes.
                     let bytes = unsafe { std::mem::transmute::<ChessBoard, [u8; 32]>(chess_board) };
-                    output_buffer.write_all(&bytes).with_context(
-                        || "Failed to write bulletformat::ChessBoard into buffered writer.",
-                    )
+                    output_buffer.write_all(&bytes).with_context(|| {
+                        "Failed to write bulletformat::ChessBoard into buffered writer."
+                    })
                 },
                 &filter,
             )?;
@@ -842,9 +842,7 @@ pub fn run_splat(
                 .flush()
                 .with_context(|| "Failed to flush stdout.")?;
         }
-        if let Some(limit) = limit
-            && game_count >= limit
-        {
+        if limit.is_some_and(|limit| game_count >= limit) {
             break;
         }
     }
@@ -942,9 +940,7 @@ pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) -> anyhow::R
 
         move_buffer = game.into_move_buffer();
         game_count += 1;
-        if let Some(limit) = limit
-            && game_count >= limit
-        {
+        if limit.is_some_and(|limit| game_count >= limit) {
             break;
         }
     }
@@ -1183,7 +1179,11 @@ pub fn dataset_count(path: &Path) -> anyhow::Result<()> {
                 dir.filter_map(|entry| {
                     entry.ok().and_then(|entry| {
                         let path = entry.path();
-                        if path.is_file() { Some(path) } else { None }
+                        if path.is_file() {
+                            Some(path)
+                        } else {
+                            None
+                        }
                     })
                 })
                 .collect()

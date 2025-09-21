@@ -1720,16 +1720,18 @@ impl Board {
     }
 
     #[cfg(any(feature = "datagen", test))]
-    pub fn outcome(&self) -> GameOutcome {
+    pub fn outcome(&self) -> Option<GameOutcome> {
+        use DrawType::{FiftyMoves, InsufficientMaterial, Repetition, Stalemate};
+        use GameOutcome::{BlackWin, Draw, WhiteWin};
         if self.state.fifty_move_counter >= 100 {
-            return GameOutcome::Draw(DrawType::FiftyMoves);
+            return Some(Draw(FiftyMoves));
         }
         let mut reps = 1;
         for undo in self.history.iter().rev().skip(1).step_by(2) {
             if undo.keys.zobrist == self.state.keys.zobrist {
                 reps += 1;
                 if reps == 3 {
-                    return GameOutcome::Draw(DrawType::Repetition);
+                    return Some(Draw(Repetition));
                 }
             }
             // optimisation: if the fifty move counter was zeroed, then any prior positions will not be repetitions.
@@ -1738,7 +1740,7 @@ impl Board {
             }
         }
         if self.is_insufficient_material() {
-            return GameOutcome::Draw(DrawType::InsufficientMaterial);
+            return Some(Draw(InsufficientMaterial));
         }
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
@@ -1750,14 +1752,14 @@ impl Board {
             }
         }
         if legal_moves {
-            GameOutcome::Ongoing
+            None
         } else if self.in_check() {
             match self.side {
-                Colour::White => GameOutcome::BlackWin(WinType::Mate),
-                Colour::Black => GameOutcome::WhiteWin(WinType::Mate),
+                Colour::White => Some(BlackWin(WinType::Mate)),
+                Colour::Black => Some(WhiteWin(WinType::Mate)),
             }
         } else {
-            GameOutcome::Draw(DrawType::Stalemate)
+            Some(Draw(Stalemate))
         }
     }
 
@@ -1778,7 +1780,6 @@ pub enum GameOutcome {
     WhiteWin(WinType),
     BlackWin(WinType),
     Draw(DrawType),
-    Ongoing,
 }
 
 #[allow(dead_code)]
@@ -1808,7 +1809,6 @@ impl GameOutcome {
             Self::WhiteWin(_) => 2,
             Self::BlackWin(_) => 0,
             Self::Draw(_) => 1,
-            Self::Ongoing => panic!("Game is not over!"),
         }
     }
 }
@@ -1930,40 +1930,40 @@ mod tests {
                 .unwrap();
         assert_eq!(
             fiftymove_draw.outcome(),
-            GameOutcome::Draw(DrawType::FiftyMoves)
+            Some(GameOutcome::Draw(DrawType::FiftyMoves))
         );
         let mut draw_repetition = Board::default();
-        assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
+        assert_eq!(draw_repetition.outcome(), None);
         draw_repetition.make_move_simple(Move::new(Square::G1, Square::F3));
         draw_repetition.make_move_simple(Move::new(Square::B8, Square::C6));
-        assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
+        assert_eq!(draw_repetition.outcome(), None);
         draw_repetition.make_move_simple(Move::new(Square::F3, Square::G1));
         draw_repetition.make_move_simple(Move::new(Square::C6, Square::B8));
-        assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
+        assert_eq!(draw_repetition.outcome(), None);
         draw_repetition.make_move_simple(Move::new(Square::G1, Square::F3));
         draw_repetition.make_move_simple(Move::new(Square::B8, Square::C6));
-        assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
+        assert_eq!(draw_repetition.outcome(), None);
         draw_repetition.make_move_simple(Move::new(Square::F3, Square::G1));
         draw_repetition.make_move_simple(Move::new(Square::C6, Square::B8));
         assert_eq!(
             draw_repetition.outcome(),
-            GameOutcome::Draw(DrawType::Repetition)
+            Some(GameOutcome::Draw(DrawType::Repetition))
         );
         let stalemate = Board::from_fen("7k/8/6Q1/8/8/8/8/K7 b - - 0 1").unwrap();
-        assert_eq!(stalemate.outcome(), GameOutcome::Draw(DrawType::Stalemate));
+        assert_eq!(
+            stalemate.outcome(),
+            Some(GameOutcome::Draw(DrawType::Stalemate))
+        );
         let insufficient_material_bare_kings =
             Board::from_fen("8/8/5k2/8/8/2K5/8/8 b - - 0 1").unwrap();
         assert_eq!(
             insufficient_material_bare_kings.outcome(),
-            GameOutcome::Draw(DrawType::InsufficientMaterial)
+            Some(GameOutcome::Draw(DrawType::InsufficientMaterial))
         );
         let insufficient_material_knights =
             Board::from_fen("8/8/5k2/8/2N5/2K2N2/8/8 b - - 0 1").unwrap();
-        assert_eq!(
-            insufficient_material_knights.outcome(),
-            GameOutcome::Ongoing
-        );
         // using FIDE rules.
+        assert_eq!(insufficient_material_knights.outcome(), None);
     }
 
     #[test]

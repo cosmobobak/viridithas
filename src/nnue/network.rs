@@ -672,7 +672,7 @@ impl NNUEParams {
     #[allow(clippy::too_many_lines)]
     pub fn decompress_and_alloc() -> anyhow::Result<&'static Self> {
         #[cfg(not(feature = "zstd"))]
-        type ZstdDecoder<R, D> = ruzstd::StreamingDecoder<R, D>;
+        type ZstdDecoder<R, D> = ruzstd::decoding::StreamingDecoder<R, D>;
         #[cfg(feature = "zstd")]
         type ZstdDecoder<'a, R> = zstd::stream::Decoder<'a, R>;
 
@@ -842,7 +842,9 @@ impl NNUEParams {
 
             rename_result.with_context(|| {
                 format!(
-                    "Failed to rename temp file from {tfile:#?} to {wfile:#?} in {}",
+                    "Failed to rename temp file from {} to {} in {}",
+                    tfile.display(),
+                    wfile.display(),
                     temp_dir.display()
                 )
             })?;
