@@ -671,10 +671,7 @@ fn repermute_ft_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
 impl NNUEParams {
     #[allow(clippy::too_many_lines)]
     pub fn decompress_and_alloc() -> anyhow::Result<&'static Self> {
-        #[cfg(not(feature = "zstd"))]
-        type ZstdDecoder<R, D> = ruzstd::StreamingDecoder<R, D>;
-        #[cfg(feature = "zstd")]
-        type ZstdDecoder<'a, R> = zstd::stream::Decoder<'a, R>;
+        type ZstdDecoder<R, D> = ruzstd::decoding::StreamingDecoder<R, D>;
 
         // this function is not particularly happy about running in parallel.
         static LOCK: Mutex<()> = Mutex::new(());
@@ -763,10 +760,16 @@ impl NNUEParams {
             )
         };
         let expected_bytes = mem.len() as u64;
+        let decoding_start = std::time::Instant::now();
         let mut decoder = ZstdDecoder::new(EMBEDDED_NNUE)
             .with_context(|| "Failed to construct zstd decoder for NNUE weights.")?;
         let bytes_written = std::io::copy(&mut decoder, &mut mem)
             .with_context(|| "Failed to decompress NNUE weights.")?;
+        let decoding_time = decoding_start.elapsed();
+        println!(
+            "info string decompressed NNUE weights in {}us",
+            decoding_time.as_micros()
+        );
         anyhow::ensure!(
             bytes_written == expected_bytes,
             "encountered issue while decompressing NNUE weights, expected {expected_bytes} bytes, but got {bytes_written}"
