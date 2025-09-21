@@ -13,41 +13,42 @@ use std::{
     num::{ParseFloatError, ParseIntError},
     str::{FromStr, ParseBoolError},
     sync::{
-        atomic::{self, AtomicBool, AtomicI32, AtomicU64, AtomicU8, AtomicUsize, Ordering},
-        mpsc, Mutex, Once,
+        Mutex, Once,
+        atomic::{self, AtomicBool, AtomicI32, AtomicU8, AtomicU64, AtomicUsize, Ordering},
+        mpsc,
     },
     time::Instant,
 };
 
-use anyhow::{anyhow, bail, Context};
+use anyhow::{Context, anyhow, bail};
 
 use crate::{
+    NAME, VERSION,
     bench::BENCH_POSITIONS,
     chess::{
+        CHESS960,
         board::{
-            movegen::{self, MoveList},
             Board,
+            movegen::{self, MoveList},
         },
         piece::Colour,
-        CHESS960,
     },
     cuckoo,
     errors::{FenParseError, MoveParseError},
-    evaluation::{evaluate, is_game_theoretic_score, is_mate_score, MATE_SCORE, TB_WIN_SCORE},
+    evaluation::{MATE_SCORE, TB_WIN_SCORE, evaluate, is_game_theoretic_score, is_mate_score},
     nnue::{
         self,
         network::{self, NNUEParams},
     },
     perft,
-    search::{adj_shuffle, parameters::Config, search_position, LMTable},
+    search::{LMTable, adj_shuffle, parameters::Config, search_position},
     searchinfo::SearchInfo,
     tablebases, term,
-    threadlocal::{make_thread_data, ThreadData},
+    threadlocal::{ThreadData, make_thread_data},
     threadpool,
     timemgmt::SearchLimit,
     transpositiontable::TT,
     util::{MAX_DEPTH, MEGABYTE},
-    NAME, VERSION,
 };
 
 #[cfg(feature = "nnz-counts")]
@@ -583,7 +584,9 @@ fn print_uci_response(info: &SearchInfo, full: bool) {
     };
     println!("id name {NAME} {VERSION}{version_extension}");
     println!("id author Cosmo");
-    println!("option name Hash type spin default {UCI_DEFAULT_HASH_MEGABYTES} min 1 max {UCI_MAX_HASH_MEGABYTES}");
+    println!(
+        "option name Hash type spin default {UCI_DEFAULT_HASH_MEGABYTES} min 1 max {UCI_MAX_HASH_MEGABYTES}"
+    );
     println!("option name Threads type spin default 1 min 1 max 512");
     println!("option name PrettyPrint type check default false");
     println!("option name SyzygyPath type string default <empty>");

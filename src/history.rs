@@ -6,9 +6,9 @@ use crate::{
         types::Square,
     },
     historytable::{
+        CORRECTION_HISTORY_GRAIN, CORRECTION_HISTORY_MAX, CORRECTION_HISTORY_WEIGHT_SCALE,
         cont_history_bonus, cont_history_malus, main_history_bonus, main_history_malus,
-        tactical_history_bonus, tactical_history_malus, update_history, CORRECTION_HISTORY_GRAIN,
-        CORRECTION_HISTORY_MAX, CORRECTION_HISTORY_WEIGHT_SCALE,
+        tactical_history_bonus, tactical_history_malus, update_history,
     },
     threadlocal::ThreadData,
     util::MAX_DEPTH,
