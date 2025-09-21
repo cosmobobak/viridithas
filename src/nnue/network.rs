@@ -671,7 +671,10 @@ fn repermute_ft_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
 impl NNUEParams {
     #[allow(clippy::too_many_lines)]
     pub fn decompress_and_alloc() -> anyhow::Result<&'static Self> {
+        #[cfg(not(feature = "zstd"))]
         type ZstdDecoder<R, D> = ruzstd::decoding::StreamingDecoder<R, D>;
+        #[cfg(feature = "zstd")]
+        type ZstdDecoder<'a, R> = zstd::stream::Decoder<'a, R>;
 
         // this function is not particularly happy about running in parallel.
         static LOCK: Mutex<()> = Mutex::new(());

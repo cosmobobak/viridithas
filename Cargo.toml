@@ -9,6 +9,7 @@ keywords = ["chess", "treesearch"]
 categories = ["games"]
 repository = "https://github.com/cosmobobak/viridithas"
 authors = ["Cosmo Bobak (cosmobobak@gmail.com)"]
+rust-version = "1.90.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -27,7 +28,8 @@ datagen = [
     "dep:ctrlc",
     "dep:bulletformat",
 ]
-final-release = ["bindgen", "syzygy"]
+zstd = ["dep:zstd"]
+final-release = ["zstd", "bindgen", "syzygy"]
 
 [build-dependencies]
 cc = { version = "1.2.6", optional = true }
@@ -49,6 +51,9 @@ arrayvec = "0.7.4"
 anyhow = "1.0.86"
 ruzstd = "0.8.1"
 
+# full-fat zstd for release builds
+zstd = { version = "0.13.2", optional = true }
+
 # for sharing network weights between processes
 memmap2 = "0.9.5"
 
@@ -56,8 +61,8 @@ memmap2 = "0.9.5"
 fxhash = "0.2.1"
 
 # for coloured terminal output
-[dependencies.windows-sys]
-version = "0.61"
+[target.'cfg(target_os = "windows")'.dependencies.windows-sys]
+version = "0.60"
 features = [
     "Win32_Foundation",
     "Win32_Security",

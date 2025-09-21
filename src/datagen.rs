@@ -842,9 +842,7 @@ pub fn run_splat(
                 .flush()
                 .with_context(|| "Failed to flush stdout.")?;
         }
-        if let Some(limit) = limit
-            && game_count >= limit
-        {
+        if limit.is_some_and(|limit| game_count >= limit) {
             break;
         }
     }
@@ -942,9 +940,7 @@ pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) -> anyhow::R
 
         move_buffer = game.into_move_buffer();
         game_count += 1;
-        if let Some(limit) = limit
-            && game_count >= limit
-        {
+        if limit.is_some_and(|limit| game_count >= limit) {
             break;
         }
     }
