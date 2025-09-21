@@ -1383,7 +1383,7 @@ pub fn alpha_beta<NT: NodeType>(
                 -alpha_beta::<NT::Next>(l_pv, t, new_depth, -beta, -alpha, !NT::PV && !cut_node);
         } else {
             // calculation of LMR stuff
-            let r = if depth > 2 && moves_made > (1 + usize::from(NT::PV)) {
+            let r = if depth > 2 && moves_made > (1 + usize::from(NT::ROOT)) {
                 let mut r = t.info.lm_table.lm_reduction(depth, moves_made);
                 // reduce more on non-PV nodes
                 r += i32::from(!NT::PV) * t.info.conf.lmr_non_pv_mul;
