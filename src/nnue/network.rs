@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{ensure, Context};
+use anyhow::{Context, ensure};
 use arrayvec::ArrayVec;
 use memmap2::Mmap;
 
@@ -767,7 +767,10 @@ impl NNUEParams {
             .with_context(|| "Failed to construct zstd decoder for NNUE weights.")?;
         let bytes_written = std::io::copy(&mut decoder, &mut mem)
             .with_context(|| "Failed to decompress NNUE weights.")?;
-        anyhow::ensure!(bytes_written == expected_bytes, "encountered issue while decompressing NNUE weights, expected {expected_bytes} bytes, but got {bytes_written}");
+        anyhow::ensure!(
+            bytes_written == expected_bytes,
+            "encountered issue while decompressing NNUE weights, expected {expected_bytes} bytes, but got {bytes_written}"
+        );
         let use_simd = cfg!(target_arch = "x86_64");
         let net = net.permute(use_simd);
 
@@ -842,7 +845,9 @@ impl NNUEParams {
 
             rename_result.with_context(|| {
                 format!(
-                    "Failed to rename temp file from {tfile:#?} to {wfile:#?} in {}",
+                    "Failed to rename temp file from {} to {} in {}",
+                    tfile.display(),
+                    wfile.display(),
                     temp_dir.display()
                 )
             })?;

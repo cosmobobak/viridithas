@@ -211,7 +211,8 @@ impl Square {
     /// SAFETY: you may only call this function with value of `inner` less than 64.
     pub const unsafe fn new_unchecked(inner: u8) -> Self {
         debug_assert!(inner < 64);
-        std::mem::transmute(inner)
+        // Safety: Caller's precondition.
+        unsafe { std::mem::transmute(inner) }
     }
 
     pub const fn flip_rank(self) -> Self {
@@ -300,7 +301,8 @@ impl Square {
             clippy::cast_sign_loss
         )]
         let res = self as u8 + offset;
-        Self::new_unchecked(res)
+        // Safety: caller's precondition.
+        unsafe { Self::new_unchecked(res) }
     }
 
     /// SAFETY: You may not call this function with a square and offset such that
@@ -312,7 +314,8 @@ impl Square {
             clippy::cast_sign_loss
         )]
         let res = self as u8 - offset;
-        Self::new_unchecked(res)
+        // Safety: caller's precondition.
+        unsafe { Self::new_unchecked(res) }
     }
 
     pub const fn sub(self, offset: u8) -> Option<Self> {

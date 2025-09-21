@@ -2,7 +2,7 @@ use std::cell::Cell;
 
 use crate::{
     chess::{
-        board::movegen::{pawn_attacks_by, AllMoves, MoveList, MoveListEntry, SkipQuiets},
+        board::movegen::{AllMoves, MoveList, MoveListEntry, SkipQuiets, pawn_attacks_by},
         chessmove::Move,
         piece::PieceType,
         squareset::SquareSet,
@@ -76,10 +76,10 @@ impl MovePicker {
         }
         if self.stage == Stage::TTMove {
             self.stage = Stage::GenerateCaptures;
-            if let Some(tt_move) = self.tt_move {
-                if t.board.is_pseudo_legal(tt_move) {
-                    return Some(tt_move);
-                }
+            if let Some(tt_move) = self.tt_move
+                && t.board.is_pseudo_legal(tt_move)
+            {
+                return Some(tt_move);
             }
         }
         if self.stage == Stage::GenerateCaptures {
@@ -115,13 +115,13 @@ impl MovePicker {
         }
         if self.stage == Stage::YieldKiller {
             self.stage = Stage::GenerateQuiets;
-            if !self.skip_quiets && self.killer != self.tt_move {
-                if let Some(killer) = self.killer {
-                    if t.board.is_pseudo_legal(killer) {
-                        debug_assert!(!t.board.is_tactical(killer));
-                        return Some(killer);
-                    }
-                }
+            if !self.skip_quiets
+                && self.killer != self.tt_move
+                && let Some(killer) = self.killer
+                && t.board.is_pseudo_legal(killer)
+            {
+                debug_assert!(!t.board.is_tactical(killer));
+                return Some(killer);
             }
         }
         if self.stage == Stage::GenerateQuiets {

@@ -89,11 +89,7 @@ impl Display for Piece {
 
 impl Colour {
     pub const fn new(v: bool) -> Self {
-        if v {
-            Self::Black
-        } else {
-            Self::White
-        }
+        if v { Self::Black } else { Self::White }
     }
 
     pub const fn flip(self) -> Self {
@@ -134,8 +130,11 @@ impl PieceType {
         }
     }
 
+    /// SAFETY: you may only call this function with value of `inner` less than 6.
     pub const unsafe fn from_index_unchecked(v: u8) -> Self {
-        std::mem::transmute(v)
+        debug_assert!(v < 6);
+        // Safety: caller's precondition.
+        unsafe { std::mem::transmute(v) }
     }
 
     pub const fn inner(self) -> u8 {
