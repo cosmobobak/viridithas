@@ -24,8 +24,8 @@ use crate::{
         types::{ContHistIndex, Square},
     },
     evaluation::{
-        MATE_SCORE, MINIMUM_TB_WIN_SCORE, evaluate, is_game_theoretic_score, mate_in, mated_in,
-        see_value, tb_loss_in, tb_win_in,
+        MATE_SCORE, MINIMUM_TB_WIN_SCORE, evaluate, is_decisive, mate_in, mated_in, see_value,
+        tb_loss_in, tb_win_in,
     },
     history::caphist_piece_type,
     historytable::{
@@ -405,7 +405,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
                 beta = (pv.score + delta).min(INFINITY);
                 reduction += 1;
                 // decrement depth:
-                if !is_game_theoretic_score(pv.score) {
+                if !is_decisive(pv.score) {
                     t.depth = (t.depth - 1).max(min_depth);
                 }
             } else {
@@ -554,9 +554,10 @@ pub fn quiescence<NT: NodeType>(
     let clock = t.board.fifty_move_counter();
 
     // probe the TT and see if we get a cutoff.
-    let tt_hit = if let Some(hit) = t.tt.probe(key, height) {
+    let tt_hit = if let Some(hit) = t.tt.probe(key, height, clock) {
         if !NT::PV
             && clock < 80
+            && hit.value != VALUE_NONE
             && (hit.bound == Bound::Exact
                 || (hit.bound == Bound::Lower && hit.value >= beta)
                 || (hit.bound == Bound::Upper && hit.value <= alpha))
@@ -595,9 +596,10 @@ pub fn quiescence<NT: NodeType>(
         let (tt_flag, tt_value) = tt_hit
             .as_ref()
             .map_or((Bound::None, VALUE_NONE), |tte| (tte.bound, tte.value));
-        if tt_flag == Bound::Exact
-            || tt_flag == Bound::Upper && tt_value < adj_eval
-            || tt_flag == Bound::Lower && tt_value > adj_eval
+        if !is_decisive(tt_value)
+            && (tt_flag == Bound::Exact
+                || tt_flag == Bound::Upper && tt_value < adj_eval
+                || tt_flag == Bound::Lower && tt_value > adj_eval)
         {
             stand_pat = tt_value;
         } else {
@@ -653,8 +655,9 @@ pub fn quiescence<NT: NodeType>(
         if best_score > -MINIMUM_TB_WIN_SCORE
             && is_tactical
             && !in_check
-            && futility <= alpha
             && !is_recapture
+            && futility <= alpha
+            && !is_decisive(futility)
             && !static_exchange_eval(&t.board, &t.info, m, 1)
         {
             if best_score < futility {
@@ -676,6 +679,7 @@ pub fn quiescence<NT: NodeType>(
         moves_made += 1;
 
         let score = -quiescence::<NT::Next>(l_pv, t, -beta, -alpha);
+
         t.board.unmake_move(&mut t.nnue);
 
         if score > best_score {
@@ -804,8 +808,9 @@ pub fn alpha_beta<NT: NodeType>(
 
     let excluded = t.ss[height].excluded;
     let tt_hit = if excluded.is_none() {
-        if let Some(hit) = t.tt.probe(key, height) {
+        if let Some(hit) = t.tt.probe(key, height, clock) {
             if !NT::PV
+                && hit.value != VALUE_NONE
                 && hit.depth >= depth + i32::from(hit.value >= beta)
                 && clock < 80
                 && (hit.bound == Bound::Exact
@@ -930,7 +935,7 @@ pub fn alpha_beta<NT: NodeType>(
         correction = t.correction();
         static_eval = adj_shuffle(t, raw_eval, clock) + correction;
         if tte.value != VALUE_NONE
-            && !is_game_theoretic_score(tte.value)
+            && !is_decisive(tte.value)
             && match tte.bound {
                 Bound::Upper => tte.value < static_eval,
                 Bound::Lower => tte.value > static_eval,
@@ -1095,11 +1100,11 @@ pub fn alpha_beta<NT: NodeType>(
             }
             if null_score >= beta {
                 // don't return game-theoretic scores:
-                if is_game_theoretic_score(null_score) {
+                if is_decisive(null_score) {
                     null_score = beta;
                 }
                 // unconditionally cutoff if we're just too shallow.
-                if depth < 12 && !is_game_theoretic_score(beta) {
+                if depth < 12 && !is_decisive(beta) {
                     return null_score;
                 }
                 // verify that it's *actually* fine to prune,
@@ -1111,7 +1116,7 @@ pub fn alpha_beta<NT: NodeType>(
                 let veri_score = alpha_beta::<OffPV>(l_pv, t, nm_depth, beta - 1, beta, false);
                 t.unban_nmp_for(t.board.turn());
                 if veri_score >= beta {
-                    return null_score;
+                    return veri_score;
                 }
             }
         }
@@ -1149,7 +1154,7 @@ pub fn alpha_beta<NT: NodeType>(
         && !in_check
         && excluded.is_none()
         && depth >= 5
-        && !is_game_theoretic_score(beta)
+        && !is_decisive(beta)
         // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
         && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
     {
@@ -1190,6 +1195,7 @@ pub fn alpha_beta<NT: NodeType>(
                     depth - 3,
                     t.ss[height].ttpv,
                 );
+
                 return value;
             }
         }
@@ -1318,6 +1324,7 @@ pub fn alpha_beta<NT: NodeType>(
             } = tt_hit.unwrap();
             let r_beta = singularity_margin(tt_value, depth);
             let r_depth = (depth - 1) / 2;
+
             t.ss[t.board.height()].excluded = Some(m);
             let value = alpha_beta::<OffPV>(
                 &mut PVariation::default(),
@@ -1328,13 +1335,16 @@ pub fn alpha_beta<NT: NodeType>(
                 cut_node,
             );
             t.ss[t.board.height()].excluded = None;
-            if value >= r_beta && r_beta >= beta {
+
+            if value != VALUE_NONE && value >= r_beta && r_beta >= beta {
                 // multi-cut: if a move other than the best one beats beta,
                 // then we can cut with relatively high confidence.
                 return singularity_margin(tt_value, depth);
             }
 
-            if value < r_beta {
+            if value == VALUE_NONE {
+                extension = 1; // extend if there's only one legal move.
+            } else if value < r_beta {
                 if !NT::PV
                     && t.ss[t.board.height()].dextensions <= 12
                     && value < r_beta - t.info.conf.dext_margin
@@ -1489,7 +1499,7 @@ pub fn alpha_beta<NT: NodeType>(
 
     if moves_made == 0 {
         if excluded.is_some() {
-            return alpha;
+            return VALUE_NONE; // singular search in position with one legal move.
         }
         if in_check {
             #[cfg(debug_assertions)]
@@ -1502,6 +1512,7 @@ pub fn alpha_beta<NT: NodeType>(
     if best_score >= beta
         && best_score.abs() < MINIMUM_TB_WIN_SCORE
         && alpha.abs() < MINIMUM_TB_WIN_SCORE
+        && beta.abs() < MINIMUM_TB_WIN_SCORE
     {
         best_score = (best_score * depth + beta) / (depth + 1);
     }
@@ -1863,7 +1874,13 @@ fn readout_info(
         clippy::cast_sign_loss,
         clippy::cast_possible_truncation
     )]
+    const PREFIX_LEN: usize = 54;
     if !info.print_to_stdout {
+        return;
+    }
+    // don't print anything if we are in the first 50ms of the search and we are in a game,
+    // this helps in ultra-fast time controls where we only have a few ms to think.
+    if info.skip_print() && !force_print {
         return;
     }
     let ThreadData {
@@ -1872,22 +1889,11 @@ fn readout_info(
         tt,
         ..
     } = t;
-    let depth = iteration;
     let pv = t.pv();
-    // don't print anything if we are in the first 50ms of the search and we are in a game,
-    // this helps in ultra-fast time controls where we only have a few ms to think.
-    if info.clock.is_dynamic() && info.skip_print() && !force_print {
-        return;
-    }
-    let sstr = uci::format_score(pv.score);
     let normal_uci_output = !uci::PRETTY_PRINT.load(Ordering::SeqCst);
     let nps = (nodes as f64 / info.clock.elapsed().as_secs_f64()) as u64;
     if board.turn() == Colour::Black {
-        bound = match bound {
-            Bound::Upper => Bound::Lower,
-            Bound::Lower => Bound::Upper,
-            _ => Bound::Exact,
-        };
+        bound = bound.invert();
     }
     let bound_string = match bound {
         Bound::Upper => " upperbound",
@@ -1896,9 +1902,10 @@ fn readout_info(
     };
     if normal_uci_output {
         println!(
-            "info depth {depth} seldepth {} nodes {nodes} time {} nps {nps} hashfull {hashfull} tbhits {tbhits} score {sstr}{bound_string} wdl {wdl} {pv}",
+            "info depth {iteration} seldepth {} nodes {nodes} time {} nps {nps} hashfull {hashfull} tbhits {tbhits} score {sstr}{bound_string} wdl {wdl} {pv}",
             info.seldepth as usize,
             info.clock.elapsed().as_millis(),
+            sstr = uci::format_score(pv.score),
             hashfull = tt.hashfull(),
             tbhits = TB_HITS.load(Ordering::SeqCst),
             wdl = uci::format_wdl(pv.score, board.ply()),
@@ -1907,26 +1914,27 @@ fn readout_info(
         let value = uci::pretty_format_score(pv.score, board.turn());
         let mut pv_string = board.pv_san(pv).unwrap();
         // truncate the pv string if it's too long
-        if pv_string.len() > 130 {
+        let max_length =
+            term_size::dimensions().map_or(80 - PREFIX_LEN, |(w, _)| w.saturating_sub(PREFIX_LEN));
+        if pv_string.len() > max_length {
             let final_space = pv_string
                 .match_indices(' ')
-                .filter(|(i, _)| *i < 130)
+                .filter(|(i, _)| *i < max_length)
                 .next_back()
                 .map_or(0, |(i, _)| i);
             pv_string.truncate(final_space);
-            pv_string.push_str("...         ");
+            // pad up to max length with spaces so that the line clears the terminal
+            for _ in pv_string.len()..max_length {
+                pv_string.push(' ');
+            }
         }
-        let endchr = if bound == Bound::Exact {
-            "\n"
-        } else {
-            "                                                                   \r"
-        };
+        let endchr = if bound == Bound::Exact { "\n" } else { "\r" };
         eprint!(
-            " {depth:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}kn\u{001b}[0m {value} ({wdl}) \u{001b}[38;5;243m{knps:5}kn/s\u{001b}[0m {pv_string}{endchr}",
+            " {iteration:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}n\u{001b}[0m {value} {wdl} \u{001b}[38;5;243m{knps:5}kn/s\u{001b}[0m {pv_string}{endchr}",
             info.seldepth as usize,
             t = uci::format_time(info.clock.elapsed().as_millis()),
             knps = nps / 1_000,
-            knodes = nodes / 1_000,
+            knodes = uci::pretty_format_counter(nodes),
             wdl = uci::pretty_format_wdl(pv.score, board.ply()),
         );
     }

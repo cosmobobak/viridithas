@@ -35,7 +35,7 @@ use crate::{
     },
     cuckoo,
     errors::{FenParseError, MoveParseError},
-    evaluation::{MATE_SCORE, TB_WIN_SCORE, evaluate, is_game_theoretic_score, is_mate_score},
+    evaluation::{MATE_SCORE, TB_WIN_SCORE, evaluate, is_decisive, is_mate_score},
     nnue::{
         self,
         network::{self, NNUEParams},
@@ -485,7 +485,7 @@ impl Display for ScoreFormatWrapper {
             } else {
                 write!(f, "mate -{moves_to_mate}")
             }
-        } else if is_game_theoretic_score(self.0) {
+        } else if is_decisive(self.0) {
             write!(f, "cp {}", self.0)
         } else {
             write!(f, "cp {}", self.0 * 100 / NORMALISE_TO_PAWN_VALUE)
@@ -520,7 +520,7 @@ impl Display for PrettyScoreFormatWrapper {
             } else {
                 write!(f, "  #-{moves_to_mate:<2}")?;
             }
-        } else if is_game_theoretic_score(white_pov) {
+        } else if is_decisive(white_pov) {
             let plies_to_tb = TB_WIN_SCORE - white_pov.abs();
             if white_pov > 0 {
                 write!(f, " +TB{plies_to_tb:<2}")?;
@@ -529,6 +529,7 @@ impl Display for PrettyScoreFormatWrapper {
             }
         } else {
             let white_pov = white_pov * 100 / NORMALISE_TO_PAWN_VALUE;
+            let white_pov = white_pov.clamp(-9999, 9999);
             if white_pov == 0 {
                 // same as below, but with no sign
                 write!(f, "{:6.2}", f64::from(white_pov) / 100.0)?;
@@ -1143,7 +1144,7 @@ impl Display for PrettyUciWdlFormat {
         let wdl_l = (f64::from(wdl_l) / 10.0).round() as i32;
         write!(
             f,
-            "\u{001b}[38;5;243m{wdl_w:3.0}%W {wdl_d:3.0}%D {wdl_l:3.0}%L\u{001b}[0m",
+            "\u{001b}[38;5;243m{wdl_w:3.0}W {wdl_d:3.0}D {wdl_l:3.0}L\u{001b}[0m",
         )
     }
 }
@@ -1153,4 +1154,21 @@ pub fn format_wdl(eval: i32, ply: usize) -> impl Display {
 }
 pub fn pretty_format_wdl(eval: i32, ply: usize) -> impl Display {
     PrettyUciWdlFormat { eval, ply }
+}
+
+struct PrettyCounterFormat(u64);
+impl Display for PrettyCounterFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        #![allow(clippy::match_overlapping_arm)]
+        match self.0 {
+            ..1_000 => write!(f, "{:>4}", self.0),
+            ..1_000_000 => write!(f, "{:>3}K", self.0 / 1_000),
+            ..1_000_000_000 => write!(f, "{:>3}M", self.0 / 1_000_000),
+            ..1_000_000_000_000 => write!(f, "{:>3}G", self.0 / 1_000_000_000),
+            _ => write!(f, "{:>3}T", self.0 / 1_000_000_000_000),
+        }
+    }
+}
+pub const fn pretty_format_counter(v: u64) -> impl Display {
+    PrettyCounterFormat(v)
 }
