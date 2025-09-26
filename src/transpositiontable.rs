@@ -385,19 +385,16 @@ impl TTView<'_> {
             || flag == Bound::Exact && tte.info.flag() != Bound::Exact
             || insert_priority * 3 >= record_prority * 2
         {
-            let score = normalise_gt_truth_score(score, ply).try_into().expect(
-                "attempted to store a score with value outwith [i16::MIN, i16::MAX] in the transposition table",
-            );
             let write = TTEntry {
                 key,
                 m: best_move,
                 // normalise mate / TB scores:
-                score,
+                score: normalise_gt_truth_score(score, ply)
+                    .try_into()
+                    .expect("score with value outwith i16"),
                 depth: depth.try_into().unwrap(),
                 info: PackedInfo::new(self.age, flag, pv),
-                evaluation: eval.try_into().expect(
-                    "attempted to store an eval with value outwith [i16::MIN, i16::MAX] in the transposition table",
-                ),
+                evaluation: eval.try_into().expect("eval with value outwith i16"),
             };
             cluster.entries[idx] = write;
             self.table[cluster_index].store(cluster);
@@ -417,13 +414,11 @@ impl TTView<'_> {
                 continue;
             }
 
-            let value = reconstruct_gt_truth_score(entry.score.into(), ply, clock);
-
             return Some(TTHit {
                 mov: entry.m,
                 depth: entry.depth.into(),
                 bound: entry.info.flag(),
-                value,
+                value: reconstruct_gt_truth_score(entry.score.into(), ply, clock),
                 eval: entry.evaluation.into(),
                 was_pv: entry.info.pv(),
             });
