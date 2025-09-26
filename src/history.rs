@@ -180,10 +180,10 @@ impl ThreadData<'_> {
             scaled_diff,
         );
         if height > 2 {
-            let ch1 = self.ss[height - 1].conthist_index;
-            let ch2 = self.ss[height - 2].conthist_index;
-            let sq1 = ch1.square;
-            let sq2 = ch2.square;
+            let ch1 = self.ss[height - 1].ch_idx;
+            let ch2 = self.ss[height - 2].ch_idx;
+            let sq1 = ch1.to;
+            let sq2 = ch2.to;
             let pt1 = ch1.piece.piece_type();
             let pt2 = ch2.piece.piece_type();
             update(
@@ -208,10 +208,10 @@ impl ThreadData<'_> {
         let major = self.major_corrhist.get(turn, keys.major);
 
         let cont = if height > 2 {
-            let ch1 = self.ss[height - 1].conthist_index;
-            let ch2 = self.ss[height - 2].conthist_index;
-            let sq1 = ch1.square;
-            let sq2 = ch2.square;
+            let ch1 = self.ss[height - 1].ch_idx;
+            let ch2 = self.ss[height - 2].ch_idx;
+            let sq1 = ch1.to;
+            let sq2 = ch2.to;
             let pt1 = ch1.piece.piece_type();
             let pt2 = ch2.piece.piece_type();
             i64::from(self.continuation_corrhist[sq1][pt1][sq2][pt2][turn])
