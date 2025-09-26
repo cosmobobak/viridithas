@@ -1326,6 +1326,7 @@ pub fn alpha_beta<NT: NodeType>(
             } = tt_hit.unwrap();
             let r_beta = singularity_margin(tt_value, depth);
             let r_depth = (depth - 1) / 2;
+
             t.ss[t.board.height()].excluded = Some(m);
             let value = alpha_beta::<OffPV>(
                 &mut PVariation::default(),
@@ -1336,7 +1337,8 @@ pub fn alpha_beta<NT: NodeType>(
                 cut_node,
             );
             t.ss[t.board.height()].excluded = None;
-            if value >= r_beta && r_beta >= beta {
+
+            if value != VALUE_NONE && value >= r_beta && r_beta >= beta {
                 // multi-cut: if a move other than the best one beats beta,
                 // then we can cut with relatively high confidence.
                 return value;
