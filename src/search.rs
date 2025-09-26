@@ -596,9 +596,10 @@ pub fn quiescence<NT: NodeType>(
         let (tt_flag, tt_value) = tt_hit
             .as_ref()
             .map_or((Bound::None, VALUE_NONE), |tte| (tte.bound, tte.value));
-        if tt_flag == Bound::Exact
-            || tt_flag == Bound::Upper && tt_value < adj_eval
-            || tt_flag == Bound::Lower && tt_value > adj_eval
+        if !is_decisive(tt_value)
+            && (tt_flag == Bound::Exact
+                || tt_flag == Bound::Upper && tt_value < adj_eval
+                || tt_flag == Bound::Lower && tt_value > adj_eval)
         {
             stand_pat = tt_value;
         } else {
