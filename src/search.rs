@@ -1069,7 +1069,6 @@ pub fn alpha_beta<NT: NodeType>(
         if cut_node
             && t.ss[height - 1].searching.is_some()
             && depth > 2
-            && !is_decisive(beta)
             && static_eval
                 + i32::from(improving) * t.info.conf.nmp_improving_margin
                 + depth * t.info.conf.nmp_depth_mul
@@ -1105,7 +1104,7 @@ pub fn alpha_beta<NT: NodeType>(
                     null_score = beta;
                 }
                 // unconditionally cutoff if we're just too shallow.
-                if depth < 12 {
+                if depth < 12 && !is_decisive(beta) {
                     return null_score;
                 }
                 // verify that it's *actually* fine to prune,
@@ -1117,8 +1116,7 @@ pub fn alpha_beta<NT: NodeType>(
                 let veri_score = alpha_beta::<OffPV>(l_pv, t, nm_depth, beta - 1, beta, false);
                 t.unban_nmp_for(t.board.turn());
                 if veri_score >= beta {
-                    // TODO: test replacing with `return veri_score;`
-                    return null_score;
+                    return veri_score;
                 }
             }
         }
