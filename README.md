@@ -1,8 +1,6 @@
-# Viridithas, a UCI chess engine written in Rust
-
 <div align="center">
 
-  ![Visualisation of Neuron 0 in the 21th-gen Viridithas NNUE](images/logo.png)
+  ![Logo](images/logo2.png)
   
   [![Build][build-badge]][build-link]
   [![License][license-badge]][license-link]
@@ -11,26 +9,33 @@
   
 </div>
 
-Viridithas is a free and open source chess engine, that as of 2024-08-22 is the strongest chess program written in Rust, and the strongest chess program by a UK author.
-These claims are based on my own personal tests and aggregate results from multiple public rating lists. If these claims are no longer true, it's likely due to the hard work of some of my friends in the chess-programming community, most likely the authors of [Stormphrax](https://github.com/Ciekce/Stormphrax) & [Black Marlin](https://github.com/jnlt3/blackmarlin). The Viridithas project prides itself on using original training data for its neural networks.
+Viridithas is a very strong chess playing program, developed in his current form since 2022-04-10.
 
-Viridithas is a command-line program that can be used from the terminal or can communicate with a graphical user interface over the UCI protocol.
+Viridithas communicates over the Universal Chess Interface, which means you can talk to him in the terminal,
+or install him into a UCI-compatible graphical user interface, like [En Croissant](https://encroissant.org/download) or [Nibbler](https://github.com/rooklift/nibbler).
 
-For an overview of the features of Viridithas, see the [viri-wiki](https://cosmo.tardis.ac/files/2023-02-20-viri-wiki.html).
+Some writing on the internals and development of Viridithas can be found on [his author's website](https://cosmo.tardis.ac).
+
+The Viridithas project prides itself on using original training data for its neural networks.
+
+PS: Viridithas is enormously fond of the [Stormphrax](https://github.com/Ciekce/Stormphrax) chess engine.
 
 ## Building Viridithas
 
-If you just want one of the official releases of Viridithas, check out the **Releases** tab on the right. If you want to build a specific version of Viridithas from source (say, the latest and greatest master commit) then follow these instructions:
+If you just want one of the official releases of Viridithas, check out the **Releases** tab on the right.
+If you want to build a specific version of Viridithas from source (say, the latest and greatest master commit) then follow these instructions:
 
-0. Before following any of these instructions, make sure you have [Rust](https://www.rust-lang.org/tools/install) installed. You may also need to install the `clang` C compiler for tablebase probing support.
-1. Clone this repository to your machine via `git clone https://github.com/cosmobobak/viridithas`.
+0. Before following any of these instructions, make sure you have [Rust](https://www.rust-lang.org/tools/install) installed.
+   You may also need to install the `clang` C compiler, as Viridithas relies on [Fathom](https://github.com/jdart1/Fathom) for tablebase probing support.
+1. Clone this repository to your machine via `git clone git@github.com:cosmobobak/viridithas.git`.
 2. Enter the source directory via `cd viridithas`.
-3. (optional, likely unnecessary) select the branch you'd like to compile via `git checkout <BRANCH_NAME>`.
-4. Download the corresponding neural network for the version of Viridithas that you are compiling and save it in the source root as `viridithas.nnue.zst`. All of Viridithas's neural networks can be found in the releases of the [viridithas-networks](https://github.com/cosmobobak/viridithas-networks) repo. Networks are stored seperately from this repo due to file-size considerations.
+3. Download the corresponding neural network for the version of Viridithas that you are compiling and save it in the source root as `viridithas.nnue.zst`.
+   All of Viridithas's neural networks can be found in the releases of the [viridithas-networks](https://github.com/cosmobobak/viridithas-networks) repo.
+   Networks are stored seperately from this repo due to their considerable size.
 
     **If you just want the latest neural net**, you can download it with the command `curl -s "https://api.github.com/repos/cosmobobak/viridithas-networks/releases/latest" | grep -o '"browser_download_url": "[^"]*' | awk -F'"' '{print $4}' | xargs -L 1 wget -O viridithas.nnue.zst`.
 
-5. Build Viridithas.
+4. Build Viridithas.
    
    **On Windows**, run 
    ```
@@ -45,14 +50,19 @@ If you just want one of the official releases of Viridithas, check out the **Rel
 
 ## Evaluation Development History/Originality (HCE/NNUE)
 
-- First evaluation was a simple piece value / psqt table approach, using values from PeSTO. (as far as I remember)
-- Early in development, a local-search texel tuning module was developed, and trained on the Lichess Elite dataset, removing the PeSTO values with increased strength.
+- First evaluation was a simple material / PSQT approach, using values from PeSTO.
+- Early in development, a local-search [Texel tuning](https://www.chessprogramming.org/Texel%27s_Tuning_Method) module was developed,
+  and Viridithas was retrained on the Lichess Elite dataset, removing the PeSTO values with increased strength.
 - Many new evaluation terms were added during development, and were continually re-tuned on Viridithas's self-play games.
-- The first NNUE was trained on a dataset of games played by Viridithas 2.7.0, 2.6.0, and 2.5.0, all rescored with a development version of Viridithas 2.7.0 at low depth.
-- Subsequent networks were trained on additional self-play games by subsequent versions of Viridithas. The 13th-generation network, and many since, include positions from the Lichess Elite dataset rescored by Viridithas.
-- Between versions 7.0.0 and 8.0.0, original datagen code was written that allows Viridithas to generate data without need for an opening book to ensure game variety, resulting in even greater strength of play.
+- The first NNUE was trained on a dataset of games played by Viridithas 2.7.0, 2.6.0, and 2.5.0, all rescored with a development
+  version of Viridithas 2.7.0 at low depth.
+- Subsequent networks were trained on additional self-play games by subsequent versions of Viridithas.
+  The 13th-generation network, and many since, include positions from the Lichess Elite dataset rescored by Viridithas.
+- Between versions 7.0.0 and 8.0.0, original datagen code was written that allows Viridithas to generate data without need for an
+  opening book to ensure game variety, resulting in even greater strength of play.
 
-All neural networks currently used in the development of Viridithas are trained exclusively on its own self-play games, and no network has ever been trained on the output of an engine other than Viridithas.
+All neural networks currently used in the development of Viridithas are trained exclusively on its own self-play games,
+and no network has ever been trained on the output of an engine other than Viridithas.
 
 ## Thanks and Acknowledgements
 

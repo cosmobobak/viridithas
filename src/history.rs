@@ -6,12 +6,12 @@ use crate::{
         types::Square,
     },
     historytable::{
+        CORRECTION_HISTORY_GRAIN, CORRECTION_HISTORY_MAX, CORRECTION_HISTORY_WEIGHT_SCALE,
         cont_history_bonus, cont_history_malus, main_history_bonus, main_history_malus,
-        tactical_history_bonus, tactical_history_malus, update_history, CORRECTION_HISTORY_GRAIN,
-        CORRECTION_HISTORY_MAX, CORRECTION_HISTORY_WEIGHT_SCALE,
+        tactical_history_bonus, tactical_history_malus, update_history,
     },
     threadlocal::ThreadData,
-    util::MAX_PLY,
+    util::MAX_DEPTH,
 };
 
 use crate::chess::board::Board;
@@ -24,7 +24,7 @@ impl ThreadData<'_> {
             let from = m.from();
             let piece_moved = self.board.state.mailbox[from];
             let to = m.history_to_square();
-            let val = self.main_history.get_mut(
+            let val = self.main_hist.get_mut(
                 piece_moved.unwrap(),
                 to,
                 threats.contains_square(from),
@@ -48,24 +48,13 @@ impl ThreadData<'_> {
         threats: SquareSet,
         delta: i32,
     ) {
-        let val = self.main_history.get_mut(
+        let val = self.main_hist.get_mut(
             moved,
             to,
             threats.contains_square(from),
             threats.contains_square(to),
         );
         update_history(val, delta);
-    }
-
-    /// Get the history score for a single move.
-    pub fn get_history_score(&self, m: Move) -> i32 {
-        let from = m.from();
-        let piece = self.board.state.mailbox[from].unwrap();
-        let to = m.history_to_square();
-        let threats = self.board.state.threats.all;
-        let from_threat = usize::from(threats.contains_square(from));
-        let to_threat = usize::from(threats.contains_square(to));
-        i32::from(self.main_history[from_threat][to_threat][piece][to])
     }
 
     /// Update the tactical history counters of a batch of moves.
@@ -81,7 +70,7 @@ impl ThreadData<'_> {
             let capture = caphist_piece_type(&self.board, m);
             let to = m.to();
             let to_threat = threats.contains_square(to);
-            let val = &mut self.tactical_history[usize::from(to_threat)][capture][piece_moved][to];
+            let val = &mut self.tactical_hist[usize::from(to_threat)][capture][piece_moved][to];
             let delta = if m == best_move {
                 tactical_history_bonus(&self.info.conf, depth)
             } else {
@@ -89,16 +78,6 @@ impl ThreadData<'_> {
             };
             update_history(val, delta);
         }
-    }
-
-    /// Get the tactical history score for a single move.
-    pub fn get_tactical_history_score(&self, m: Move) -> i32 {
-        let threats = self.board.state.threats.all;
-        let piece_moved = self.board.state.mailbox[m.from()].unwrap();
-        let capture = caphist_piece_type(&self.board, m);
-        let to = m.to();
-        let to_threat = threats.contains_square(to);
-        i32::from(self.tactical_history[usize::from(to_threat)][capture][piece_moved][to])
     }
 
     /// Update the continuation history counters of a batch of moves.
@@ -110,13 +89,12 @@ impl ThreadData<'_> {
         index: usize,
     ) {
         let height = self.board.height();
+
         if height <= index {
             return;
         }
-        let Some(ss) = self.ss.get(height - index - 1) else {
-            return;
-        };
-        let cmh_block = self.continuation_history.get_index_mut(ss.conthist_index);
+
+        let cmh_block = &mut self.cont_hist[self.ss[height - index - 1].ch_idx];
         for &m in moves_to_adjust {
             let to = m.history_to_square();
             let piece = self.board.state.mailbox[m.from()].unwrap();
@@ -139,34 +117,18 @@ impl ThreadData<'_> {
         index: usize,
     ) {
         let height = self.board.height();
-        if height <= index {
-            return;
-        }
-        let Some(ss) = self.ss.get(height - index - 1) else {
-            return;
-        };
-        let cmh_block = self.continuation_history.get_index_mut(ss.conthist_index);
-        update_history(cmh_block.get_mut(moved, to), delta);
-    }
 
-    /// Get the continuation history score for a single move.
-    pub fn get_continuation_history_score(&self, m: Move, index: usize) -> i32 {
-        let height = self.board.height();
         if height <= index {
-            return 0;
+            return;
         }
-        let Some(ss) = self.ss.get(height - index - 1) else {
-            return 0;
-        };
-        let cmh_block = self.continuation_history.get_index(ss.conthist_index);
-        let to = m.history_to_square();
-        let piece = self.board.state.mailbox[m.from()].unwrap();
-        i32::from(cmh_block[piece][to])
+
+        let cmh_block = &mut self.cont_hist[self.ss[height - index - 1].ch_idx];
+        update_history(cmh_block.get_mut(moved, to), delta);
     }
 
     /// Add a killer move.
     pub fn insert_killer(&mut self, m: Move) {
-        debug_assert!(self.board.height() < MAX_PLY);
+        debug_assert!(self.board.height() < MAX_DEPTH);
         let idx = self.board.height();
         self.killer_move_table[idx] = Some(m);
     }

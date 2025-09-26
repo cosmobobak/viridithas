@@ -11,56 +11,56 @@ use crate::{
     search::draw_score,
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
-    util::{MAX_DEPTH, MAX_PLY},
+    util::MAX_DEPTH,
 };
 
 /// The value of checkmate.
 /// To recover depth-to-mate, we subtract depth (ply) from this value.
 /// e.g. if white has a mate in two ply, the output from a depth-5 search will be
 /// two less than `MATE_SCORE`.
-pub const MATE_SCORE: i32 = i16::MAX as i32 - 300;
+pub const MATE_SCORE: i32 = i16::MAX as i32 - 367;
 pub const fn mate_in(ply: usize) -> i32 {
     #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-    debug_assert!(ply <= MAX_PLY);
+    debug_assert!(ply <= MAX_DEPTH);
     MATE_SCORE - ply as i32
 }
 pub const fn mated_in(ply: usize) -> i32 {
     #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-    debug_assert!(ply <= MAX_PLY);
+    debug_assert!(ply <= MAX_DEPTH);
     -MATE_SCORE + ply as i32
 }
 pub const TB_WIN_SCORE: i32 = MATE_SCORE - 1000;
 pub const fn tb_win_in(ply: usize) -> i32 {
     #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-    debug_assert!(ply <= MAX_PLY);
+    debug_assert!(ply <= MAX_DEPTH);
     TB_WIN_SCORE - ply as i32
 }
 pub const fn tb_loss_in(ply: usize) -> i32 {
     #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-    debug_assert!(ply <= MAX_PLY);
+    debug_assert!(ply <= MAX_DEPTH);
     -TB_WIN_SCORE + ply as i32
 }
 
 /// A threshold over which scores must be mate.
 #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-const MINIMUM_MATE_SCORE: i32 = MATE_SCORE - MAX_DEPTH;
+pub const MINIMUM_MATE_SCORE: i32 = MATE_SCORE - 2 * MAX_DEPTH as i32 - 44;
 /// A threshold over which scores must be a TB win (or mate).
 #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-pub const MINIMUM_TB_WIN_SCORE: i32 = TB_WIN_SCORE - MAX_DEPTH;
+pub const MINIMUM_TB_WIN_SCORE: i32 = TB_WIN_SCORE - 2 * MAX_DEPTH as i32 - 44;
 
 pub const fn is_mate_score(score: i32) -> bool {
     score.abs() >= MINIMUM_MATE_SCORE
 }
-pub const fn is_game_theoretic_score(score: i32) -> bool {
+pub const fn is_decisive(score: i32) -> bool {
     score.abs() >= MINIMUM_TB_WIN_SCORE
 }
 
-pub const MATERIAL_SCALE_BASE: i32 = 823;
-pub const SEE_PAWN_VALUE: i32 = 211;
-pub const SEE_KNIGHT_VALUE: i32 = 445;
-pub const SEE_BISHOP_VALUE: i32 = 469;
-pub const SEE_ROOK_VALUE: i32 = 720;
-pub const SEE_QUEEN_VALUE: i32 = 1332;
+pub const SEE_PAWN_VALUE: i32 = 277;
+pub const SEE_KNIGHT_VALUE: i32 = 477;
+pub const SEE_BISHOP_VALUE: i32 = 442;
+pub const SEE_ROOK_VALUE: i32 = 709;
+pub const SEE_QUEEN_VALUE: i32 = 1300;
+pub const MATERIAL_SCALE_BASE: i32 = 905;
 
 impl Board {
     pub fn material(&self, info: &SearchInfo) -> i32 {
@@ -108,7 +108,7 @@ pub fn evaluate_nnue(t: &ThreadData) -> i32 {
     // this basically never comes up, but the network will
     // occasionally output OOB values in crazy positions with
     // massive material imbalances.
-    v.clamp(-MINIMUM_TB_WIN_SCORE + 1, MINIMUM_TB_WIN_SCORE - 1)
+    v.clamp(-MINIMUM_TB_WIN_SCORE + 1024, MINIMUM_TB_WIN_SCORE - 1024)
 }
 
 pub fn evaluate(t: &mut ThreadData, nodes: u64) -> i32 {

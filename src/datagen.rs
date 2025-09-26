@@ -3,6 +3,7 @@
 mod dataformat;
 
 use std::{
+    array::{from_mut, from_ref},
     borrow::Cow,
     cmp::Reverse,
     collections::HashMap,
@@ -12,33 +13,32 @@ use std::{
     io::{BufReader, BufWriter, Seek, Write},
     ops::ControlFlow,
     path::{Path, PathBuf},
-    str::FromStr,
     sync::{
-        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
         Mutex,
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     },
     time::Instant,
 };
 
-use anyhow::{anyhow, bail, Context};
+use anyhow::{Context, anyhow, bail};
 use bulletformat::ChessBoard;
 use dataformat::Filter;
-use rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
+use rand::{rngs::ThreadRng, seq::IndexedRandom};
 
 use crate::{
     chess::{
+        CHESS960,
         board::{Board, DrawType, GameOutcome, WinType},
         chessmove::Move,
         piece::{Colour, PieceType},
         types::Square,
-        CHESS960,
     },
     datagen::dataformat::Game,
-    evaluation::{is_game_theoretic_score, is_mate_score},
+    evaluation::{is_decisive, is_mate_score},
     nnue::network::NNUEParams,
     search::{search_position, static_exchange_eval},
     tablebases::{self, probe::WDL},
-    threadlocal::{make_thread_data, ThreadData},
+    threadlocal::{ThreadData, make_thread_data},
     threadpool,
     timemgmt::{SearchLimit, TimeManager},
     transpositiontable::TT,
@@ -46,18 +46,20 @@ use crate::{
     util::MEGABYTE,
 };
 
-const MIN_SAVE_PLY: usize = 16;
-const MAX_RNG_PLY: usize = 24;
+/// Number of attempts to find a good random move before just picking any random move.
+const RANDOM_MOVE_ATTEMPTS: usize = 8;
+/// Number of random moves to make from the root position in classical startpos or DFRC.
+const RANDOM_MOVES_ROOT: usize = 8;
+/// Number of random moves to make from a book position.
+const RANDOM_MOVES_BOOK: usize = 0;
+/// The SEE threshold for random move selection.
+const RANDOM_SEE_THRESHOLD: i32 = -1000;
 
+/// Global atomic counter for tracking progress.
 static FENS_GENERATED: AtomicU64 = AtomicU64::new(0);
-static STOP_GENERATION: AtomicBool = AtomicBool::new(false);
 
-/// Whether to limit searches by depth or by nodes.
-#[derive(Clone, Debug, Hash)]
-enum DataGenLimit {
-    Depth(i32),
-    Nodes(u64),
-}
+/// Flag to indicate that generation should stop.
+static STOP_GENERATION: AtomicBool = AtomicBool::new(false);
 
 /// Configuration options for Viri's self-play data generation.
 #[derive(Clone, Debug, Hash)]
@@ -70,12 +72,10 @@ struct DataGenOptions {
     tablebases_path: Option<PathBuf>,
     // The (optional) path to an EPD format book to use for generating starting positions.
     book: Option<PathBuf>,
-    // The depth or node limit for searches.
-    limit: DataGenLimit,
+    // The node limit for searches.
+    nodes: u64,
     // Whether to generate DFRC data.
     generate_dfrc: bool,
-    // log level
-    log_level: u8,
 }
 
 /// Builder for datagen options.
@@ -88,8 +88,8 @@ pub struct DataGenOptionsBuilder {
     pub tbs: Option<PathBuf>,
     // The (optional) path to an EPD format book to use for generating starting positions.
     pub book: Option<PathBuf>,
-    // The depth or node limit for searches.
-    pub depth_limit: bool,
+    // The node limit for searches.
+    pub nodes: u64,
     // Whether to generate DFRC data.
     pub dfrc: bool,
 }
@@ -101,13 +101,8 @@ impl DataGenOptionsBuilder {
             num_threads: self.threads,
             tablebases_path: self.tbs,
             book: self.book,
-            limit: if self.depth_limit {
-                DataGenLimit::Depth(8)
-            } else {
-                DataGenLimit::Nodes(25000)
-            },
+            nodes: self.nodes,
             generate_dfrc: self.dfrc,
-            log_level: 1,
         }
     }
 }
@@ -120,16 +115,15 @@ impl DataGenOptions {
             num_threads: 1,
             tablebases_path: None,
             book: None,
-            limit: DataGenLimit::Depth(8),
+            nodes: 25_000,
             generate_dfrc: true,
-            log_level: 1,
         }
     }
 
     /// Gives a summarised string representation of the options.
     fn summary(&self) -> String {
         format!(
-            "{}g-{}t-{}-{}-{}{}",
+            "{}g-{}t-{}-{}-n{}{}",
             self.num_games,
             self.num_threads,
             if self.tablebases_path.is_some() {
@@ -142,10 +136,7 @@ impl DataGenOptions {
             } else {
                 "classical"
             },
-            match self.limit {
-                DataGenLimit::Depth(depth) => format!("d{depth}"),
-                DataGenLimit::Nodes(nodes) => format!("n{nodes}"),
-            },
+            self.nodes,
             self.book.as_ref().map_or_else(String::new, |book| format!(
                 "-{}",
                 book.file_name()
@@ -167,7 +158,7 @@ trait StartposGenerator {
 /// If there are no legal moves, None is returned.
 fn make_random_move(rng: &mut ThreadRng, t: &mut ThreadData, see_threshold: i32) -> Option<Move> {
     let legal_moves = t.board.legal_moves();
-    for _ in 0..8 {
+    for _ in 0..RANDOM_MOVE_ATTEMPTS {
         let m = *legal_moves.choose(rng)?;
         if static_exchange_eval(&t.board, &t.info, m, see_threshold) {
             assert!(t.board.is_legal(m));
@@ -190,6 +181,7 @@ struct DFRCStartposGenerator {
 }
 
 struct BookStartposGenerator<'a> {
+    rng: ThreadRng,
     source: &'a [&'a str],
     cursor: &'a AtomicUsize,
 }
@@ -200,13 +192,13 @@ impl StartposGenerator for ClassicalStartposGenerator {
         thread_data
             .nnue
             .reinit_from(&thread_data.board, thread_data.nnue_params);
-        let max = if self.rng.gen_bool(0.5) { 8 } else { 9 };
-        for _ in 0..max {
-            let res = make_random_move(&mut self.rng, thread_data, 0);
+
+        for _ in 0..RANDOM_MOVES_ROOT {
+            let res = make_random_move(&mut self.rng, thread_data, RANDOM_SEE_THRESHOLD);
             if res.is_none() {
                 return ControlFlow::Break(());
             }
-            if thread_data.board.outcome() != GameOutcome::Ongoing {
+            if thread_data.board.outcome().is_some() {
                 return ControlFlow::Break(());
             }
         }
@@ -219,17 +211,17 @@ impl StartposGenerator for DFRCStartposGenerator {
     fn generate(&mut self, thread_data: &mut ThreadData) -> ControlFlow<(), ()> {
         thread_data
             .board
-            .set_dfrc_idx(rand::Rng::gen_range(&mut self.rng, 0..960 * 960));
+            .set_dfrc_idx(rand::Rng::random_range(&mut self.rng, 0..960 * 960));
         thread_data
             .nnue
             .reinit_from(&thread_data.board, thread_data.nnue_params);
-        let max = if self.rng.gen_bool(0.5) { 8 } else { 9 };
-        for _ in 0..max {
-            let res = make_random_move(&mut self.rng, thread_data, 0);
+
+        for _ in 0..RANDOM_MOVES_ROOT {
+            let res = make_random_move(&mut self.rng, thread_data, RANDOM_SEE_THRESHOLD);
             if res.is_none() {
                 return ControlFlow::Break(());
             }
-            if thread_data.board.outcome() != GameOutcome::Ongoing {
+            if thread_data.board.outcome().is_some() {
                 return ControlFlow::Break(());
             }
         }
@@ -255,11 +247,22 @@ impl StartposGenerator for BookStartposGenerator<'_> {
         thread_data
             .nnue
             .reinit_from(&thread_data.board, thread_data.nnue_params);
+
+        #[allow(clippy::reversed_empty_ranges)]
+        for _ in 0..RANDOM_MOVES_BOOK {
+            let res = make_random_move(&mut self.rng, thread_data, RANDOM_SEE_THRESHOLD);
+            if res.is_none() {
+                return ControlFlow::Break(());
+            }
+            if thread_data.board.outcome().is_some() {
+                return ControlFlow::Break(());
+            }
+        }
+
         ControlFlow::Continue(())
     }
 }
 
-#[allow(clippy::too_many_lines)]
 pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
     if !cfg!(feature = "datagen") {
         bail!("datagen feature not enabled (compile with --features datagen)");
@@ -278,18 +281,14 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
     CHESS960.store(options.generate_dfrc, Ordering::SeqCst);
     FENS_GENERATED.store(0, Ordering::SeqCst);
 
-    if options.log_level > 0 {
-        println!("Starting data generation with the following configuration:");
-        println!("{options}");
-        if options.num_games % options.num_threads != 0 {
-            println!(
-                "Warning: The number of games is not evenly divisible by the number of threads,"
-            );
-            println!(
-                "this will result in {} games being omitted.",
-                options.num_games % options.num_threads
-            );
-        }
+    println!("Starting data generation with the following configuration:");
+    println!("{options}");
+    if !options.num_games.is_multiple_of(options.num_threads) {
+        println!("Warning: The number of games is not evenly divisible by the number of threads,");
+        println!(
+            "this will result in {} games being omitted.",
+            options.num_games % options.num_threads
+        );
     }
     if let Some(tb_path) = &options.tablebases_path {
         let tb_path = tb_path.to_string_lossy();
@@ -300,9 +299,7 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
             bail!("Failed to take lock on SYZYGY_PATH");
         }
         SYZYGY_ENABLED.store(true, Ordering::SeqCst);
-        if options.log_level > 0 {
-            println!("Syzygy tablebases enabled.");
-        }
+        println!("Syzygy tablebases enabled.");
     }
 
     // create a new unique identifier for this generation run
@@ -315,10 +312,8 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
         chrono::Utc::now().format("%Y-%m-%d_%H-%M-%S"),
         options.summary()
     );
-    if options.log_level > 0 {
-        println!("This run will be saved to the directory \"data/{run_id}\"");
-        println!("Each thread will save its data to a separate file in this directory.");
-    }
+    println!("This run will be saved to the directory \"data/{run_id}\"");
+    println!("Each thread will save its data to a separate file in this directory.");
 
     // create the directory for the data
     let data_dir = PathBuf::from("data").join(run_id);
@@ -346,10 +341,13 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
                     // this rng is different between each thread
                     // (https://rust-random.github.io/book/guide-parallel.html)
                     // so no worries :3
-                    let rng = rand::thread_rng();
-                    #[allow(clippy::option_if_let_else)]
+                    let rng = rand::rng();
                     let startpos_src = if let Some(source) = book_positions {
-                        Box::new(BookStartposGenerator { source, cursor }) as Box<_>
+                        Box::new(BookStartposGenerator {
+                            rng,
+                            source,
+                            cursor,
+                        }) as Box<_>
                     } else if opt_ref.generate_dfrc {
                         Box::new(DFRCStartposGenerator { rng }) as Box<_>
                     } else {
@@ -369,16 +367,14 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
         Ok(())
     })?;
 
-    if options.log_level > 0 {
-        println!("Done!");
-    }
-
     let counters = counters.into_iter().reduce(|mut acc, e| {
         for (key, value) in e {
             *acc.entry(key).or_insert(0) += value;
         }
         acc
     });
+
+    println!("Done!");
 
     if let Some(counters) = counters {
         print_game_stats(&counters);
@@ -392,7 +388,7 @@ fn print_game_stats(counters: &HashMap<GameOutcome, u64>) {
     let total = counters.values().sum::<u64>();
     eprintln!("Total games: {total}");
     let mut counters = counters.iter().collect::<Vec<_>>();
-    counters.sort_unstable_by_key(|(_, &value)| Reverse(value));
+    counters.sort_unstable_by_key(|&(_, value)| Reverse(value));
     for (&key, &value) in counters {
         eprintln!(
             "{key:?}: {value} ({percentage}%)",
@@ -401,12 +397,17 @@ fn print_game_stats(counters: &HashMap<GameOutcome, u64>) {
     }
 }
 
-#[allow(
-    clippy::cognitive_complexity,
-    clippy::cast_precision_loss,
-    clippy::too_many_lines,
-    clippy::cast_possible_truncation
-)]
+impl From<WDL> for GameOutcome {
+    fn from(value: WDL) -> Self {
+        match value {
+            WDL::Win => Self::WhiteWin(WinType::TB),
+            WDL::Loss => Self::BlackWin(WinType::TB),
+            WDL::Draw => Self::Draw(DrawType::TB),
+        }
+    }
+}
+
+#[allow(clippy::too_many_lines)]
 fn generate_on_thread<'a>(
     id: usize,
     options: &DataGenOptions,
@@ -414,9 +415,21 @@ fn generate_on_thread<'a>(
     nnue_params: &'static NNUEParams,
     mut startpos_src: Box<dyn StartposGenerator + 'a>,
 ) -> anyhow::Result<HashMap<GameOutcome, u64>> {
-    let pool = threadpool::make_worker_threads(1);
+    // Whole datagen workers are multiplied across the machine,
+    // so any given worker has only one thread for search.
+    // This is good, because we don't have to contend with any
+    // imperfect Lazy SMP scaling losses, and it makes the whole
+    // procedure utterly parallel.
+    let worker_thread = threadpool::make_worker_threads(1)
+        .into_iter()
+        .next()
+        .unwrap();
+
+    // We allocate four megabytes of cache for each worker,
+    // because search budgets are so small and smaller TTs
+    // increase speed.
     let mut tt = TT::new();
-    tt.resize(MEGABYTE, &pool);
+    tt.resize(4 * MEGABYTE, from_ref(&worker_thread));
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
     let mut thread_data = make_thread_data(
@@ -425,17 +438,18 @@ fn generate_on_thread<'a>(
         nnue_params,
         &stopped,
         &nodes,
-        &pool,
-    )?;
-    let time_manager = TimeManager::default_with_limit(match options.limit {
-        DataGenLimit::Depth(depth) => SearchLimit::Depth(depth),
-        DataGenLimit::Nodes(nodes) => SearchLimit::SoftNodes {
-            soft_limit: nodes,
-            hard_limit: nodes * 8,
-        },
+        from_ref(&worker_thread),
+    )?
+    .into_iter()
+    .next()
+    .unwrap();
+
+    let time_manager = TimeManager::default_with_limit(SearchLimit::SoftNodes {
+        soft_limit: options.nodes,
+        hard_limit: options.nodes * 8,
     });
-    thread_data[0].info.time_manager = time_manager;
-    thread_data[0].info.print_to_stdout = false;
+    thread_data.info.clock = time_manager;
+    thread_data.info.print_to_stdout = false;
 
     let n_games_to_run = std::cmp::max(options.num_games / options.num_threads, 1);
 
@@ -463,86 +477,53 @@ fn generate_on_thread<'a>(
     let start = Instant::now();
     'generation_main_loop: for game in 0..n_games_to_run {
         // report progress
-        if id == 0 && game % 8 == 0 && options.log_level > 0 && game > 0 {
-            let percentage = game * 100_000 / n_games_to_run;
-            let percentage = percentage as f64 / 1000.0;
-            let time_per_game = start.elapsed().as_secs_f64() / game as f64;
-            let games_to_go = n_games_to_run as f64 - game as f64;
-            let time_remaining = games_to_go * time_per_game;
-            eprintln!("[+] Main thread: Generated {game} games ({percentage:.1}%). Time per game: {time_per_game:.2} seconds.");
-            eprintln!(
-                " |> FENs generated: {fens} (FENs/sec = {fps:.2})",
-                fens = FENS_GENERATED.load(Ordering::Relaxed),
-                fps = FENS_GENERATED.load(Ordering::Relaxed) as f64 / start.elapsed().as_secs_f64()
-            );
-            eprintln!(" |> Estimated time remaining: {time_remaining:.2} seconds.");
-            let est_completion_date = chrono::Local::now()
-                .checked_add_signed(
-                    chrono::Duration::try_seconds(time_remaining as i64)
-                        .with_context(|| "failed to convert remaining time to seconds")?,
-                )
-                .with_context(|| "failed to add remaining time to current time")?;
-            let time_completion = est_completion_date.format("%Y-%m-%d %H:%M:%S");
-            eprintln!(" |> Estimated completion time: {time_completion}");
-            std::io::stderr()
-                .flush()
-                .with_context(|| "Failed to flush stderr.")?;
-            if game % 1024 == 0 {
-                eprintln!("Game stats for main thread:");
-                print_game_stats(&counters);
-            }
+        if id == 0 && game % 32 == 0 && game > 0 {
+            print_progress(n_games_to_run, &counters, start, game)?;
         }
         // reset everything: board, thread data, tt, search info
-        tt.clear(&pool);
-        thread_data[0].info.set_up_for_search();
+        tt.clear(from_ref(&worker_thread));
+        thread_data.info.set_up_for_search();
         // generate game
         // STEP 1: get the next starting position from the callback
-        match startpos_src.generate(&mut thread_data[0]) {
+        match startpos_src.generate(&mut thread_data) {
             ControlFlow::Break(()) => continue 'generation_main_loop,
             ControlFlow::Continue(()) => {}
         }
 
-        // STEP 2: evaluate the exit position with reasonable depth
-        // to make sure that it isn't silly.
-        let temp_limit = thread_data[0].info.time_manager.limit().clone();
-        thread_data[0]
-            .info
-            .time_manager
-            .set_limit(SearchLimit::Depth(10));
-        let (eval, _) = search_position(&pool, &mut thread_data, tt.view());
-        thread_data[0].info.time_manager.set_limit(temp_limit);
+        // STEP 2: evaluate the exit position with reasonable
+        // effort to make sure that it's worth learning from.
+        let temp_limit = thread_data.info.clock.limit().clone();
+        thread_data.info.clock.set_limit(SearchLimit::SoftNodes {
+            soft_limit: 50_000,
+            hard_limit: 50_000 * 8,
+        });
+        let eval = search_position(from_ref(&worker_thread), from_mut(&mut thread_data)).0;
+        thread_data.info.clock.set_limit(temp_limit);
         if eval.abs() > 1000 {
             // if the position is too good or too bad, we don't want it
             continue 'generation_main_loop;
         }
-        let mut game = Game::new(&thread_data[0].board);
+        let mut game = Game::new(&thread_data.board);
         // STEP 3: play out to the end of the game
         let mut win_adj_counter = 0;
         let mut draw_adj_counter = 0;
         let outcome = loop {
-            let outcome = thread_data[0].board.outcome();
-            if outcome != GameOutcome::Ongoing {
+            if let Some(outcome) = thread_data.board.outcome() {
                 break outcome;
             }
-            if options.tablebases_path.is_some() {
-                if let Some(wdl) = tablebases::probe::get_wdl_white(&thread_data[0].board) {
-                    break match wdl {
-                        WDL::Win => GameOutcome::WhiteWin(WinType::TB),
-                        WDL::Loss => GameOutcome::BlackWin(WinType::TB),
-                        WDL::Draw => GameOutcome::Draw(DrawType::TB),
-                    };
-                }
+            if options.tablebases_path.is_some()
+                && let Some(wdl) = tablebases::probe::get_wdl_white(&thread_data.board)
+            {
+                break wdl.into();
             }
-            tt.increase_age();
 
-            let (score, best_move) = search_position(&pool, &mut thread_data, tt.view());
+            tt.increase_age();
+            let (score, best_move) =
+                search_position(from_ref(&worker_thread), from_mut(&mut thread_data));
 
             let Some(best_move) = best_move else {
                 println!("[WARNING!] search returned a null move as the best move!");
-                println!(
-                    "[WARNING!] this occurred in position {}",
-                    thread_data[0].board
-                );
+                println!("[WARNING!] this occurred in position {}", thread_data.board);
                 continue 'generation_main_loop;
             };
 
@@ -566,43 +547,39 @@ fn generate_on_thread<'a>(
             }
 
             if win_adj_counter >= 4 {
-                let outcome = if score > 0 {
+                break if score > 0 {
                     GameOutcome::WhiteWin(WinType::Adjudication)
                 } else {
                     GameOutcome::BlackWin(WinType::Adjudication)
                 };
-                break outcome;
             }
             if draw_adj_counter >= 12 {
                 break GameOutcome::Draw(DrawType::Adjudication);
             }
-            if is_game_theoretic_score(score) {
+            if is_decisive(score) {
                 // if the score is game theoretic, we don't want to play out the rest of the game
-                let is_mate = is_mate_score(score);
-                break match (score.signum(), is_mate) {
-                    (1, false) => GameOutcome::WhiteWin(WinType::TB),
-                    (-1, false) => GameOutcome::BlackWin(WinType::TB),
-                    (1, true) => GameOutcome::WhiteWin(WinType::Mate),
-                    (-1, true) => GameOutcome::BlackWin(WinType::Mate),
-                    _ => unreachable!(),
+                break match (score > 0, is_mate_score(score)) {
+                    (true, true) => GameOutcome::WhiteWin(WinType::Mate),
+                    (true, false) => GameOutcome::WhiteWin(WinType::TB),
+                    (false, true) => GameOutcome::BlackWin(WinType::Mate),
+                    (false, false) => GameOutcome::BlackWin(WinType::TB),
                 };
             }
 
-            let td = &mut thread_data[0];
-            td.board.make_move(best_move, &mut td.nnue);
+            thread_data
+                .board
+                .make_move(best_move, &mut thread_data.nnue);
         };
-        assert_ne!(outcome, GameOutcome::Ongoing, "Game should be over by now.");
+
         // STEP 4: write the game to the output file
-        let count = game.len();
+        // increment the counter
+        FENS_GENERATED.fetch_add(game.len() as u64, Ordering::SeqCst);
         // update with outcome
         game.set_outcome(outcome);
 
         // write to file
         game.serialise_into(&mut output_buffer)
             .with_context(|| "Failed to serialise game into output buffer.")?;
-
-        // increment the counter
-        FENS_GENERATED.fetch_add(count as u64, Ordering::SeqCst);
 
         // STEP 5: update the game outcome statistics
         *counters.entry(outcome).or_default() += 1;
@@ -620,24 +597,61 @@ fn generate_on_thread<'a>(
     Ok(counters)
 }
 
-fn show_boot_info(options: &DataGenOptions) {
-    if options.log_level > 0 {
-        println!("Welcome to Viri's data generation tool!");
-        println!("This tool will generate self-play data for Viridithas.");
-        println!(
-            "You can configure the data generation process by setting the following parameters:"
-        );
-        println!("{options}");
-        println!("you can also set positions_limit to limit the number of positions generated.");
-        println!("It is recommended that you do not set the number of threads to more than the number of logical cores on your CPU, as performance will suffer.");
-        println!("(You have {} logical cores on your CPU)", num_cpus::get());
-        println!("To set a parameter, type \"set <PARAM> <VALUE>\"");
-        println!("To start data generation, type \"start\" or \"go\".");
+#[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+fn print_progress(
+    n_games_to_run: usize,
+    counters: &HashMap<GameOutcome, u64>,
+    start: Instant,
+    game: usize,
+) -> Result<(), anyhow::Error> {
+    let percentage = game * 100_000 / n_games_to_run;
+    let percentage = percentage as f64 / 1000.0;
+    let time_per_game = start.elapsed().as_secs_f64() / game as f64;
+    let games_to_go = n_games_to_run as f64 - game as f64;
+    let time_remaining = games_to_go * time_per_game;
+    eprintln!(
+        "[+] Main thread: Generated {game} games ({percentage:.1}%). Time per game: {time_per_game:.2} seconds."
+    );
+    eprintln!(
+        " |> FENs generated: {fens} (FENs/sec = {fps:.2})",
+        fens = FENS_GENERATED.load(Ordering::Relaxed),
+        fps = FENS_GENERATED.load(Ordering::Relaxed) as f64 / start.elapsed().as_secs_f64()
+    );
+    eprintln!(" |> Estimated time remaining: {time_remaining:.2} seconds.");
+    let est_completion_date = chrono::Local::now()
+        .checked_add_signed(
+            chrono::Duration::try_seconds(time_remaining as i64)
+                .with_context(|| "failed to convert remaining time to seconds")?,
+        )
+        .with_context(|| "failed to add remaining time to current time")?;
+    let time_completion = est_completion_date.format("%Y-%m-%d %H:%M:%S");
+    eprintln!(" |> Estimated completion time: {time_completion}");
+    std::io::stderr()
+        .flush()
+        .with_context(|| "Failed to flush stderr.")?;
+    if game.is_multiple_of(1024) {
+        eprintln!("Game stats for main thread:");
+        print_game_stats(counters);
     }
+
+    Ok(())
+}
+
+fn show_boot_info(options: &DataGenOptions) {
+    println!("Welcome to Viri's data generation tool!");
+    println!("This tool will generate self-play data for Viridithas.");
+    println!("You can configure the data generation process by setting the following parameters:");
+    println!("{options}");
+    println!("you can also set positions_limit to limit the number of positions generated.");
+    println!(
+        "It is recommended that you do not set the number of threads to more than the number of logical cores on your CPU, as performance will suffer."
+    );
+    println!("(You have {} logical cores on your CPU)", num_cpus::get());
+    println!("To set a parameter, type \"set <PARAM> <VALUE>\"");
+    println!("To start data generation, type \"start\" or \"go\".");
 }
 
 fn config_loop(mut options: DataGenOptions) -> anyhow::Result<DataGenOptions> {
-    #![allow(clippy::option_if_let_else, clippy::too_many_lines)]
     println!();
     let mut user_input = String::new();
     loop {
@@ -657,7 +671,9 @@ fn config_loop(mut options: DataGenOptions) -> anyhow::Result<DataGenOptions> {
             break;
         }
         if command != "set" {
-            eprintln!("Invalid command, supported commands are \"set <PARAM> <VALUE>\", \"start\", and \"go\"");
+            eprintln!(
+                "Invalid command, supported commands are \"set <PARAM> <VALUE>\", \"start\", and \"go\""
+            );
             continue;
         }
         let Some(param) = user_input.next() else {
@@ -684,7 +700,9 @@ fn config_loop(mut options: DataGenOptions) -> anyhow::Result<DataGenOptions> {
                 if let Ok(num_threads) = value.parse::<usize>() {
                     let num_cpus = num_cpus::get();
                     if num_threads > num_cpus {
-                        eprintln!("Warning: The specified number of threads ({num_threads}) is greater than the number of available CPUs ({num_cpus}).");
+                        eprintln!(
+                            "Warning: The specified number of threads ({num_threads}) is greater than the number of available CPUs ({num_cpus})."
+                        );
                     }
                     options.num_threads = num_threads;
                 } else {
@@ -704,19 +722,19 @@ fn config_loop(mut options: DataGenOptions) -> anyhow::Result<DataGenOptions> {
             "limit" => {
                 let Some(limit_size) = user_input.next() else {
                     eprintln!("Trying to set limit, but only one token was provided");
-                    eprintln!("Usage: \"set limit <TYPE> <NUMBER>\"");
-                    eprintln!("Example: \"set limit depth 8\" (sets the limit to 8 plies)");
+                    eprintln!("Usage: \"set limit <NUMBER>\"");
+                    eprintln!("Example: \"set limit 8000\" (sets the limit to 8000 nodes)");
                     continue;
                 };
                 let full_limit = value.to_string() + " " + limit_size;
-                let limit = match full_limit.parse::<DataGenLimit>() {
+                let limit = match full_limit.parse::<u64>() {
                     Ok(limit) => limit,
                     Err(e) => {
                         eprintln!("{e}");
                         continue;
                     }
                 };
-                options.limit = limit;
+                options.nodes = limit;
             }
             "dfrc" => {
                 if let Ok(dfrc) = value.parse::<bool>() {
@@ -725,18 +743,10 @@ fn config_loop(mut options: DataGenOptions) -> anyhow::Result<DataGenOptions> {
                     eprintln!("Invalid value for dfrc, must be a boolean");
                 }
             }
-            "log_level" => {
-                let log_level = match value.parse::<u8>() {
-                    Ok(log_level) => log_level,
-                    Err(e) => {
-                        eprintln!("{e}");
-                        continue;
-                    }
-                };
-                options.log_level = log_level;
-            }
             other => {
-                eprintln!("Invalid parameter (\"{other}\"), supported parameters are \"num_games\", \"num_threads\", \"tablebases_path\", \"use_nnue\", \"limit\", and \"log_level\"");
+                eprintln!(
+                    "Invalid parameter (\"{other}\"), supported parameters are \"num_games\", \"num_threads\", \"tablebases_path\", \"use_nnue\", and \"nodes\"."
+                );
             }
         }
     }
@@ -756,16 +766,8 @@ impl Display for DataGenOptions {
                 .as_ref()
                 .map_or_else(|| "None".into(), |path| path.to_string_lossy())
         )?;
-        writeln!(
-            f,
-            " |> limit: {}",
-            match self.limit {
-                DataGenLimit::Depth(depth) => format!("depth {depth}"),
-                DataGenLimit::Nodes(nodes) => format!("nodes {nodes}"),
-            }
-        )?;
+        writeln!(f, " |> limit: {} nodes", self.nodes)?;
         writeln!(f, " |> dfrc: {}", self.generate_dfrc)?;
-        writeln!(f, " |> log_level: {}", self.log_level)?;
         if self.tablebases_path.is_none() {
             writeln!(
                 f,
@@ -773,30 +775,6 @@ impl Display for DataGenOptions {
             )?;
         }
         Ok(())
-    }
-}
-
-impl FromStr for DataGenLimit {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        #![allow(clippy::cast_possible_truncation)]
-        let (limit_type, limit_value) = s
-            .split_once(' ')
-            .ok_or_else(|| format!("Invalid limit, no space: {s}"))?;
-        let limit_value: u64 = limit_value
-            .parse()
-            .map_err(|_| format!("Invalid limit value: {limit_value}"))?;
-        match limit_type {
-            "depth" => {
-                if limit_value > i32::MAX as u64 {
-                    return Err(format!("Depth limit too large: {limit_value}"));
-                }
-                Ok(Self::Depth(limit_value as i32))
-            }
-            "nodes" => Ok(Self::Nodes(limit_value)),
-            _ => Err(format!("Invalid limit type: {limit_type}")),
-        }
     }
 }
 
@@ -849,9 +827,9 @@ pub fn run_splat(
                 |chess_board| {
                     // SAFETY: ChessBoard is composed entirely of integer types, which are safe to transmute into bytes.
                     let bytes = unsafe { std::mem::transmute::<ChessBoard, [u8; 32]>(chess_board) };
-                    output_buffer.write_all(&bytes).with_context(|| {
-                        "Failed to write bulletformat::ChessBoard into buffered writer."
-                    })
+                    output_buffer.write_all(&bytes).with_context(
+                        || "Failed to write bulletformat::ChessBoard into buffered writer.",
+                    )
                 },
                 &filter,
             )?;
@@ -864,10 +842,8 @@ pub fn run_splat(
                 .flush()
                 .with_context(|| "Failed to flush stdout.")?;
         }
-        if let Some(limit) = limit {
-            if game_count >= limit {
-                break;
-            }
+        if limit.is_some_and(|limit| game_count >= limit) {
+            break;
         }
     }
     println!("\r{game_count} games splatted.");
@@ -964,10 +940,8 @@ pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) -> anyhow::R
 
         move_buffer = game.into_move_buffer();
         game_count += 1;
-        if let Some(limit) = limit {
-            if game_count >= limit {
-                break;
-            }
+        if limit.is_some_and(|limit| game_count >= limit) {
+            break;
         }
     }
 
@@ -1009,7 +983,6 @@ impl Display for MaterialConfiguration {
     }
 }
 
-#[allow(clippy::fallible_impl_from)]
 impl From<&Board> for MaterialConfiguration {
     fn from(board: &Board) -> Self {
         let mut mc = Self::default();
@@ -1206,11 +1179,7 @@ pub fn dataset_count(path: &Path) -> anyhow::Result<()> {
                 dir.filter_map(|entry| {
                     entry.ok().and_then(|entry| {
                         let path = entry.path();
-                        if path.is_file() {
-                            Some(path)
-                        } else {
-                            None
-                        }
+                        if path.is_file() { Some(path) } else { None }
                     })
                 })
                 .collect()

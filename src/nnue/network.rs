@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{ensure, Context};
+use anyhow::{Context, ensure};
 use arrayvec::ArrayVec;
 use memmap2::Mmap;
 
@@ -22,7 +22,7 @@ use crate::{
     },
     image::{self, Image},
     nnue,
-    util::{self, Align64, MAX_PLY},
+    util::{self, Align64, MAX_DEPTH},
 };
 
 use super::accumulator::{self, Accumulator};
@@ -672,7 +672,7 @@ impl NNUEParams {
     #[allow(clippy::too_many_lines)]
     pub fn decompress_and_alloc() -> anyhow::Result<&'static Self> {
         #[cfg(not(feature = "zstd"))]
-        type ZstdDecoder<R, D> = ruzstd::StreamingDecoder<R, D>;
+        type ZstdDecoder<R, D> = ruzstd::decoding::StreamingDecoder<R, D>;
         #[cfg(feature = "zstd")]
         type ZstdDecoder<'a, R> = zstd::stream::Decoder<'a, R>;
 
@@ -763,11 +763,20 @@ impl NNUEParams {
             )
         };
         let expected_bytes = mem.len() as u64;
+        let decoding_start = std::time::Instant::now();
         let mut decoder = ZstdDecoder::new(EMBEDDED_NNUE)
             .with_context(|| "Failed to construct zstd decoder for NNUE weights.")?;
         let bytes_written = std::io::copy(&mut decoder, &mut mem)
             .with_context(|| "Failed to decompress NNUE weights.")?;
-        anyhow::ensure!(bytes_written == expected_bytes, "encountered issue while decompressing NNUE weights, expected {expected_bytes} bytes, but got {bytes_written}");
+        let decoding_time = decoding_start.elapsed();
+        println!(
+            "info string decompressed NNUE weights in {}us",
+            decoding_time.as_micros()
+        );
+        anyhow::ensure!(
+            bytes_written == expected_bytes,
+            "encountered issue while decompressing NNUE weights, expected {expected_bytes} bytes, but got {bytes_written}"
+        );
         let use_simd = cfg!(target_arch = "x86_64");
         let net = net.permute(use_simd);
 
@@ -842,7 +851,9 @@ impl NNUEParams {
 
             rename_result.with_context(|| {
                 format!(
-                    "Failed to rename temp file from {tfile:#?} to {wfile:#?} in {}",
+                    "Failed to rename temp file from {} to {} in {}",
+                    tfile.display(),
+                    wfile.display(),
                     temp_dir.display()
                 )
             })?;
@@ -1039,7 +1050,7 @@ pub fn dry_run() -> anyhow::Result<()> {
 }
 
 /// The size of the stack used to store the activations of the hidden layer.
-const ACC_STACK_SIZE: usize = MAX_PLY + 1;
+const ACC_STACK_SIZE: usize = MAX_DEPTH + 1;
 
 /// Struct representing some unmaterialised feature update made as part of a move.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

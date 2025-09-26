@@ -9,11 +9,7 @@ macro_rules! max {
         max
     }};
     ($a:expr, $b:expr) => {
-        if $a > $b {
-            $a
-        } else {
-            $b
-        }
+        if $a > $b { $a } else { $b }
     };
 }
 
@@ -28,11 +24,7 @@ macro_rules! min {
         min
     }};
     ($a:expr, $b:expr) => {
-        if $a < $b {
-            $a
-        } else {
-            $b
-        }
+        if $a < $b { $a } else { $b }
     };
 }
 
@@ -50,12 +42,23 @@ macro_rules! track {
             )]
             static TOTAL: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
             static COUNT: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
-            TOTAL.fetch_add($v as i64, std::sync::atomic::Ordering::Relaxed);
+            static MAX: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(i64::MIN);
+            static MIN: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(i64::MAX);
+            let v = $v as i64;
+            MAX.fetch_max(v, std::sync::atomic::Ordering::Relaxed);
+            MIN.fetch_min(v, std::sync::atomic::Ordering::Relaxed);
+            TOTAL.fetch_add(v, std::sync::atomic::Ordering::Relaxed);
             let count = COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            if count % 2048 == 0 {
+            if count % 8192 == 0 {
                 let total = TOTAL.load(std::sync::atomic::Ordering::Relaxed);
                 let avg = total as f64 / count as f64;
                 println!("average value of {}: {}", stringify!($v), avg);
+                println!(
+                    "min/max value of {}: {}/{}",
+                    stringify!($v),
+                    MIN.load(std::sync::atomic::Ordering::Relaxed),
+                    MAX.load(std::sync::atomic::Ordering::Relaxed)
+                );
             }
             // pass-through
             $v

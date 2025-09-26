@@ -10,25 +10,26 @@ use std::{
 use crate::{
     cfor,
     chess::{
+        CHESS960,
         board::Board,
         chessmove::{Move, MoveFlags},
         magic::{
-            bishop_attacks_on_the_fly, rook_attacks_on_the_fly, set_occupancy, BISHOP_ATTACKS,
-            BISHOP_REL_BITS, BISHOP_TABLE, ROOK_ATTACKS, ROOK_REL_BITS, ROOK_TABLE,
+            BISHOP_ATTACKS, BISHOP_REL_BITS, BISHOP_TABLE, ROOK_ATTACKS, ROOK_REL_BITS, ROOK_TABLE,
+            bishop_attacks_on_the_fly, rook_attacks_on_the_fly, set_occupancy,
         },
         piece::{Black, Col, Colour, PieceType, White},
         squareset::SquareSet,
         types::{Rank, Square},
-        CHESS960,
     },
 };
 
 pub const MAX_POSITION_MOVES: usize = 218;
 
+#[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MoveListEntry {
-    pub mov: Move,
     pub score: i32,
+    pub mov: Move,
 }
 
 impl MoveListEntry {
@@ -1223,7 +1224,7 @@ mod tests {
 
     #[test]
     fn ray_test() {
-        use super::{Square, RAY_BETWEEN};
+        use super::{RAY_BETWEEN, Square};
         use crate::chess::squareset::SquareSet;
         assert_eq!(RAY_BETWEEN[Square::A1][Square::A1], SquareSet::EMPTY);
         assert_eq!(RAY_BETWEEN[Square::A1][Square::B1], SquareSet::EMPTY);
@@ -1244,7 +1245,7 @@ mod tests {
 
     #[test]
     fn ray_diag_test() {
-        use super::{Square, RAY_BETWEEN};
+        use super::{RAY_BETWEEN, Square};
         let ray = RAY_BETWEEN[Square::B5][Square::E8];
         assert_eq!(ray, Square::C6.as_set() | Square::D7.as_set());
     }

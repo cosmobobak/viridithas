@@ -41,10 +41,10 @@ impl Board {
                 self.side
             ));
         }
-        if self.generate_pos_keys() != self.state.keys {
+        if self.state.generate_pos_keys(self.side) != self.state.keys {
             return Err(format!(
                 "key is corrupt: expected {:?}, got {:?}",
-                self.generate_pos_keys(),
+                self.state.generate_pos_keys(self.side),
                 self.state.keys
             ));
         }

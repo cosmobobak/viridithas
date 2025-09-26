@@ -4,7 +4,6 @@ pub mod parameters;
 pub mod pv;
 
 use std::{
-    ops::ControlFlow,
     sync::atomic::{AtomicU64, Ordering},
     thread,
 };
@@ -14,20 +13,21 @@ use arrayvec::ArrayVec;
 use crate::{
     cfor,
     chess::{
+        CHESS960,
         board::{
-            movegen::{self, MAX_POSITION_MOVES, RAY_FULL},
             Board,
+            movegen::{self, MAX_POSITION_MOVES, RAY_FULL},
         },
         chessmove::Move,
         piece::{Colour, Piece, PieceType},
         squareset::SquareSet,
         types::{ContHistIndex, Square},
-        CHESS960,
     },
     evaluation::{
-        evaluate, is_game_theoretic_score, mate_in, mated_in, see_value, tb_loss_in, tb_win_in,
-        MATE_SCORE, MINIMUM_TB_WIN_SCORE,
+        MATE_SCORE, MINIMUM_TB_WIN_SCORE, evaluate, is_decisive, mate_in, mated_in, see_value,
+        tb_loss_in, tb_win_in,
     },
+    history::caphist_piece_type,
     historytable::{
         cont1_history_bonus, cont1_history_malus, cont2_history_bonus, cont2_history_malus,
         main_history_bonus, main_history_malus,
@@ -39,9 +39,9 @@ use crate::{
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
     threadpool::{self, ScopeExt},
-    transpositiontable::{Bound, TTHit, TTView},
+    transpositiontable::{Bound, TTHit},
     uci,
-    util::{INFINITY, MAX_DEPTH, MAX_PLY, VALUE_NONE},
+    util::{INFINITY, MAX_DEPTH, VALUE_NONE},
 };
 
 use self::parameters::Config;
@@ -57,84 +57,87 @@ use self::parameters::Config;
 // in alpha-beta, a call to alpha_beta(ALLNODE, alpha, beta) returns a score <= alpha.
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
-const ASPIRATION_WINDOW: i32 = 6;
-const RFP_MARGIN: i32 = 77;
-const RFP_IMPROVING_MARGIN: i32 = 67;
-const NMP_IMPROVING_MARGIN: i32 = 83;
+const ASPIRATION_EVAL_DIVISOR: i32 = 29614;
+const DELTA_INITIAL: i32 = 12;
+const DELTA_BASE_MUL: i32 = 40;
+const DELTA_REDUCTION_MUL: i32 = 15;
+const RFP_MARGIN: i32 = 84;
+const RFP_IMPROVING_MARGIN: i32 = 75;
+const NMP_IMPROVING_MARGIN: i32 = 106;
 const NMP_DEPTH_MUL: i32 = -8;
-const NMP_REDUCTION_EVAL_DIVISOR: i32 = 191;
-const SEE_QUIET_MARGIN: i32 = -73;
+const NMP_REDUCTION_EVAL_DIVISOR: i32 = 150;
+const SEE_QUIET_MARGIN: i32 = -70;
 const SEE_TACTICAL_MARGIN: i32 = -25;
-const FUTILITY_COEFF_0: i32 = 113;
-const FUTILITY_COEFF_1: i32 = 75;
-const RAZORING_COEFF_0: i32 = -28;
-const RAZORING_COEFF_1: i32 = 268;
-const PROBCUT_MARGIN: i32 = 306;
+const FUTILITY_COEFF_0: i32 = 110;
+const FUTILITY_COEFF_1: i32 = 61;
+const RAZORING_COEFF_0: i32 = 63;
+const RAZORING_COEFF_1: i32 = 270;
+const PROBCUT_MARGIN: i32 = 184;
 const PROBCUT_IMPROVING_MARGIN: i32 = 69;
-const DOUBLE_EXTENSION_MARGIN: i32 = 14;
-const TRIPLE_EXTENSION_MARGIN: i32 = 119;
-const LMR_BASE: f64 = 91.0;
-const LMR_DIVISION: f64 = 264.0;
-const QS_SEE_BOUND: i32 = -159;
-const MAIN_SEE_BOUND: i32 = -134;
-const DO_DEEPER_BASE_MARGIN: i32 = 53;
-const DO_DEEPER_DEPTH_MARGIN: i32 = 12;
-const HISTORY_PRUNING_MARGIN: i32 = -3746;
-const QS_FUTILITY: i32 = 261;
-const SEE_STAT_SCORE_MUL: i32 = 26;
+const DOUBLE_EXTENSION_MARGIN: i32 = 12;
+const TRIPLE_EXTENSION_MARGIN: i32 = 166;
+const LMR_BASE: f64 = 95.0;
+const LMR_DIVISION: f64 = 260.0;
+const QS_SEE_BOUND: i32 = -50;
+const MAIN_SEE_BOUND: i32 = -86;
+const DO_DEEPER_BASE_MARGIN: i32 = 45;
+const DO_DEEPER_DEPTH_MARGIN: i32 = 14;
+const HISTORY_PRUNING_MARGIN: i32 = -4942;
+const QS_FUTILITY: i32 = 341;
+const SEE_STAT_SCORE_MUL: i32 = 20;
 
-const HISTORY_LMR_DIVISOR: i32 = 17103;
-const LMR_REFUTATION_MUL: i32 = 906;
-const LMR_NON_PV_MUL: i32 = 1053;
-const LMR_TTPV_MUL: i32 = 1403;
-const LMR_CUT_NODE_MUL: i32 = 1472;
-const LMR_NON_IMPROVING_MUL: i32 = 683;
-const LMR_TT_CAPTURE_MUL: i32 = 1131;
-const LMR_CHECK_MUL: i32 = 1176;
+const HISTORY_LMR_DIVISOR: i32 = 17205;
+const LMR_REFUTATION_MUL: i32 = 860;
+const LMR_NON_PV_MUL: i32 = 1148;
+const LMR_TTPV_MUL: i32 = 1432;
+const LMR_CUT_NODE_MUL: i32 = 1412;
+const LMR_NON_IMPROVING_MUL: i32 = 456;
+const LMR_TT_CAPTURE_MUL: i32 = 1301;
+const LMR_CHECK_MUL: i32 = 1217;
 
-const MAIN_HISTORY_BONUS_MUL: i32 = 364;
-const MAIN_HISTORY_BONUS_OFFSET: i32 = 152;
-const MAIN_HISTORY_BONUS_MAX: i32 = 2707;
-const MAIN_HISTORY_MALUS_MUL: i32 = 236;
-const MAIN_HISTORY_MALUS_OFFSET: i32 = 424;
-const MAIN_HISTORY_MALUS_MAX: i32 = 1392;
-const CONT1_HISTORY_BONUS_MUL: i32 = 298;
-const CONT1_HISTORY_BONUS_OFFSET: i32 = 186;
-const CONT1_HISTORY_BONUS_MAX: i32 = 2901;
-const CONT1_HISTORY_MALUS_MUL: i32 = 236;
-const CONT1_HISTORY_MALUS_OFFSET: i32 = 306;
-const CONT1_HISTORY_MALUS_MAX: i32 = 1391;
-const CONT2_HISTORY_BONUS_MUL: i32 = 257;
-const CONT2_HISTORY_BONUS_OFFSET: i32 = 129;
-const CONT2_HISTORY_BONUS_MAX: i32 = 2414;
-const CONT2_HISTORY_MALUS_MUL: i32 = 276;
-const CONT2_HISTORY_MALUS_OFFSET: i32 = 317;
-const CONT2_HISTORY_MALUS_MAX: i32 = 1533;
-const TACTICAL_HISTORY_BONUS_MUL: i32 = 236;
-const TACTICAL_HISTORY_BONUS_OFFSET: i32 = 278;
-const TACTICAL_HISTORY_BONUS_MAX: i32 = 2196;
-const TACTICAL_HISTORY_MALUS_MUL: i32 = 125;
-const TACTICAL_HISTORY_MALUS_OFFSET: i32 = 360;
-const TACTICAL_HISTORY_MALUS_MAX: i32 = 1073;
+const MAIN_HISTORY_BONUS_MUL: i32 = 341;
+const MAIN_HISTORY_BONUS_OFFSET: i32 = 178;
+const MAIN_HISTORY_BONUS_MAX: i32 = 2298;
+const MAIN_HISTORY_MALUS_MUL: i32 = 172;
+const MAIN_HISTORY_MALUS_OFFSET: i32 = 407;
+const MAIN_HISTORY_MALUS_MAX: i32 = 835;
+const CONT1_HISTORY_BONUS_MUL: i32 = 187;
+const CONT1_HISTORY_BONUS_OFFSET: i32 = 234;
+const CONT1_HISTORY_BONUS_MAX: i32 = 3217;
+const CONT1_HISTORY_MALUS_MUL: i32 = 323;
+const CONT1_HISTORY_MALUS_OFFSET: i32 = 436;
+const CONT1_HISTORY_MALUS_MAX: i32 = 1442;
+const CONT2_HISTORY_BONUS_MUL: i32 = 177;
+const CONT2_HISTORY_BONUS_OFFSET: i32 = 139;
+const CONT2_HISTORY_BONUS_MAX: i32 = 1473;
+const CONT2_HISTORY_MALUS_MUL: i32 = 218;
+const CONT2_HISTORY_MALUS_OFFSET: i32 = 66;
+const CONT2_HISTORY_MALUS_MAX: i32 = 1248;
+const TACTICAL_HISTORY_BONUS_MUL: i32 = 136;
+const TACTICAL_HISTORY_BONUS_OFFSET: i32 = 458;
+const TACTICAL_HISTORY_BONUS_MAX: i32 = 2007;
+const TACTICAL_HISTORY_MALUS_MUL: i32 = 49;
+const TACTICAL_HISTORY_MALUS_OFFSET: i32 = 401;
+const TACTICAL_HISTORY_MALUS_MAX: i32 = 1464;
 
-const PAWN_CORRHIST_WEIGHT: i32 = 1511;
-const MAJOR_CORRHIST_WEIGHT: i32 = 1568;
-const MINOR_CORRHIST_WEIGHT: i32 = 1518;
-const NONPAWN_CORRHIST_WEIGHT: i32 = 1708;
+const PAWN_CORRHIST_WEIGHT: i32 = 1583;
+const MAJOR_CORRHIST_WEIGHT: i32 = 1495;
+const MINOR_CORRHIST_WEIGHT: i32 = 1304;
+const NONPAWN_CORRHIST_WEIGHT: i32 = 1813;
 const CONTINUATION_CORRHIST_WEIGHT: i32 = 1500;
 
-const EVAL_POLICY_IMPROVEMENT_SCALE: i32 = 209;
-const EVAL_POLICY_OFFSET: i32 = 8;
-const EVAL_POLICY_UPDATE_MAX: i32 = 110;
+const EVAL_POLICY_IMPROVEMENT_SCALE: i32 = 214;
+const EVAL_POLICY_OFFSET: i32 = -4;
+const EVAL_POLICY_UPDATE_MAX: i32 = 95;
 
 const TIME_MANAGER_UPDATE_MIN_DEPTH: i32 = 4;
 
-const HINDSIGHT_EXT_DEPTH: i32 = 3646;
-const HINDSIGHT_RED_DEPTH: i32 = 2048;
-const HINDSIGHT_RED_EVAL: i32 = 100;
+const HINDSIGHT_EXT_DEPTH: i32 = 2097;
+const HINDSIGHT_RED_DEPTH: i32 = 2421;
+const HINDSIGHT_RED_EVAL: i32 = 141;
 
-const OPTIMISM_OFFSET: i32 = 227;
-const OPTIMISM_MATERIAL_BASE: i32 = 2249;
+const OPTIMISM_OFFSET: i32 = 189;
+const OPTIMISM_MATERIAL_BASE: i32 = 2320;
 
 static TB_HITS: AtomicU64 = AtomicU64::new(0);
 
@@ -194,7 +197,6 @@ impl SmpThreadType for HelperThread {
 pub fn search_position(
     pool: &[threadpool::WorkerThread],
     thread_headers: &mut [Box<ThreadData>],
-    tt: TTView,
 ) -> (i32, Option<Move>) {
     for t in &mut *thread_headers {
         t.board.zero_height();
@@ -215,36 +217,33 @@ pub fn search_position(
         return (0, None);
     }
     if legal_moves.len() == 1 {
-        thread_headers[0].info.time_manager.notify_one_legal_move();
+        thread_headers[0].info.clock.notify_one_legal_move();
     }
 
     // Probe the tablebases if we're in a TB position and in a game.
-    if thread_headers[0].info.time_manager.is_dynamic() {
-        if let Some((best_move, score)) =
+    if thread_headers[0].info.clock.is_dynamic()
+        && let Some((best_move, score)) =
             tablebases::probe::get_tablebase_move(&thread_headers[0].board)
-        {
-            let mut pv = PVariation::default();
-            pv.load_from(best_move, &PVariation::default());
-            pv.score = score;
-            TB_HITS.store(1, Ordering::SeqCst);
-            readout_info(
-                &thread_headers[0].board,
-                Bound::Exact,
-                &pv,
-                0,
-                &thread_headers[0].info,
-                tt,
-                1,
-                true,
+    {
+        let pv = &mut thread_headers[0].pvs[1];
+        pv.load_from(best_move, &PVariation::default());
+        pv.score = score;
+        TB_HITS.store(1, Ordering::SeqCst);
+        thread_headers[0].completed = 1;
+        readout_info(
+            &thread_headers[0],
+            &thread_headers[0].info,
+            Bound::Exact,
+            1,
+            true,
+        );
+        if thread_headers[0].info.print_to_stdout {
+            println!(
+                "bestmove {}",
+                best_move.display(CHESS960.load(Ordering::Relaxed))
             );
-            if thread_headers[0].info.print_to_stdout {
-                println!(
-                    "bestmove {}",
-                    best_move.display(CHESS960.load(Ordering::Relaxed))
-                );
-            }
-            return (score, Some(best_move));
         }
+        return (score, Some(best_move));
     }
 
     let global_stopped = thread_headers[0].info.stopped;
@@ -279,7 +278,6 @@ pub fn search_position(
     });
 
     let best_thread = select_best(thread_headers);
-    let depth_achieved = best_thread.completed;
     let pv = best_thread.pv();
     let best_move = pv
         .moves()
@@ -287,20 +285,14 @@ pub fn search_position(
         .copied()
         .unwrap_or_else(|| default_move(&thread_headers[0]));
 
-    if thread_headers[0].info.print_to_stdout {
-        // always give a final info log before ending search
-        let nodes = thread_headers[0].info.nodes.get_global();
-        readout_info(
-            &thread_headers[0].board,
-            Bound::Exact,
-            pv,
-            depth_achieved,
-            &thread_headers[0].info,
-            tt,
-            nodes,
-            true,
-        );
-    }
+    // always give a final info log before ending search
+    readout_info(
+        best_thread,
+        &thread_headers[0].info,
+        Bound::Exact,
+        thread_headers[0].info.nodes.get_global(),
+        true,
+    );
 
     if thread_headers[0].info.print_to_stdout {
         let maybe_ponder = pv.moves().get(1).map_or_else(String::new, |ponder_move| {
@@ -352,212 +344,150 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
         !ThTy::MAIN_THREAD || t.thread_id == 0,
         "main thread must have thread_id 0"
     );
-    let mut aw = AspirationWindow::infinite();
     let mut pv = PVariation::default();
-    let max_depth = t
-        .info
-        .time_manager
-        .limit()
-        .depth()
-        .unwrap_or(MAX_DEPTH - 1)
-        .try_into()
-        .unwrap_or_default();
+    let max_depth = dyn_max_depth(t);
     let starting_depth = 1 + t.thread_id % 10;
     let mut average_value = VALUE_NONE;
-    'deepening: for d in starting_depth..=max_depth {
-        t.depth = d;
-        if ThTy::MAIN_THREAD {
-            // consider stopping early if we've neatly completed a depth:
-            if (t.info.time_manager.is_dynamic() || t.info.time_manager.is_soft_nodes())
-                && t.info
-                    .time_manager
-                    .is_past_opt_time(t.info.nodes.get_global())
-            {
-                t.info.stopped.store(true, Ordering::SeqCst);
-                break 'deepening;
-            }
-            if d > t
-                .info
-                .time_manager
-                .limit()
-                .depth()
-                .unwrap_or(MAX_DEPTH - 1)
-                .try_into()
-                .unwrap_or_default()
-            {
-                t.info.stopped.store(true, Ordering::SeqCst);
-                break 'deepening;
-            }
-        }
+    'deepening: for iteration in starting_depth..=max_depth {
+        t.iteration = iteration;
+        t.depth = i32::try_from(iteration).unwrap();
+        t.optimism = [0; 2];
 
-        t.optimism[t.board.turn()] =
-            128 * average_value / (average_value.abs() + t.info.conf.optimism_offset);
-        t.optimism[!t.board.turn()] = -t.optimism[t.board.turn()];
+        let min_depth = (t.depth / 2).max(1);
+
+        let mut alpha = -INFINITY;
+        let mut beta = INFINITY;
+
+        let mut delta = t.info.conf.delta_initial;
+        let mut reduction = 0;
+
+        if t.depth > 1 {
+            let us = t.board.turn();
+            let offset = t.info.conf.optimism_offset;
+            t.optimism[us] = 128 * average_value / (average_value.abs() + offset);
+            t.optimism[!us] = -t.optimism[us];
+
+            delta += average_value * average_value / t.info.conf.aspiration_eval_divisor;
+
+            alpha = (average_value - delta).max(-INFINITY);
+            beta = (average_value + delta).min(INFINITY);
+        }
 
         // aspiration loop:
-        // (depth can be dynamically modified in the aspiration loop,
-        // so we return out the value of depth to the caller)
-        let ControlFlow::Continue(depth) =
-            aspiration::<ThTy>(&mut pv, t, &mut aw, d, &mut average_value)
-        else {
-            break 'deepening;
-        };
+        loop {
+            let root_draft = (t.depth - reduction).max(min_depth);
+            pv.score = alpha_beta::<Root>(&mut pv, t, root_draft, alpha, beta, false);
+            if t.info.check_up() {
+                break 'deepening; // we've been told to stop searching.
+            }
 
-        if depth > 5 {
-            aw = AspirationWindow::around_value(average_value, depth);
-        } else {
-            aw = AspirationWindow::infinite();
-        }
-
-        if ThTy::MAIN_THREAD && depth > TIME_MANAGER_UPDATE_MIN_DEPTH {
-            let bm_frac = if d > 8 {
-                let best_move = pv.moves[0];
-                let best_move_subtree_size =
-                    t.info.root_move_nodes[best_move.from()][best_move.to()];
-                let tree_size = t.info.nodes.get_local();
-                #[allow(clippy::cast_precision_loss)]
-                Some(best_move_subtree_size as f64 / tree_size as f64)
+            if pv.score <= alpha {
+                if ThTy::MAIN_THREAD {
+                    t.pv_mut().score = pv.score;
+                    readout_info(t, &t.info, Bound::Upper, t.info.nodes.get_global(), false);
+                    t.info
+                        .clock
+                        .report_aspiration_fail(t.depth, Bound::Upper, &t.info.conf);
+                }
+                beta = i32::midpoint(alpha, beta);
+                alpha = (pv.score - delta).max(-INFINITY);
+                reduction = 0;
+                // search failed low, so we might have to
+                // revert a fail-high pv update
+                t.revert_best_line();
+            } else if pv.score >= beta {
+                t.update_best_line(&pv);
+                if ThTy::MAIN_THREAD {
+                    readout_info(t, &t.info, Bound::Lower, t.info.nodes.get_global(), false);
+                    t.info
+                        .clock
+                        .report_aspiration_fail(t.depth, Bound::Lower, &t.info.conf);
+                }
+                beta = (pv.score + delta).min(INFINITY);
+                reduction += 1;
+                // decrement depth:
+                if !is_decisive(pv.score) {
+                    t.depth = (t.depth - 1).max(min_depth);
+                }
             } else {
-                None
-            };
-            t.info.time_manager.report_completed_depth(
-                depth,
-                pv.score,
-                pv.moves[0],
-                bm_frac,
-                &t.info.conf,
-            );
-        }
-
-        if t.info.check_up() {
-            break 'deepening;
-        }
-    }
-}
-
-fn aspiration<ThTy: SmpThreadType>(
-    pv: &mut PVariation,
-    t: &mut ThreadData,
-    aw: &mut AspirationWindow,
-    d: usize,
-    average_value: &mut i32,
-) -> ControlFlow<(), i32> {
-    let mut depth = i32::try_from(d).unwrap();
-    let min_depth = (depth / 2).max(1);
-    loop {
-        pv.score = alpha_beta::<Root>(pv, t, depth, aw.alpha, aw.beta, false);
-        if t.info.check_up() {
-            return ControlFlow::Break(()); // we've been told to stop searching.
-        }
-
-        if aw.alpha != -INFINITY && pv.score <= aw.alpha {
-            if ThTy::MAIN_THREAD && t.info.print_to_stdout {
-                let nodes = t.info.nodes.get_global();
-                let mut apv = t.pv().clone();
-                apv.score = pv.score;
-                readout_info(&t.board, Bound::Upper, &apv, d, &t.info, t.tt, nodes, false);
-            }
-            aw.widen_down(pv.score, depth);
-            if ThTy::MAIN_THREAD {
-                t.info
-                    .time_manager
-                    .report_aspiration_fail(depth, Bound::Upper, &t.info.conf);
-            }
-            // search failed low, so we might have to
-            // revert a fail-high pv update
-            t.revert_best_line();
-            continue;
-        }
-        // search is either exact or fail-high, so we can update the best line.
-        t.update_best_line(pv);
-        if aw.beta != INFINITY && pv.score >= aw.beta {
-            if ThTy::MAIN_THREAD && t.info.print_to_stdout {
-                let nodes = t.info.nodes.get_global();
-                readout_info(
-                    &t.board,
-                    Bound::Lower,
-                    t.pv(),
-                    d,
-                    &t.info,
-                    t.tt,
-                    nodes,
-                    false,
-                );
-            }
-            aw.widen_up(pv.score, depth);
-            if ThTy::MAIN_THREAD {
-                t.info
-                    .time_manager
-                    .report_aspiration_fail(depth, Bound::Lower, &t.info.conf);
-            }
-            // decrement depth:
-            if !is_game_theoretic_score(pv.score) {
-                depth = (depth - 1).max(min_depth);
+                t.update_best_line(&pv);
+                break;
             }
 
-            if t.info.time_manager.solved_breaker::<ThTy>(0, d) == ControlFlow::Break(()) {
-                t.info.stopped.store(true, Ordering::SeqCst);
-                return ControlFlow::Break(()); // we've been told to stop searching.
-            }
-
-            continue;
+            delta += delta
+                * (t.info.conf.delta_base_mul + t.info.conf.delta_reduction_mul * reduction)
+                / 128;
         }
 
         // if we've made it here, it means we got an exact score.
         let score = pv.score;
-        let bestmove = t.pvs[t.completed]
+        let best_move = pv
             .moves()
             .first()
             .copied()
             .unwrap_or_else(|| default_move(t));
-        *average_value = if *average_value == VALUE_NONE {
+
+        average_value = if average_value == VALUE_NONE {
             score
         } else {
-            (2 * score + *average_value) / 3
+            (2 * score + average_value) / 3
         };
 
-        if ThTy::MAIN_THREAD && t.info.print_to_stdout {
-            let total_nodes = t.info.nodes.get_global();
-            readout_info(
-                &t.board,
-                Bound::Exact,
-                t.pv(),
-                d,
-                &t.info,
-                t.tt,
-                total_nodes,
-                false,
-            );
-        }
-
-        if t.info.time_manager.solved_breaker::<ThTy>(pv.score, d) == ControlFlow::Break(()) {
-            t.info.stopped.store(true, Ordering::SeqCst);
-            return ControlFlow::Break(());
-        }
-
-        if t.info.time_manager.mate_found_breaker::<ThTy>(pv, depth) == ControlFlow::Break(()) {
-            t.info.stopped.store(true, Ordering::SeqCst);
-            return ControlFlow::Break(());
-        }
-
         if ThTy::MAIN_THREAD {
-            if let Some(margin) = t.info.time_manager.check_for_forced_move(depth) {
+            readout_info(t, &t.info, Bound::Exact, t.info.nodes.get_global(), false);
+
+            if let Some(margin) = t.info.clock.check_for_forced_move(t.depth) {
                 let saved_seldepth = t.info.seldepth;
-                let forced = is_forced(margin, t, bestmove, score, (depth - 1) / 2);
+                let forced = is_forced(margin, t, best_move, score, (t.depth - 1) / 2);
                 t.info.seldepth = saved_seldepth;
 
                 if forced {
-                    t.info.time_manager.report_forced_move(depth, &t.info.conf);
+                    t.info.clock.report_forced_move(t.depth, &t.info.conf);
                 }
+            }
+
+            if t.depth > TIME_MANAGER_UPDATE_MIN_DEPTH {
+                let bm_frac = if t.depth > 8 {
+                    let best_move_subtree_size =
+                        t.info.root_move_nodes[best_move.from()][best_move.history_to_square()];
+                    let tree_size = t.info.nodes.get_local();
+                    #[allow(clippy::cast_precision_loss)]
+                    Some(best_move_subtree_size as f64 / tree_size as f64)
+                } else {
+                    None
+                };
+                t.info.clock.report_completed_depth(
+                    t.depth,
+                    pv.score,
+                    pv.moves[0],
+                    bm_frac,
+                    &t.info.conf,
+                );
             }
         }
 
-        if t.info.stopped() {
-            return ControlFlow::Break(());
+        if t.info.check_up() {
+            break 'deepening;
         }
 
-        break ControlFlow::Continue(depth); // we got an exact score, so we can stop the aspiration loop.
+        if ThTy::MAIN_THREAD {
+            // consider stopping early if we've neatly completed a depth,
+            // or if we were told to find a mate and we found one,
+            // or if we're on the clock and we've solved a mate.
+            if t.info.clock.is_past_opt_time(t.info.nodes.get_global())
+                || (iteration > 10
+                    && (t.info.clock.solved_breaker(pv.score)
+                        || t.info.clock.mate_found_breaker(pv.score)))
+            {
+                t.info.stopped.store(true, Ordering::SeqCst);
+                break 'deepening;
+            }
+        }
     }
+}
+
+fn dyn_max_depth(t: &ThreadData<'_>) -> usize {
+    t.info.clock.limit().depth().unwrap_or(MAX_DEPTH - 1)
 }
 
 /// Give a legal default move in the case where we don't have enough time to search.
@@ -606,7 +536,7 @@ pub fn quiescence<NT: NodeType>(
     let in_check = t.board.in_check();
 
     // are we too deep?
-    if height > MAX_PLY - 1 {
+    if height > MAX_DEPTH - 1 {
         return if in_check {
             0
         } else {
@@ -625,9 +555,10 @@ pub fn quiescence<NT: NodeType>(
     let clock = t.board.fifty_move_counter();
 
     // probe the TT and see if we get a cutoff.
-    let tt_hit = if let Some(hit) = t.tt.probe(key, height) {
+    let tt_hit = if let Some(hit) = t.tt.probe(key, height, clock) {
         if !NT::PV
             && clock < 80
+            && hit.value != VALUE_NONE
             && (hit.bound == Bound::Exact
                 || (hit.bound == Bound::Lower && hit.value >= beta)
                 || (hit.bound == Bound::Upper && hit.value <= alpha))
@@ -666,9 +597,10 @@ pub fn quiescence<NT: NodeType>(
         let (tt_flag, tt_value) = tt_hit
             .as_ref()
             .map_or((Bound::None, VALUE_NONE), |tte| (tte.bound, tte.value));
-        if tt_flag == Bound::Exact
-            || tt_flag == Bound::Upper && tt_value < adj_eval
-            || tt_flag == Bound::Lower && tt_value > adj_eval
+        if !is_decisive(tt_value)
+            && (tt_flag == Bound::Exact
+                || tt_flag == Bound::Upper && tt_value < adj_eval
+                || tt_flag == Bound::Lower && tt_value > adj_eval)
         {
             stand_pat = tt_value;
         } else {
@@ -724,8 +656,9 @@ pub fn quiescence<NT: NodeType>(
         if best_score > -MINIMUM_TB_WIN_SCORE
             && is_tactical
             && !in_check
-            && futility <= alpha
             && !is_recapture
+            && futility <= alpha
+            && !is_decisive(futility)
             && !static_exchange_eval(&t.board, &t.info, m, 1)
         {
             if best_score < futility {
@@ -736,9 +669,9 @@ pub fn quiescence<NT: NodeType>(
         t.ss[height].searching = Some(m);
         t.ss[height].searching_tactical = is_tactical;
         let moved = t.board.state.mailbox[m.from()].unwrap();
-        t.ss[height].conthist_index = ContHistIndex {
+        t.ss[height].ch_idx = ContHistIndex {
             piece: moved,
-            square: m.history_to_square(),
+            to: m.history_to_square(),
         };
         t.board.make_move(m, &mut t.nnue);
         // move found, we can start skipping quiets again:
@@ -747,6 +680,7 @@ pub fn quiescence<NT: NodeType>(
         moves_made += 1;
 
         let score = -quiescence::<NT::Next>(l_pv, t, -beta, -alpha);
+
         t.board.unmake_move(&mut t.nnue);
 
         if score > best_score {
@@ -826,7 +760,10 @@ pub fn alpha_beta<NT: NodeType>(
 
     debug_assert_eq!(height == 0, NT::ROOT);
     debug_assert!(!(NT::PV && cut_node));
-    debug_assert_eq!(NT::PV, alpha + 1 != beta, "PV must be true iff the alpha-beta window is larger than 1, but PV was {PV} and alpha-beta window was {alpha}-{beta}", PV = NT::PV);
+    debug_assert!(
+        NT::PV || alpha + 1 == beta,
+        "Non-PV nodes must be zero-window."
+    );
 
     t.info.seldepth = if NT::ROOT {
         0
@@ -843,7 +780,7 @@ pub fn alpha_beta<NT: NodeType>(
         }
 
         // are we too deep?
-        let max_height = MAX_PLY.min(uci::GO_MATE_MAX_DEPTH.load(Ordering::SeqCst));
+        let max_height = MAX_DEPTH.min(uci::GO_MATE_MAX_DEPTH.load(Ordering::SeqCst));
         if height >= max_height {
             return if in_check {
                 0
@@ -872,9 +809,10 @@ pub fn alpha_beta<NT: NodeType>(
 
     let excluded = t.ss[height].excluded;
     let tt_hit = if excluded.is_none() {
-        if let Some(hit) = t.tt.probe(key, height) {
+        if let Some(hit) = t.tt.probe(key, height, clock) {
             if !NT::PV
-                && hit.depth >= depth
+                && hit.value != VALUE_NONE
+                && hit.depth >= depth + i32::from(hit.value >= beta)
                 && clock < 80
                 && (hit.bound == Bound::Exact
                     || (hit.bound == Bound::Lower && hit.value >= beta)
@@ -921,68 +859,70 @@ pub fn alpha_beta<NT: NodeType>(
             && (depth >= uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst)
                 || n_men < cardinality)
             && n_men <= cardinality
+        && let Some(wdl) = tablebases::probe::get_wdl(&t.board)
     {
-        if let Some(wdl) = tablebases::probe::get_wdl(&t.board) {
-            TB_HITS.fetch_add(1, Ordering::Relaxed);
+        TB_HITS.fetch_add(1, Ordering::Relaxed);
 
-            let tb_value = match wdl {
-                WDL::Win => tb_win_in(height),
-                WDL::Loss => tb_loss_in(height),
-                WDL::Draw => draw_score(t, t.info.nodes.get_buffer(), t.board.turn()),
-            };
+        let tb_value = match wdl {
+            WDL::Win => tb_win_in(height),
+            WDL::Loss => tb_loss_in(height),
+            WDL::Draw => draw_score(t, t.info.nodes.get_buffer(), t.board.turn()),
+        };
 
-            let tb_bound = match wdl {
-                WDL::Win => Bound::Lower,
-                WDL::Loss => Bound::Upper,
-                WDL::Draw => Bound::Exact,
-            };
+        let tb_bound = match wdl {
+            WDL::Win => Bound::Lower,
+            WDL::Loss => Bound::Upper,
+            WDL::Draw => Bound::Exact,
+        };
 
-            if tb_bound == Bound::Exact
-                || (tb_bound == Bound::Lower && tb_value >= beta)
-                || (tb_bound == Bound::Upper && tb_value <= alpha)
-            {
-                t.tt.store(
-                    key,
-                    height,
-                    None,
-                    tb_value,
-                    VALUE_NONE,
-                    tb_bound,
-                    depth,
-                    t.ss[height].ttpv,
-                );
-                return tb_value;
-            }
+        if tb_bound == Bound::Exact
+            || (tb_bound == Bound::Lower && tb_value >= beta)
+            || (tb_bound == Bound::Upper && tb_value <= alpha)
+        {
+            t.tt.store(
+                key,
+                height,
+                None,
+                tb_value,
+                VALUE_NONE,
+                tb_bound,
+                depth,
+                t.ss[height].ttpv,
+            );
+            return tb_value;
+        }
 
-            if NT::PV && tb_bound == Bound::Lower {
-                alpha = alpha.max(tb_value);
-                syzygy_min = tb_value;
-            }
+        if NT::PV && tb_bound == Bound::Lower {
+            alpha = alpha.max(tb_value);
+            syzygy_min = tb_value;
+        }
 
-            if NT::PV && tb_bound == Bound::Upper {
-                syzygy_max = tb_value;
-            }
+        if NT::PV && tb_bound == Bound::Upper {
+            syzygy_max = tb_value;
         }
     }
 
     let raw_eval;
     let static_eval;
+    let eval;
     let correction;
 
     if in_check {
         // when we're in check, it could be checkmate, so it's unsound to use evaluate().
         raw_eval = VALUE_NONE;
         static_eval = VALUE_NONE;
+        eval = VALUE_NONE;
         correction = 0;
     } else if excluded.is_some() {
         // if we're in a singular-verification search, we already have the static eval.
         // we can set raw_eval to whatever we like, because we're not going to be saving it.
         raw_eval = VALUE_NONE;
-        static_eval = t.ss[height].eval;
+        static_eval = t.ss[height].static_eval;
+        eval = t.ss[height].eval;
         correction = 0;
         t.nnue.hint_common_access(&t.board, t.nnue_params);
-    } else if let Some(TTHit { eval: tt_eval, .. }) = &tt_hit {
-        let v = *tt_eval; // if we have a TT hit, check the cached TT eval.
+    } else if let Some(tte) = &tt_hit {
+        let v = tte.eval; // if we have a TT hit, check the cached TT eval.
         if v == VALUE_NONE {
             // regenerate the static eval if it's VALUE_NONE.
             raw_eval = evaluate(t, t.info.nodes.get_local());
@@ -995,6 +935,19 @@ pub fn alpha_beta<NT: NodeType>(
         }
         correction = t.correction();
         static_eval = adj_shuffle(t, raw_eval, clock) + correction;
+        if tte.value != VALUE_NONE
+            && !is_decisive(tte.value)
+            && match tte.bound {
+                Bound::Upper => tte.value < static_eval,
+                Bound::Lower => tte.value > static_eval,
+                Bound::Exact => true,
+                Bound::None => false,
+            }
+        {
+            eval = tte.value;
+        } else {
+            eval = static_eval;
+        }
     } else {
         // otherwise, use the static evaluation.
         raw_eval = evaluate(t, t.info.nodes.get_local());
@@ -1014,32 +967,31 @@ pub fn alpha_beta<NT: NodeType>(
 
         correction = t.correction();
         static_eval = adj_shuffle(t, raw_eval, clock) + correction;
+        eval = static_eval;
     }
 
-    t.ss[height].eval = static_eval;
+    t.ss[height].static_eval = static_eval;
+    t.ss[height].eval = eval;
 
     // value-difference based policy update.
-    if !NT::ROOT {
-        let ss_prev = &t.ss[height - 1];
-        if let Some(mov) = ss_prev.searching {
-            if ss_prev.eval != VALUE_NONE
-                && static_eval != VALUE_NONE
-                && !ss_prev.searching_tactical
-            {
-                let from = mov.from();
-                let to = mov.history_to_square();
-                let moved = t.board.state.mailbox[to].expect("Cannot fail, move has been made.");
-                debug_assert_eq!(moved.colour(), !t.board.turn());
-                let threats = t.board.history().last().unwrap().threats.all;
-                let improvement = -(ss_prev.eval + static_eval) + t.info.conf.eval_policy_offset;
-                let delta = i32::clamp(
-                    improvement * t.info.conf.eval_policy_improvement_scale / 32,
-                    -t.info.conf.eval_policy_update_max,
-                    t.info.conf.eval_policy_update_max,
-                );
-                t.update_history_single(from, to, moved, threats, delta);
-            }
-        }
+    if let Some(ss_prev) = t.ss.get(height.wrapping_sub(1))
+        && let Some(mov) = ss_prev.searching
+        && ss_prev.static_eval != VALUE_NONE
+        && static_eval != VALUE_NONE
+        && !ss_prev.searching_tactical
+    {
+        let from = mov.from();
+        let to = mov.history_to_square();
+        let moved = t.board.state.mailbox[to].expect("Cannot fail, move has been made.");
+        debug_assert_eq!(moved.colour(), !t.board.turn());
+        let threats = t.board.history().last().unwrap().threats.all;
+        let improvement = -(ss_prev.static_eval + static_eval) + t.info.conf.eval_policy_offset;
+        let delta = i32::clamp(
+            improvement * t.info.conf.eval_policy_improvement_scale / 32,
+            -t.info.conf.eval_policy_update_max,
+            t.info.conf.eval_policy_update_max,
+        );
+        t.update_history_single(from, to, moved, threats, delta);
     }
 
     // "improving" is true when the current position has a better static evaluation than the one from a fullmove ago.
@@ -1049,10 +1001,10 @@ pub fn alpha_beta<NT: NodeType>(
     // neutral with regards to the evaluation.
     let improving = if in_check {
         false
-    } else if height >= 2 && t.ss[height - 2].eval != VALUE_NONE {
-        static_eval > t.ss[height - 2].eval
-    } else if height >= 4 && t.ss[height - 4].eval != VALUE_NONE {
-        static_eval > t.ss[height - 4].eval
+    } else if height >= 2 && t.ss[height - 2].static_eval != VALUE_NONE {
+        static_eval > t.ss[height - 2].static_eval
+    } else if height >= 4 && t.ss[height - 4].static_eval != VALUE_NONE {
+        static_eval > t.ss[height - 4].static_eval
     } else {
         true
     };
@@ -1067,20 +1019,20 @@ pub fn alpha_beta<NT: NodeType>(
     t.killer_move_table[height + 1] = None;
 
     let tt_move = tt_hit.and_then(|hit| hit.mov);
-    let tt_capture = matches!(tt_move, Some(mv) if t.board.is_capture(mv));
+    let tt_capture = tt_move.is_some_and(|m| t.board.is_capture(m));
 
     // whole-node techniques:
     if !NT::ROOT && !NT::PV && !in_check && excluded.is_none() {
         if t.ss[height - 1].reduction >= t.info.conf.hindsight_ext_depth
-            && static_eval + t.ss[height - 1].eval < 0
+            && static_eval + t.ss[height - 1].static_eval < 0
         {
             depth += 1;
         }
 
         if depth >= 2
             && t.ss[height - 1].reduction >= t.info.conf.hindsight_red_depth
-            && t.ss[height - 1].eval != VALUE_NONE
-            && static_eval + t.ss[height - 1].eval > t.info.conf.hindsight_red_eval
+            && t.ss[height - 1].static_eval != VALUE_NONE
+            && static_eval + t.ss[height - 1].static_eval > t.info.conf.hindsight_red_eval
         {
             depth -= 1;
         }
@@ -1104,6 +1056,7 @@ pub fn alpha_beta<NT: NodeType>(
         // this is a generalisation of stand_pat in quiescence search.
         if !t.ss[height].ttpv
             && depth < 9
+            && eval >= beta
             && static_eval - rfp_margin(&t.board, &t.info, depth, improving, correction) >= beta
             && (tt_move.is_none() || tt_capture)
             && beta > -MINIMUM_TB_WIN_SCORE
@@ -1136,9 +1089,9 @@ pub fn alpha_beta<NT: NodeType>(
             let nm_depth = depth - r;
             t.ss[height].searching = None;
             t.ss[height].searching_tactical = false;
-            t.ss[height].conthist_index = ContHistIndex {
+            t.ss[height].ch_idx = ContHistIndex {
                 piece: Piece::new(t.board.turn(), PieceType::Pawn),
-                square: Square::A1,
+                to: Square::A1,
             };
             t.board.make_nullmove();
             let mut null_score = -alpha_beta::<OffPV>(l_pv, t, nm_depth, -beta, -beta + 1, false);
@@ -1148,11 +1101,11 @@ pub fn alpha_beta<NT: NodeType>(
             }
             if null_score >= beta {
                 // don't return game-theoretic scores:
-                if is_game_theoretic_score(null_score) {
+                if is_decisive(null_score) {
                     null_score = beta;
                 }
                 // unconditionally cutoff if we're just too shallow.
-                if depth < 12 && !is_game_theoretic_score(beta) {
+                if depth < 12 && !is_decisive(beta) {
                     return null_score;
                 }
                 // verify that it's *actually* fine to prune,
@@ -1164,7 +1117,7 @@ pub fn alpha_beta<NT: NodeType>(
                 let veri_score = alpha_beta::<OffPV>(l_pv, t, nm_depth, beta - 1, beta, false);
                 t.unban_nmp_for(t.board.turn());
                 if veri_score >= beta {
-                    return null_score;
+                    return veri_score;
                 }
             }
         }
@@ -1202,7 +1155,7 @@ pub fn alpha_beta<NT: NodeType>(
         && !in_check
         && excluded.is_none()
         && depth >= 5
-        && !is_game_theoretic_score(beta)
+        && !is_decisive(beta)
         // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
         && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
     {
@@ -1217,9 +1170,9 @@ pub fn alpha_beta<NT: NodeType>(
             t.ss[height].searching = Some(m);
             t.ss[height].searching_tactical = true;
             let moved = t.board.state.mailbox[m.from()].unwrap();
-            t.ss[height].conthist_index = ContHistIndex {
+            t.ss[height].ch_idx = ContHistIndex {
                 piece: moved,
-                square: m.history_to_square(),
+                to: m.history_to_square(),
             };
             t.board.make_move(m, &mut t.nnue);
 
@@ -1243,6 +1196,7 @@ pub fn alpha_beta<NT: NodeType>(
                     depth - 3,
                     t.ss[height].ttpv,
                 );
+
                 return value;
             }
         }
@@ -1266,7 +1220,7 @@ pub fn alpha_beta<NT: NodeType>(
 
     let maybe_singular = depth >= 5
         && excluded.is_none()
-        && matches!(tt_hit, Some(TTHit { depth: tt_depth, bound: Bound::Lower | Bound::Exact, .. }) if tt_depth >= depth - 3);
+        && tt_hit.is_some_and(|tte| tte.depth >= depth - 3 && tte.bound.is_lower());
 
     while let Some(m) = move_picker.next(t) {
         if excluded == Some(m) {
@@ -1284,13 +1238,23 @@ pub fn alpha_beta<NT: NodeType>(
 
         let mut stat_score = 0;
 
+        let from = m.from();
+        let hist_to = m.history_to_square();
+        let moved = t.board.state.mailbox[from].unwrap();
+        let threats = t.board.state.threats.all;
+        let from_threat = usize::from(threats.contains_square(from));
+        let to_threat = usize::from(threats.contains_square(hist_to));
         if is_quiet {
-            stat_score += t.get_history_score(m);
-            stat_score += t.get_continuation_history_score(m, 0);
-            stat_score += t.get_continuation_history_score(m, 1);
-            // stat_score += t.get_continuation_history_score(t.board, m, 3);
+            stat_score += i32::from(t.main_hist[from_threat][to_threat][moved][hist_to]);
+            if height >= 1 {
+                stat_score += i32::from(t.cont_hist[t.ss[height - 1].ch_idx][moved][hist_to]);
+            }
+            if height >= 2 {
+                stat_score += i32::from(t.cont_hist[t.ss[height - 2].ch_idx][moved][hist_to]);
+            }
         } else {
-            stat_score += t.get_tactical_history_score(m);
+            let capture = caphist_piece_type(&t.board, m);
+            stat_score += i32::from(t.tactical_hist[to_threat][capture][moved][hist_to]);
         }
 
         // lmp & fp.
@@ -1361,6 +1325,7 @@ pub fn alpha_beta<NT: NodeType>(
             } = tt_hit.unwrap();
             let r_beta = singularity_margin(tt_value, depth);
             let r_depth = (depth - 1) / 2;
+
             t.ss[t.board.height()].excluded = Some(m);
             let value = alpha_beta::<OffPV>(
                 &mut PVariation::default(),
@@ -1371,13 +1336,16 @@ pub fn alpha_beta<NT: NodeType>(
                 cut_node,
             );
             t.ss[t.board.height()].excluded = None;
-            if value >= r_beta && r_beta >= beta {
+
+            if value != VALUE_NONE && value >= r_beta && r_beta >= beta {
                 // multi-cut: if a move other than the best one beats beta,
                 // then we can cut with relatively high confidence.
                 return singularity_margin(tt_value, depth);
             }
 
-            if value < r_beta {
+            if value == VALUE_NONE {
+                extension = 1; // extend if there's only one legal move.
+            } else if value < r_beta {
                 if !NT::PV
                     && t.ss[t.board.height()].dextensions <= 12
                     && value < r_beta - t.info.conf.dext_margin
@@ -1411,10 +1379,9 @@ pub fn alpha_beta<NT: NodeType>(
 
         t.ss[height].searching = Some(m);
         t.ss[height].searching_tactical = !is_quiet;
-        let moved = t.board.state.mailbox[m.from()].unwrap();
-        t.ss[height].conthist_index = ContHistIndex {
+        t.ss[height].ch_idx = ContHistIndex {
             piece: moved,
-            square: m.history_to_square(),
+            to: m.history_to_square(),
         };
 
         t.board.make_move(m, &mut t.nnue);
@@ -1427,7 +1394,7 @@ pub fn alpha_beta<NT: NodeType>(
                 -alpha_beta::<NT::Next>(l_pv, t, new_depth, -beta, -alpha, !NT::PV && !cut_node);
         } else {
             // calculation of LMR stuff
-            let r = if depth > 2 && moves_made > (1 + usize::from(NT::PV)) {
+            let r = if depth > 2 && moves_made > (1 + usize::from(NT::ROOT)) {
                 let mut r = t.info.lm_table.lm_reduction(depth, moves_made);
                 // reduce more on non-PV nodes
                 r += i32::from(!NT::PV) * t.info.conf.lmr_non_pv_mul;
@@ -1486,9 +1453,8 @@ pub fn alpha_beta<NT: NodeType>(
                             cont2_history_bonus(&t.info.conf, new_depth),
                         )
                     };
-                    let to = m.to();
-                    t.update_continuation_history_single(to, moved, c1, 1);
-                    t.update_continuation_history_single(to, moved, c2, 2);
+                    t.update_continuation_history_single(hist_to, moved, c1, 1);
+                    t.update_continuation_history_single(hist_to, moved, c2, 2);
                 }
             } else if score > alpha && score < best_score + 16 {
                 new_depth -= 1;
@@ -1504,7 +1470,7 @@ pub fn alpha_beta<NT: NodeType>(
         // record subtree size for TimeManager
         if NT::ROOT && t.thread_id == 0 {
             let subtree_size = t.info.nodes.get_local() - nodes_before_search;
-            t.info.root_move_nodes[m.from()][m.to()] += subtree_size;
+            t.info.root_move_nodes[from][hist_to] += subtree_size;
         }
 
         if extension >= 2 {
@@ -1534,7 +1500,7 @@ pub fn alpha_beta<NT: NodeType>(
 
     if moves_made == 0 {
         if excluded.is_some() {
-            return alpha;
+            return VALUE_NONE; // singular search in position with one legal move.
         }
         if in_check {
             #[cfg(debug_assertions)]
@@ -1547,6 +1513,7 @@ pub fn alpha_beta<NT: NodeType>(
     if best_score >= beta
         && best_score.abs() < MINIMUM_TB_WIN_SCORE
         && alpha.abs() < MINIMUM_TB_WIN_SCORE
+        && beta.abs() < MINIMUM_TB_WIN_SCORE
     {
         best_score = (best_score * depth + beta) / (depth + 1);
     }
@@ -1588,21 +1555,21 @@ pub fn alpha_beta<NT: NodeType>(
         update_tactical_history(t, tacticals_tried.as_slice(), best_move, depth);
     }
 
-    if !NT::ROOT && flag == Bound::Upper && (!quiets_tried.is_empty() || depth > 3) {
+    if let Some(ss_prev) = t.ss.get(height.wrapping_sub(1))
+        && flag == Bound::Upper
+        && (!quiets_tried.is_empty() || depth > 3)
+        && let Some(mov) = ss_prev.searching
+        && !ss_prev.searching_tactical
+    {
         // the current node has failed low. this means that the inbound edge to this node
         // will fail high, so we can give a bonus to that edge.
-        let ss_prev = &t.ss[height - 1];
-        if let Some(mov) = ss_prev.searching {
-            if !ss_prev.searching_tactical {
-                let from = mov.from();
-                let to = mov.history_to_square();
-                let moved = t.board.state.mailbox[to].expect("Cannot fail, move has been made.");
-                debug_assert_eq!(moved.colour(), !t.board.turn());
-                let threats = t.board.history().last().unwrap().threats.all;
-                let bonus = main_history_bonus(&t.info.conf, depth);
-                t.update_history_single(from, to, moved, threats, bonus);
-            }
-        }
+        let from = mov.from();
+        let to = mov.history_to_square();
+        let moved = t.board.state.mailbox[to].expect("Cannot fail, move has been made.");
+        debug_assert_eq!(moved.colour(), !t.board.turn());
+        let threats = t.board.history().last().unwrap().threats.all;
+        let bonus = main_history_bonus(&t.info.conf, depth);
+        t.update_history_single(from, to, moved, threats, bonus);
     }
 
     if excluded.is_none() {
@@ -1613,7 +1580,7 @@ pub fn alpha_beta<NT: NodeType>(
         // if we're not in check, and we don't have a tactical best-move,
         // and the static eval needs moving in a direction, then update corrhist.
         if !(in_check
-            || matches!(best_move, Some(m) if t.board.is_tactical(m))
+            || best_move.is_some_and(|m| t.board.is_tactical(m))
             || flag == Bound::Lower && best_score <= static_eval
             || flag == Bound::Upper && best_score >= static_eval)
         {
@@ -1849,10 +1816,9 @@ pub fn adj_shuffle(t: &ThreadData, raw_eval: i32, clock: u8) -> i32 {
     // on the board if we have winning chances, and trading
     // material off if the position is worse for us.
     let material = t.board.material(&t.info);
-    let material_mul = t.info.conf.material_scale_base + material;
-    let optimism_mul = t.info.conf.optimism_mat_base + material;
-    let raw_eval =
-        (raw_eval * material_mul + t.optimism[t.board.turn()] * optimism_mul / 32) / 1024;
+    let mat_mul = t.info.conf.material_scale_base + material;
+    let opt_mul = t.info.conf.optimism_mat_base + material;
+    let raw_eval = (raw_eval * mat_mul + t.optimism[t.board.turn()] * opt_mul / 32) / 1024;
 
     // scale down the value when the fifty-move counter is high.
     // this goes some way toward making viri realise when he's not
@@ -1861,9 +1827,7 @@ pub fn adj_shuffle(t: &ThreadData, raw_eval: i32, clock: u8) -> i32 {
 }
 
 pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadData<'a> {
-    let print_to_stdout = thread_headers[0].info.print_to_stdout;
     let total_nodes = thread_headers[0].info.nodes.get_global();
-    let tt = thread_headers[0].tt;
 
     let (mut best_thread, rest) = thread_headers.split_first().unwrap();
 
@@ -1885,16 +1849,11 @@ pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadD
 
     // if we aren't using the main thread (thread 0) then we need to do
     // an extra uci info line to show the best move/score/pv
-    if best_thread.thread_id != 0 && print_to_stdout {
-        let pv = &best_thread.pvs[best_thread.completed];
-        let depth = best_thread.completed;
+    if best_thread.thread_id != 0 {
         readout_info(
-            &best_thread.board,
-            Bound::Exact,
-            pv,
-            depth,
+            best_thread,
             &thread_headers[0].info,
-            tt,
+            Bound::Exact,
             total_nodes,
             false,
         );
@@ -1905,12 +1864,9 @@ pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadD
 
 /// Print the info about an iteration of the search.
 fn readout_info(
-    board: &Board,
-    mut bound: Bound,
-    pv: &PVariation,
-    depth: usize,
+    t: &ThreadData,
     info: &SearchInfo,
-    tt: TTView,
+    mut bound: Bound,
     nodes: u64,
     force_print: bool,
 ) {
@@ -1919,20 +1875,26 @@ fn readout_info(
         clippy::cast_sign_loss,
         clippy::cast_possible_truncation
     )]
-    // don't print anything if we are in the first 50ms of the search and we are in a game,
-    // this helps in ultra-fast time controls where we only have a few ms to think.
-    if info.time_manager.is_dynamic() && info.skip_print() && !force_print {
+    const PREFIX_LEN: usize = 54;
+    if !info.print_to_stdout {
         return;
     }
-    let sstr = uci::format_score(pv.score);
+    // don't print anything if we are in the first 50ms of the search and we are in a game,
+    // this helps in ultra-fast time controls where we only have a few ms to think.
+    if info.skip_print() && !force_print {
+        return;
+    }
+    let ThreadData {
+        board,
+        iteration,
+        tt,
+        ..
+    } = t;
+    let pv = t.pv();
     let normal_uci_output = !uci::PRETTY_PRINT.load(Ordering::SeqCst);
-    let nps = (nodes as f64 / info.time_manager.elapsed().as_secs_f64()) as u64;
+    let nps = (nodes as f64 / info.clock.elapsed().as_secs_f64()) as u64;
     if board.turn() == Colour::Black {
-        bound = match bound {
-            Bound::Upper => Bound::Lower,
-            Bound::Lower => Bound::Upper,
-            _ => Bound::Exact,
-        };
+        bound = bound.invert();
     }
     let bound_string = match bound {
         Bound::Upper => " upperbound",
@@ -1941,9 +1903,10 @@ fn readout_info(
     };
     if normal_uci_output {
         println!(
-            "info score {sstr}{bound_string} wdl {wdl} depth {depth} seldepth {} nodes {nodes} time {} nps {nps} hashfull {hashfull} tbhits {tbhits} {pv}",
+            "info depth {iteration} seldepth {} nodes {nodes} time {} nps {nps} hashfull {hashfull} tbhits {tbhits} score {sstr}{bound_string} wdl {wdl} {pv}",
             info.seldepth as usize,
-            info.time_manager.elapsed().as_millis(),
+            info.clock.elapsed().as_millis(),
+            sstr = uci::format_score(pv.score),
             hashfull = tt.hashfull(),
             tbhits = TB_HITS.load(Ordering::SeqCst),
             wdl = uci::format_wdl(pv.score, board.ply()),
@@ -1952,26 +1915,27 @@ fn readout_info(
         let value = uci::pretty_format_score(pv.score, board.turn());
         let mut pv_string = board.pv_san(pv).unwrap();
         // truncate the pv string if it's too long
-        if pv_string.len() > 130 {
+        let max_length =
+            term_size::dimensions().map_or(80 - PREFIX_LEN, |(w, _)| w.saturating_sub(PREFIX_LEN));
+        if pv_string.len() > max_length {
             let final_space = pv_string
                 .match_indices(' ')
-                .filter(|(i, _)| *i < 130)
+                .filter(|(i, _)| *i < max_length)
                 .next_back()
                 .map_or(0, |(i, _)| i);
             pv_string.truncate(final_space);
-            pv_string.push_str("...         ");
+            // pad up to max length with spaces so that the line clears the terminal
+            for _ in pv_string.len()..max_length {
+                pv_string.push(' ');
+            }
         }
-        let endchr = if bound == Bound::Exact {
-            "\n"
-        } else {
-            "                                                                   \r"
-        };
+        let endchr = if bound == Bound::Exact { "\n" } else { "\r" };
         eprint!(
-            " {depth:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}kn\u{001b}[0m {value} ({wdl}) \u{001b}[38;5;243m{knps:5}kn/s\u{001b}[0m {pv_string}{endchr}",
+            " {iteration:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}n\u{001b}[0m {value} {wdl} \u{001b}[38;5;243m{knps:5}kn/s\u{001b}[0m {pv_string}{endchr}",
             info.seldepth as usize,
-            t = uci::format_time(info.time_manager.elapsed().as_millis()),
+            t = uci::format_time(info.clock.elapsed().as_millis()),
             knps = nps / 1_000,
-            knodes = nodes / 1_000,
+            knodes = uci::pretty_format_counter(nodes),
             wdl = uci::pretty_format_wdl(pv.score, board.ply()),
         );
     }
@@ -2047,74 +2011,5 @@ impl LMTable {
 impl Default for LMTable {
     fn default() -> Self {
         Self::new(&Config::default())
-    }
-}
-
-pub struct AspirationWindow {
-    pub midpoint: i32,
-    pub alpha: i32,
-    pub beta: i32,
-    pub alpha_fails: i32,
-    pub beta_fails: i32,
-}
-
-pub fn asp_window(depth: i32) -> i32 {
-    (ASPIRATION_WINDOW + (50 / depth - 3)).max(10)
-}
-
-impl AspirationWindow {
-    pub const fn infinite() -> Self {
-        Self {
-            alpha: -INFINITY,
-            beta: INFINITY,
-            midpoint: 0,
-            alpha_fails: 0,
-            beta_fails: 0,
-        }
-    }
-
-    pub fn around_value(value: i32, depth: i32) -> Self {
-        if is_game_theoretic_score(value) {
-            // for mates / tbwins we expect a lot of fluctuation, so aspiration
-            // windows are not useful.
-            Self {
-                midpoint: value,
-                alpha: -INFINITY,
-                beta: INFINITY,
-                alpha_fails: 0,
-                beta_fails: 0,
-            }
-        } else {
-            Self {
-                midpoint: value,
-                alpha: value - asp_window(depth),
-                beta: value + asp_window(depth),
-                alpha_fails: 0,
-                beta_fails: 0,
-            }
-        }
-    }
-
-    pub fn widen_down(&mut self, value: i32, depth: i32) {
-        self.midpoint = value;
-        let margin = asp_window(depth) << (self.alpha_fails + 1);
-        if margin > 1369 {
-            self.alpha = -INFINITY;
-            return;
-        }
-        self.beta = (self.alpha + self.beta) / 2;
-        self.alpha = self.midpoint - margin;
-        self.alpha_fails += 1;
-    }
-
-    pub fn widen_up(&mut self, value: i32, depth: i32) {
-        self.midpoint = value;
-        let margin = asp_window(depth) << (self.beta_fails + 1);
-        if margin > 1369 {
-            self.beta = INFINITY;
-            return;
-        }
-        self.beta = self.midpoint + margin;
-        self.beta_fails += 1;
     }
 }

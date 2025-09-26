@@ -1,4 +1,3 @@
-// #![feature(stdarch_x86_avx512)]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::missing_const_for_fn)]
 #![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
@@ -47,9 +46,6 @@ pub static NAME: &str = "Viridithas";
 pub static VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn main() -> anyhow::Result<()> {
-    #[cfg(debug_assertions)]
-    std::env::set_var("RUST_BACKTRACE", "1");
-
     if std::env::args_os().len() == 1 {
         // fast path to UCI:
         return uci::main_loop();
@@ -103,14 +99,14 @@ fn main() -> anyhow::Result<()> {
             threads,
             tbs,
             book,
-            depth_limit,
+            nodes,
             dfrc,
         }) => datagen::gen_data_main(datagen::DataGenOptionsBuilder {
             games,
             threads,
             tbs,
             book,
-            depth_limit,
+            nodes,
             dfrc,
         }),
         Some(Bench { depth }) => {

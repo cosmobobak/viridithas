@@ -13,41 +13,42 @@ use std::{
     num::{ParseFloatError, ParseIntError},
     str::{FromStr, ParseBoolError},
     sync::{
-        atomic::{self, AtomicBool, AtomicI32, AtomicU64, AtomicU8, AtomicUsize, Ordering},
-        mpsc, Mutex, Once,
+        Mutex, Once,
+        atomic::{self, AtomicBool, AtomicI32, AtomicU8, AtomicU64, AtomicUsize, Ordering},
+        mpsc,
     },
     time::Instant,
 };
 
-use anyhow::{anyhow, bail, Context};
+use anyhow::{Context, anyhow, bail};
 
 use crate::{
+    NAME, VERSION,
     bench::BENCH_POSITIONS,
     chess::{
+        CHESS960,
         board::{
-            movegen::{self, MoveList},
             Board,
+            movegen::{self, MoveList},
         },
         piece::Colour,
-        CHESS960,
     },
     cuckoo,
     errors::{FenParseError, MoveParseError},
-    evaluation::{evaluate, is_game_theoretic_score, is_mate_score, MATE_SCORE, TB_WIN_SCORE},
+    evaluation::{MATE_SCORE, TB_WIN_SCORE, evaluate, is_decisive, is_mate_score},
     nnue::{
         self,
         network::{self, NNUEParams},
     },
     perft,
-    search::{adj_shuffle, parameters::Config, search_position, LMTable},
+    search::{LMTable, adj_shuffle, parameters::Config, search_position},
     searchinfo::SearchInfo,
     tablebases, term,
-    threadlocal::{make_thread_data, ThreadData},
+    threadlocal::{ThreadData, make_thread_data},
     threadpool,
     timemgmt::SearchLimit,
     transpositiontable::TT,
-    util::{MAX_PLY, MEGABYTE},
-    NAME, VERSION,
+    util::{MAX_DEPTH, MEGABYTE},
 };
 
 #[cfg(feature = "nnz-counts")]
@@ -59,7 +60,7 @@ const UCI_MAX_THREADS: usize = 512;
 
 static STDIN_READER_THREAD_KEEP_RUNNING: AtomicBool = AtomicBool::new(true);
 pub static QUIT: AtomicBool = AtomicBool::new(false);
-pub static GO_MATE_MAX_DEPTH: AtomicUsize = AtomicUsize::new(MAX_PLY);
+pub static GO_MATE_MAX_DEPTH: AtomicUsize = AtomicUsize::new(MAX_DEPTH);
 pub static PRETTY_PRINT: AtomicBool = AtomicBool::new(true);
 pub static SYZYGY_PROBE_LIMIT: AtomicU8 = AtomicU8::new(6);
 pub static SYZYGY_PROBE_DEPTH: AtomicI32 = AtomicI32::new(1);
@@ -198,7 +199,7 @@ fn parse_position(text: &str, pos: &mut Board) -> anyhow::Result<()> {
 fn parse_go(text: &str, stm: Colour) -> anyhow::Result<SearchLimit> {
     #![allow(clippy::too_many_lines)]
 
-    let mut depth: Option<i32> = None;
+    let mut depth: Option<usize> = None;
     let mut moves_to_go: Option<u64> = None;
     let mut movetime: Option<u64> = None;
     let mut clocks: [Option<i64>; 2] = [None, None];
@@ -242,7 +243,7 @@ fn parse_go(text: &str, stm: Colour) -> anyhow::Result<SearchLimit> {
         }
     }
     if !matches!(limit, SearchLimit::Mate { .. }) {
-        GO_MATE_MAX_DEPTH.store(MAX_PLY, Ordering::SeqCst);
+        GO_MATE_MAX_DEPTH.store(MAX_DEPTH, Ordering::SeqCst);
     }
 
     if let Some(movetime) = movetime {
@@ -484,7 +485,7 @@ impl Display for ScoreFormatWrapper {
             } else {
                 write!(f, "mate -{moves_to_mate}")
             }
-        } else if is_game_theoretic_score(self.0) {
+        } else if is_decisive(self.0) {
             write!(f, "cp {}", self.0)
         } else {
             write!(f, "cp {}", self.0 * 100 / NORMALISE_TO_PAWN_VALUE)
@@ -519,7 +520,7 @@ impl Display for PrettyScoreFormatWrapper {
             } else {
                 write!(f, "  #-{moves_to_mate:<2}")?;
             }
-        } else if is_game_theoretic_score(white_pov) {
+        } else if is_decisive(white_pov) {
             let plies_to_tb = TB_WIN_SCORE - white_pov.abs();
             if white_pov > 0 {
                 write!(f, " +TB{plies_to_tb:<2}")?;
@@ -528,6 +529,7 @@ impl Display for PrettyScoreFormatWrapper {
             }
         } else {
             let white_pov = white_pov * 100 / NORMALISE_TO_PAWN_VALUE;
+            let white_pov = white_pov.clamp(-9999, 9999);
             if white_pov == 0 {
                 // same as below, but with no sign
                 write!(f, "{:6.2}", f64::from(white_pov) / 100.0)?;
@@ -583,7 +585,9 @@ fn print_uci_response(info: &SearchInfo, full: bool) {
     };
     println!("id name {NAME} {VERSION}{version_extension}");
     println!("id author Cosmo");
-    println!("option name Hash type spin default {UCI_DEFAULT_HASH_MEGABYTES} min 1 max {UCI_MAX_HASH_MEGABYTES}");
+    println!(
+        "option name Hash type spin default {UCI_DEFAULT_HASH_MEGABYTES} min 1 max {UCI_MAX_HASH_MEGABYTES}"
+    );
     println!("option name Threads type spin default 1 min 1 max 512");
     println!("option name PrettyPrint type check default false");
     println!("option name SyzygyPath type string default <empty>");
@@ -829,7 +833,7 @@ pub fn main_loop() -> anyhow::Result<()> {
             }
             input if input.starts_with("go") => {
                 // start the clock *immediately*
-                thread_data[0].info.time_manager.start();
+                thread_data[0].info.clock.start();
 
                 // if we're in pretty-printing mode, set the terminal properly:
                 if PRETTY_PRINT.load(Ordering::SeqCst) {
@@ -840,9 +844,9 @@ pub fn main_loop() -> anyhow::Result<()> {
 
                 let res = parse_go(input, thread_data[0].board.turn());
                 if let Ok(search_limit) = res {
-                    thread_data[0].info.time_manager.set_limit(search_limit);
+                    thread_data[0].info.clock.set_limit(search_limit);
                     tt.increase_age();
-                    search_position(&worker_threads, &mut thread_data, tt.view());
+                    search_position(&worker_threads, &mut thread_data);
                     Ok(())
                 } else {
                     res.map(|_| ())
@@ -921,17 +925,17 @@ pub fn bench(
             }
             t.nnue.reinit_from(&t.board, nnue_params);
         }
-        thread_data[0].info.time_manager.start();
+        thread_data[0].info.clock.start();
         let res = parse_go(&bench_string, thread_data[0].board.turn());
         match res {
-            Ok(limit) => thread_data[0].info.time_manager.set_limit(limit),
+            Ok(limit) => thread_data[0].info.clock.set_limit(limit),
             Err(e) => {
                 thread_data[0].info.print_to_stdout = true;
                 return Err(e);
             }
         }
         tt.increase_age();
-        search_position(&pool, &mut thread_data, tt.view());
+        search_position(&pool, &mut thread_data);
         node_sum += thread_data[0].info.nodes.get_global();
         if matches!(benchcmd, "benchfull" | "openbench") {
             println!(
@@ -1003,14 +1007,14 @@ pub fn go_benchmark(nnue_params: &'static NNUEParams) -> anyhow::Result<()> {
     thread_data[0].info.print_to_stdout = false;
     let start = std::time::Instant::now();
     for _ in 0..COUNT {
-        thread_data[0].info.time_manager.start();
+        thread_data[0].info.clock.start();
         let limit = parse_go(
             std::hint::black_box("go wtime 0 btime 0 winc 0 binc 0"),
             thread_data[0].board.turn(),
         )?;
-        thread_data[0].info.time_manager.set_limit(limit);
+        thread_data[0].info.clock.set_limit(limit);
         tt.increase_age();
-        std::hint::black_box(search_position(&pool, &mut thread_data, tt.view()));
+        std::hint::black_box(search_position(&pool, &mut thread_data));
     }
     let elapsed = start.elapsed();
     let micros = elapsed.as_secs_f64() * (1_000_000.0 / COUNT as f64);
@@ -1140,7 +1144,7 @@ impl Display for PrettyUciWdlFormat {
         let wdl_l = (f64::from(wdl_l) / 10.0).round() as i32;
         write!(
             f,
-            "\u{001b}[38;5;243m{wdl_w:3.0}%W {wdl_d:3.0}%D {wdl_l:3.0}%L\u{001b}[0m",
+            "\u{001b}[38;5;243m{wdl_w:3.0}W {wdl_d:3.0}D {wdl_l:3.0}L\u{001b}[0m",
         )
     }
 }
@@ -1150,4 +1154,21 @@ pub fn format_wdl(eval: i32, ply: usize) -> impl Display {
 }
 pub fn pretty_format_wdl(eval: i32, ply: usize) -> impl Display {
     PrettyUciWdlFormat { eval, ply }
+}
+
+struct PrettyCounterFormat(u64);
+impl Display for PrettyCounterFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        #![allow(clippy::match_overlapping_arm)]
+        match self.0 {
+            ..1_000 => write!(f, "{:>4}", self.0),
+            ..1_000_000 => write!(f, "{:>3}K", self.0 / 1_000),
+            ..1_000_000_000 => write!(f, "{:>3}M", self.0 / 1_000_000),
+            ..1_000_000_000_000 => write!(f, "{:>3}G", self.0 / 1_000_000_000),
+            _ => write!(f, "{:>3}T", self.0 / 1_000_000_000_000),
+        }
+    }
+}
+pub const fn pretty_format_counter(v: u64) -> impl Display {
+    PrettyCounterFormat(v)
 }
