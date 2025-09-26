@@ -5,9 +5,9 @@ use std::{
 
 use crate::{
     chess::chessmove::Move,
-    evaluation::MINIMUM_TB_WIN_SCORE,
+    evaluation::{MATE_SCORE, MINIMUM_MATE_SCORE, MINIMUM_TB_WIN_SCORE},
     threadpool::{self, ScopeExt},
-    util::{self, MEGABYTE, depth::CompactDepthStorage},
+    util::{self, MEGABYTE, VALUE_NONE, depth::CompactDepthStorage},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,6 +26,14 @@ impl Bound {
 
     pub fn is_upper(self) -> bool {
         self as u8 & 0b01 != 0
+    }
+
+    pub fn invert(self) -> Self {
+        match self {
+            Self::Upper => Self::Lower,
+            Self::Lower => Self::Upper,
+            x => x,
+        }
     }
 }
 
@@ -377,13 +385,21 @@ impl TTView<'_> {
             || flag == Bound::Exact && tte.info.flag() != Bound::Exact
             || insert_priority * 3 >= record_prority * 2
         {
+            let o_score = score;
+            let score = normalise_gt_truth_score(score, ply).try_into().expect(
+                "attempted to store a score with value outwith [i16::MIN, i16::MAX] in the transposition table",
+            );
+            if score == -32385 {
+                eprintln!("wtf");
+                eprintln!("original score: {o_score}");
+                eprintln!("ply: {ply}");
+                // panic!();
+            }
             let write = TTEntry {
                 key,
                 m: best_move,
                 // normalise mate / TB scores:
-                score: normalise_gt_truth_score(score, ply).try_into().expect(
-                    "attempted to store a score with value outwith [i16::MIN, i16::MAX] in the transposition table",
-                ),
+                score,
                 depth: depth.try_into().unwrap(),
                 info: PackedInfo::new(self.age, flag, pv),
                 evaluation: eval.try_into().expect(
@@ -395,7 +411,7 @@ impl TTView<'_> {
         }
     }
 
-    pub fn probe(&self, key: u64, ply: usize) -> Option<TTHit> {
+    pub fn probe(&self, key: u64, ply: usize, clock: u8) -> Option<TTHit> {
         let index = self.wrap_key(key);
         let key = TT::pack_key(key);
 
@@ -408,11 +424,20 @@ impl TTView<'_> {
                 continue;
             }
 
+            let value = reconstruct_gt_truth_score(entry.score.into(), ply, clock);
+            if value == -32338 {
+                eprintln!("wtf");
+                eprintln!("score: {}", entry.score);
+                eprintln!("ply: {ply}");
+                eprintln!("clock: {clock}");
+                // panic!();
+            }
+
             return Some(TTHit {
                 mov: entry.m,
                 depth: entry.depth.into(),
                 bound: entry.info.flag(),
-                value: reconstruct_gt_truth_score(entry.score.into(), ply),
+                value,
                 eval: entry.evaluation.into(),
                 was_pv: entry.info.pv(),
             });
@@ -441,7 +466,7 @@ impl TTView<'_> {
     }
 
     pub fn probe_move(&self, key: u64) -> Option<(Option<Move>, i32)> {
-        self.probe(key, 0)
+        self.probe(key, 0, 0)
             .map(|TTHit { mov, value, .. }| (mov, value))
     }
 
@@ -462,6 +487,9 @@ impl TTView<'_> {
 
 const fn normalise_gt_truth_score(mut score: i32, ply: usize) -> i32 {
     #![allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+    if score == VALUE_NONE {
+        return VALUE_NONE;
+    }
     if score >= MINIMUM_TB_WIN_SCORE {
         score += ply as i32;
     } else if score <= -MINIMUM_TB_WIN_SCORE {
@@ -470,12 +498,28 @@ const fn normalise_gt_truth_score(mut score: i32, ply: usize) -> i32 {
     score
 }
 
-const fn reconstruct_gt_truth_score(mut score: i32, ply: usize) -> i32 {
+const fn reconstruct_gt_truth_score(score: i32, ply: usize, clock: u8) -> i32 {
     #![allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+    if score == VALUE_NONE {
+        return VALUE_NONE;
+    }
     if score >= MINIMUM_TB_WIN_SCORE {
-        score -= ply as i32;
-    } else if score <= -MINIMUM_TB_WIN_SCORE {
-        score += ply as i32;
+        if score >= MINIMUM_MATE_SCORE && MATE_SCORE - score > 100 - clock as i32 {
+            return MINIMUM_TB_WIN_SCORE - 1;
+        }
+        if MINIMUM_TB_WIN_SCORE - score > 100 - clock as i32 {
+            return MINIMUM_TB_WIN_SCORE - 1;
+        }
+        return score - ply as i32;
+    }
+    if score <= -MINIMUM_TB_WIN_SCORE {
+        if score <= -MINIMUM_MATE_SCORE && MATE_SCORE + score > 100 - clock as i32 {
+            return -MINIMUM_TB_WIN_SCORE + 1;
+        }
+        if -MINIMUM_TB_WIN_SCORE + score > 100 - clock as i32 {
+            return -MINIMUM_TB_WIN_SCORE + 1;
+        }
+        return score + ply as i32;
     }
     score
 }

@@ -1143,7 +1143,7 @@ impl Display for PrettyUciWdlFormat {
         let wdl_l = (f64::from(wdl_l) / 10.0).round() as i32;
         write!(
             f,
-            "\u{001b}[38;5;243m{wdl_w:3.0}%W {wdl_d:3.0}%D {wdl_l:3.0}%L\u{001b}[0m",
+            "\u{001b}[38;5;243m{wdl_w:3.0}W {wdl_d:3.0}D {wdl_l:3.0}L\u{001b}[0m",
         )
     }
 }
@@ -1153,4 +1153,21 @@ pub fn format_wdl(eval: i32, ply: usize) -> impl Display {
 }
 pub fn pretty_format_wdl(eval: i32, ply: usize) -> impl Display {
     PrettyUciWdlFormat { eval, ply }
+}
+
+struct PrettyCounterFormat(u64);
+impl Display for PrettyCounterFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        #![allow(clippy::match_overlapping_arm)]
+        match self.0 {
+            ..1_000 => write!(f, "{:>4}", self.0),
+            ..1_000_000 => write!(f, "{:>3}K", self.0 / 1_000),
+            ..1_000_000_000 => write!(f, "{:>3}M", self.0 / 1_000_000),
+            ..1_000_000_000_000 => write!(f, "{:>3}G", self.0 / 1_000_000_000),
+            _ => write!(f, "{:>3}T", self.0 / 1_000_000_000_000),
+        }
+    }
+}
+pub const fn pretty_format_counter(v: u64) -> impl Display {
+    PrettyCounterFormat(v)
 }

@@ -43,7 +43,7 @@ pub const fn tb_loss_in(ply: usize) -> i32 {
 
 /// A threshold over which scores must be mate.
 #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-const MINIMUM_MATE_SCORE: i32 = MATE_SCORE - MAX_DEPTH as i32;
+pub const MINIMUM_MATE_SCORE: i32 = MATE_SCORE - MAX_DEPTH as i32;
 /// A threshold over which scores must be a TB win (or mate).
 #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 pub const MINIMUM_TB_WIN_SCORE: i32 = TB_WIN_SCORE - MAX_DEPTH as i32;
@@ -108,7 +108,7 @@ pub fn evaluate_nnue(t: &ThreadData) -> i32 {
     // this basically never comes up, but the network will
     // occasionally output OOB values in crazy positions with
     // massive material imbalances.
-    v.clamp(-MINIMUM_TB_WIN_SCORE + 1, MINIMUM_TB_WIN_SCORE - 1)
+    v.clamp(-MINIMUM_TB_WIN_SCORE + 1024, MINIMUM_TB_WIN_SCORE - 1024)
 }
 
 pub fn evaluate(t: &mut ThreadData, nodes: u64) -> i32 {

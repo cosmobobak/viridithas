@@ -60,6 +60,9 @@ memmap2 = "0.9.5"
 # for deconflicting shared weights
 fxhash = "0.2.1"
 
+# what it says on the tin
+term_size = "0.3.2"
+
 # for coloured terminal output
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 version = "0.60"
@@ -76,6 +79,6 @@ features = [
 [profile.release]
 lto = true
 codegen-units = 1
-panic = "abort"
-strip = true
-# debug = true
+# panic = "abort"
+# strip = true
+debug = true
