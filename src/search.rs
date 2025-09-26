@@ -1341,7 +1341,7 @@ pub fn alpha_beta<NT: NodeType>(
             if value != VALUE_NONE && value >= r_beta && r_beta >= beta {
                 // multi-cut: if a move other than the best one beats beta,
                 // then we can cut with relatively high confidence.
-                return value;
+                return singularity_margin(tt_value, depth);
             }
 
             if value == VALUE_NONE {
