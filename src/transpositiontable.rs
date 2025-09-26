@@ -385,16 +385,9 @@ impl TTView<'_> {
             || flag == Bound::Exact && tte.info.flag() != Bound::Exact
             || insert_priority * 3 >= record_prority * 2
         {
-            let o_score = score;
             let score = normalise_gt_truth_score(score, ply).try_into().expect(
                 "attempted to store a score with value outwith [i16::MIN, i16::MAX] in the transposition table",
             );
-            if score == -32385 {
-                eprintln!("wtf");
-                eprintln!("original score: {o_score}");
-                eprintln!("ply: {ply}");
-                // panic!();
-            }
             let write = TTEntry {
                 key,
                 m: best_move,
@@ -425,13 +418,6 @@ impl TTView<'_> {
             }
 
             let value = reconstruct_gt_truth_score(entry.score.into(), ply, clock);
-            if value == -32338 {
-                eprintln!("wtf");
-                eprintln!("score: {}", entry.score);
-                eprintln!("ply: {ply}");
-                eprintln!("clock: {clock}");
-                // panic!();
-            }
 
             return Some(TTHit {
                 mov: entry.m,

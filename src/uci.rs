@@ -35,7 +35,7 @@ use crate::{
     },
     cuckoo,
     errors::{FenParseError, MoveParseError},
-    evaluation::{MATE_SCORE, TB_WIN_SCORE, evaluate, is_game_theoretic_score, is_mate_score},
+    evaluation::{MATE_SCORE, TB_WIN_SCORE, evaluate, is_decisive, is_mate_score},
     nnue::{
         self,
         network::{self, NNUEParams},
@@ -485,7 +485,7 @@ impl Display for ScoreFormatWrapper {
             } else {
                 write!(f, "mate -{moves_to_mate}")
             }
-        } else if is_game_theoretic_score(self.0) {
+        } else if is_decisive(self.0) {
             write!(f, "cp {}", self.0)
         } else {
             write!(f, "cp {}", self.0 * 100 / NORMALISE_TO_PAWN_VALUE)
@@ -520,7 +520,7 @@ impl Display for PrettyScoreFormatWrapper {
             } else {
                 write!(f, "  #-{moves_to_mate:<2}")?;
             }
-        } else if is_game_theoretic_score(white_pov) {
+        } else if is_decisive(white_pov) {
             let plies_to_tb = TB_WIN_SCORE - white_pov.abs();
             if white_pov > 0 {
                 write!(f, " +TB{plies_to_tb:<2}")?;
@@ -529,6 +529,7 @@ impl Display for PrettyScoreFormatWrapper {
             }
         } else {
             let white_pov = white_pov * 100 / NORMALISE_TO_PAWN_VALUE;
+            let white_pov = white_pov.clamp(-9999, 9999);
             if white_pov == 0 {
                 // same as below, but with no sign
                 write!(f, "{:6.2}", f64::from(white_pov) / 100.0)?;

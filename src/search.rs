@@ -24,8 +24,8 @@ use crate::{
         types::{ContHistIndex, Square},
     },
     evaluation::{
-        MATE_SCORE, MINIMUM_TB_WIN_SCORE, evaluate, is_game_theoretic_score, is_mate_score,
-        mate_in, mated_in, see_value, tb_loss_in, tb_win_in,
+        MATE_SCORE, MINIMUM_TB_WIN_SCORE, evaluate, is_decisive, mate_in, mated_in, see_value,
+        tb_loss_in, tb_win_in,
     },
     history::caphist_piece_type,
     historytable::{
@@ -405,7 +405,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
                 beta = (pv.score + delta).min(INFINITY);
                 reduction += 1;
                 // decrement depth:
-                if !is_game_theoretic_score(pv.score) {
+                if !is_decisive(pv.score) {
                     t.depth = (t.depth - 1).max(min_depth);
                 }
             } else {
@@ -562,11 +562,6 @@ pub fn quiescence<NT: NodeType>(
                 || (hit.bound == Bound::Lower && hit.value >= beta)
                 || (hit.bound == Bound::Upper && hit.value <= alpha))
         {
-            assert!(
-                !is_game_theoretic_score(hit.value) || is_mate_score(hit.value),
-                "TT returned a non-mate game-theoretic score: {}",
-                hit.value
-            );
             return hit.value;
         }
 
@@ -606,12 +601,8 @@ pub fn quiescence<NT: NodeType>(
             || tt_flag == Bound::Lower && tt_value > adj_eval
         {
             stand_pat = tt_value;
-
-            assert!(!is_game_theoretic_score(stand_pat) || is_mate_score(stand_pat));
         } else {
             stand_pat = adj_eval;
-
-            assert!(!is_game_theoretic_score(stand_pat));
         }
     } else {
         // otherwise, use the static evaluation.
@@ -631,8 +622,6 @@ pub fn quiescence<NT: NodeType>(
         );
 
         stand_pat = adj_shuffle(t, raw_eval, clock) + t.correction();
-
-        assert!(!is_game_theoretic_score(stand_pat));
     }
 
     if stand_pat >= beta {
@@ -655,13 +644,6 @@ pub fn quiescence<NT: NodeType>(
 
     let futility = stand_pat + t.info.conf.qs_futility;
 
-    assert!(
-        is_game_theoretic_score(stand_pat)
-            || !is_game_theoretic_score(futility)
-            || is_mate_score(futility),
-        "futility generated a non-mate game-theoretic score: {futility}"
-    );
-
     while let Some(m) = move_picker.next(t) {
         t.tt.prefetch(t.board.key_after(m));
         if !t.board.is_legal(m) {
@@ -672,14 +654,11 @@ pub fn quiescence<NT: NodeType>(
         if best_score > -MINIMUM_TB_WIN_SCORE
             && is_tactical
             && !in_check
-            && futility <= alpha
             && !is_recapture
+            && futility <= alpha
+            && !is_decisive(futility)
             && !static_exchange_eval(&t.board, &t.info, m, 1)
         {
-            assert!(
-                !is_game_theoretic_score(futility) || is_mate_score(futility),
-                "futility generated a non-mate game-theoretic score: {futility}"
-            );
             if best_score < futility {
                 best_score = futility;
             }
@@ -699,11 +678,6 @@ pub fn quiescence<NT: NodeType>(
         moves_made += 1;
 
         let score = -quiescence::<NT::Next>(l_pv, t, -beta, -alpha);
-
-        assert!(
-            !is_game_theoretic_score(score) || is_mate_score(score),
-            "quiescence returned a non-mate game-theoretic score: {score}"
-        );
 
         t.board.unmake_move(&mut t.nnue);
 
@@ -749,11 +723,6 @@ pub fn quiescence<NT: NodeType>(
         t.ss[height].ttpv,
     );
 
-    assert!(
-        !is_game_theoretic_score(best_score) || is_mate_score(best_score),
-        "quiescence returned a non-mate game-theoretic score: {best_score}"
-    );
-
     best_score
 }
 
@@ -776,9 +745,7 @@ pub fn alpha_beta<NT: NodeType>(
     let key = t.board.state.keys.zobrist ^ HM_CLOCK_KEYS[t.board.state.fifty_move_counter as usize];
 
     if depth <= 0 {
-        let x = quiescence::<NT::Next>(pv, t, alpha, beta);
-        assert!(!is_game_theoretic_score(x) || is_mate_score(x), "{x}");
-        return x;
+        return quiescence::<NT::Next>(pv, t, alpha, beta);
     }
 
     pv.moves.clear();
@@ -824,10 +791,6 @@ pub fn alpha_beta<NT: NodeType>(
         alpha = alpha.max(mated_in(height));
         beta = beta.min(mate_in(height + 1));
         if alpha >= beta {
-            assert!(
-                !is_game_theoretic_score(alpha) || is_mate_score(alpha),
-                "{alpha}"
-            );
             return alpha;
         }
 
@@ -868,11 +831,6 @@ pub fn alpha_beta<NT: NodeType>(
                     }
                 }
 
-                assert!(
-                    !is_game_theoretic_score(hit.value) || is_mate_score(hit.value),
-                    "{}",
-                    hit.value
-                );
                 return hit.value;
             }
 
@@ -975,7 +933,7 @@ pub fn alpha_beta<NT: NodeType>(
         correction = t.correction();
         static_eval = adj_shuffle(t, raw_eval, clock) + correction;
         if tte.value != VALUE_NONE
-            && !is_game_theoretic_score(tte.value)
+            && !is_decisive(tte.value)
             && match tte.bound {
                 Bound::Upper => tte.value < static_eval,
                 Bound::Lower => tte.value > static_eval,
@@ -1008,8 +966,6 @@ pub fn alpha_beta<NT: NodeType>(
         static_eval = adj_shuffle(t, raw_eval, clock) + correction;
         eval = static_eval;
     }
-
-    assert!(static_eval == VALUE_NONE || !is_game_theoretic_score(static_eval));
 
     t.ss[height].static_eval = static_eval;
     t.ss[height].eval = eval;
@@ -1087,7 +1043,6 @@ pub fn alpha_beta<NT: NodeType>(
         {
             let v = quiescence::<OffPV>(pv, t, alpha, beta);
             if v <= alpha {
-                assert!(!is_game_theoretic_score(v) || is_mate_score(v), "{v}");
                 return v;
             }
         }
@@ -1103,9 +1058,7 @@ pub fn alpha_beta<NT: NodeType>(
             && (tt_move.is_none() || tt_capture)
             && beta > -MINIMUM_TB_WIN_SCORE
         {
-            let v = beta + (static_eval - beta) / 3;
-            assert!(!is_game_theoretic_score(v) || is_mate_score(v), "{v}");
-            return v;
+            return beta + (static_eval - beta) / 3;
         }
 
         // null-move pruning.
@@ -1114,7 +1067,7 @@ pub fn alpha_beta<NT: NodeType>(
         if cut_node
             && t.ss[height - 1].searching.is_some()
             && depth > 2
-            && !is_game_theoretic_score(beta)
+            && !is_decisive(beta)
             && static_eval
                 + i32::from(improving) * t.info.conf.nmp_improving_margin
                 + depth * t.info.conf.nmp_depth_mul
@@ -1146,17 +1099,11 @@ pub fn alpha_beta<NT: NodeType>(
             }
             if null_score >= beta {
                 // don't return game-theoretic scores:
-                if is_game_theoretic_score(null_score) {
+                if is_decisive(null_score) {
                     null_score = beta;
                 }
-                assert!(!is_game_theoretic_score(null_score));
                 // unconditionally cutoff if we're just too shallow.
-                if depth < 12 && !is_game_theoretic_score(beta) {
-                    assert!(
-                        !is_game_theoretic_score(null_score) || is_mate_score(null_score),
-                        "{null_score}"
-                    );
-
+                if depth < 12 && !is_decisive(beta) {
                     return null_score;
                 }
                 // verify that it's *actually* fine to prune,
@@ -1168,11 +1115,6 @@ pub fn alpha_beta<NT: NodeType>(
                 let veri_score = alpha_beta::<OffPV>(l_pv, t, nm_depth, beta - 1, beta, false);
                 t.unban_nmp_for(t.board.turn());
                 if veri_score >= beta {
-                    assert!(
-                        !is_game_theoretic_score(null_score) || is_mate_score(null_score),
-                        "{null_score}"
-                    );
-
                     return null_score;
                 }
             }
@@ -1211,7 +1153,7 @@ pub fn alpha_beta<NT: NodeType>(
         && !in_check
         && excluded.is_none()
         && depth >= 5
-        && !is_game_theoretic_score(beta)
+        && !is_decisive(beta)
         // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
         && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
     {
@@ -1251,10 +1193,6 @@ pub fn alpha_beta<NT: NodeType>(
                     Bound::Lower,
                     depth - 3,
                     t.ss[height].ttpv,
-                );
-                assert!(
-                    !is_game_theoretic_score(value) || is_mate_score(value),
-                    "{value}"
                 );
 
                 return value;
@@ -1398,15 +1336,12 @@ pub fn alpha_beta<NT: NodeType>(
             if value >= r_beta && r_beta >= beta {
                 // multi-cut: if a move other than the best one beats beta,
                 // then we can cut with relatively high confidence.
-                assert!(
-                    !is_game_theoretic_score(value) || is_mate_score(value),
-                    "{value}"
-                );
-
-                return value; //singularity_margin(tt_value, depth);
+                return value;
             }
 
-            if value < r_beta {
+            if value == VALUE_NONE {
+                extension = 1; // extend if there's only one legal move.
+            } else if value < r_beta {
                 if !NT::PV
                     && t.ss[t.board.height()].dextensions <= 12
                     && value < r_beta - t.info.conf.dext_margin
@@ -1453,10 +1388,6 @@ pub fn alpha_beta<NT: NodeType>(
             let new_depth = depth + extension - 1;
             score =
                 -alpha_beta::<NT::Next>(l_pv, t, new_depth, -beta, -alpha, !NT::PV && !cut_node);
-            assert!(
-                !is_game_theoretic_score(score) || is_mate_score(score),
-                "{score}"
-            );
         } else {
             // calculation of LMR stuff
             let r = if depth > 2 && moves_made > (1 + usize::from(NT::ROOT)) {
@@ -1486,10 +1417,6 @@ pub fn alpha_beta<NT: NodeType>(
             let mut new_depth = depth + extension;
             let reduced_depth = (new_depth - r).clamp(0, new_depth);
             score = -alpha_beta::<OffPV>(l_pv, t, reduced_depth, -alpha - 1, -alpha, true);
-            assert!(
-                !is_game_theoretic_score(score) || is_mate_score(score),
-                "{score}"
-            );
             // simple reduction for any future searches
             t.ss[height].reduction = 1024;
             // if we beat alpha, and reduced more than one ply,
@@ -1508,10 +1435,6 @@ pub fn alpha_beta<NT: NodeType>(
                 if new_depth - 1 > reduced_depth {
                     score =
                         -alpha_beta::<OffPV>(l_pv, t, new_depth - 1, -alpha - 1, -alpha, !cut_node);
-                    assert!(
-                        !is_game_theoretic_score(score) || is_mate_score(score),
-                        "{score}"
-                    );
                 }
 
                 if is_quiet && (score <= alpha || score >= beta) {
@@ -1536,10 +1459,6 @@ pub fn alpha_beta<NT: NodeType>(
             if score > alpha && score < beta {
                 // this is a new best move, so it *is* PV.
                 score = -alpha_beta::<NT::Next>(l_pv, t, new_depth - 1, -beta, -alpha, false);
-                assert!(
-                    !is_game_theoretic_score(score) || is_mate_score(score),
-                    "{score}"
-                );
             }
         }
         t.board.unmake_move(&mut t.nnue);
@@ -1560,10 +1479,6 @@ pub fn alpha_beta<NT: NodeType>(
 
         if score > best_score {
             best_score = score;
-            assert!(
-                !is_game_theoretic_score(score) || is_mate_score(score),
-                "{score}"
-            );
             if score > alpha {
                 best_move = Some(m);
                 alpha = score;
@@ -1581,11 +1496,7 @@ pub fn alpha_beta<NT: NodeType>(
 
     if moves_made == 0 {
         if excluded.is_some() {
-            assert!(
-                !is_game_theoretic_score(alpha) || is_mate_score(alpha),
-                "{alpha}"
-            );
-            return alpha;
+            return VALUE_NONE; // singular search in position with one legal move.
         }
         if in_check {
             #[cfg(debug_assertions)]
@@ -1595,31 +1506,15 @@ pub fn alpha_beta<NT: NodeType>(
         return draw_score(t, t.info.nodes.get_local(), t.board.turn());
     }
 
-    assert!(
-        !is_game_theoretic_score(best_score) || is_mate_score(best_score),
-        "{best_score}"
-    );
     if best_score >= beta
         && best_score.abs() < MINIMUM_TB_WIN_SCORE
         && alpha.abs() < MINIMUM_TB_WIN_SCORE
         && beta.abs() < MINIMUM_TB_WIN_SCORE
     {
         best_score = (best_score * depth + beta) / (depth + 1);
-        assert!(
-            !is_game_theoretic_score(best_score) || is_mate_score(best_score),
-            "{best_score}"
-        );
     }
 
-    assert!(
-        !is_game_theoretic_score(best_score) || is_mate_score(best_score),
-        "{best_score}"
-    );
     best_score = best_score.clamp(syzygy_min, syzygy_max);
-    assert!(
-        !is_game_theoretic_score(best_score) || is_mate_score(best_score),
-        "{best_score}"
-    );
 
     let flag = if best_score >= beta {
         Bound::Lower
@@ -1672,11 +1567,6 @@ pub fn alpha_beta<NT: NodeType>(
         let bonus = main_history_bonus(&t.info.conf, depth);
         t.update_history_single(from, to, moved, threats, bonus);
     }
-
-    assert!(
-        !is_game_theoretic_score(best_score) || is_mate_score(best_score),
-        "{best_score}"
-    );
 
     if excluded.is_none() {
         debug_assert!(
@@ -1929,11 +1819,7 @@ pub fn adj_shuffle(t: &ThreadData, raw_eval: i32, clock: u8) -> i32 {
     // scale down the value when the fifty-move counter is high.
     // this goes some way toward making viri realise when he's not
     // making progress in a position.
-    let eval = raw_eval * (200 - i32::from(clock)) / 200;
-
-    assert!(eval.abs() < MINIMUM_TB_WIN_SCORE);
-
-    eval
+    raw_eval * (200 - i32::from(clock)) / 200
 }
 
 pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadData<'a> {
@@ -1985,7 +1871,7 @@ fn readout_info(
         clippy::cast_sign_loss,
         clippy::cast_possible_truncation
     )]
-    const PREFIX_LEN: usize = 64;
+    const PREFIX_LEN: usize = 54;
     if !info.print_to_stdout {
         return;
     }
