@@ -34,7 +34,7 @@ use crate::{
         types::Square,
     },
     datagen::dataformat::Game,
-    evaluation::{is_game_theoretic_score, is_mate_score},
+    evaluation::{is_decisive, is_mate_score},
     nnue::network::NNUEParams,
     search::{search_position, static_exchange_eval},
     tablebases::{self, probe::WDL},
@@ -556,7 +556,7 @@ fn generate_on_thread<'a>(
             if draw_adj_counter >= 12 {
                 break GameOutcome::Draw(DrawType::Adjudication);
             }
-            if is_game_theoretic_score(score) {
+            if is_decisive(score) {
                 // if the score is game theoretic, we don't want to play out the rest of the game
                 break match (score > 0, is_mate_score(score)) {
                     (true, true) => GameOutcome::WhiteWin(WinType::Mate),

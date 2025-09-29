@@ -8,7 +8,8 @@ use anyhow::Context;
 use crate::{
     chess::{board::Board, chessmove::Move, piece::Colour},
     historytable::{
-        CaptureHistoryTable, CorrectionHistoryTable, DoubleHistoryTable, ThreatsHistoryTable,
+        CaptureHistoryTable, ContinuationCorrectionHistoryTable, CorrectionHistoryTable,
+        DoubleHistoryTable, ThreatsHistoryTable,
     },
     nnue::{self, network::NNUEParams},
     search::pv::PVariation,
@@ -36,6 +37,7 @@ pub struct ThreadData<'a> {
     pub nonpawn_corrhist: [Box<CorrectionHistoryTable>; 2],
     pub major_corrhist: Box<CorrectionHistoryTable>,
     pub minor_corrhist: Box<CorrectionHistoryTable>,
+    pub continuation_corrhist: Box<ContinuationCorrectionHistoryTable>,
 
     pub thread_id: usize,
 
@@ -85,6 +87,7 @@ impl<'a> ThreadData<'a> {
             ],
             major_corrhist: CorrectionHistoryTable::boxed(),
             minor_corrhist: CorrectionHistoryTable::boxed(),
+            continuation_corrhist: ContinuationCorrectionHistoryTable::boxed(),
             thread_id,
             #[allow(clippy::large_stack_arrays)]
             pvs: [Self::ARRAY_REPEAT_VALUE; MAX_DEPTH],
@@ -138,6 +141,7 @@ impl<'a> ThreadData<'a> {
         self.nonpawn_corrhist[Colour::Black].clear();
         self.major_corrhist.clear();
         self.minor_corrhist.clear();
+        self.continuation_corrhist.clear();
         self.killer_move_table.fill(None);
         self.depth = 0;
         self.completed = 0;

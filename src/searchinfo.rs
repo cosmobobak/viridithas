@@ -131,7 +131,7 @@ impl<'a> SearchInfo<'a> {
     }
 
     pub fn skip_print(&self) -> bool {
-        self.clock.time_since_start().as_millis() < 50
+        self.clock.is_dynamic() && self.clock.time_since_start().as_millis() < 50
     }
 
     pub fn stopped(&self) -> bool {

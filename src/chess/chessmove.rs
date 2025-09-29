@@ -127,8 +127,10 @@ impl Move {
     /// Handles castling moves, which are a bit weird.
     pub fn history_to_square(self) -> Square {
         if self.is_castle() {
-            let to_rank = self.from().rank();
-            if self.to() > self.from() {
+            let to = self.to();
+            let from = self.from();
+            let to_rank = from.rank();
+            if to > from {
                 // kingside castling, king goes to the G file
                 Square::from_rank_file(to_rank, File::G)
             } else {
