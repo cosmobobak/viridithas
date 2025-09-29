@@ -182,12 +182,10 @@ impl ThreadData<'_> {
         if height > 2 {
             let ch1 = self.ss[height - 1].ch_idx;
             let ch2 = self.ss[height - 2].ch_idx;
-            let sq1 = ch1.to;
-            let sq2 = ch2.to;
             let pt1 = ch1.piece.piece_type();
             let pt2 = ch2.piece.piece_type();
             update(
-                &mut self.continuation_corrhist[sq1][pt1][sq2][pt2][us],
+                &mut self.continuation_corrhist[ch1.to][pt1][ch2.to][pt2][us],
                 new_weight,
                 scaled_diff,
             );
@@ -210,11 +208,9 @@ impl ThreadData<'_> {
         let cont = if height > 2 {
             let ch1 = self.ss[height - 1].ch_idx;
             let ch2 = self.ss[height - 2].ch_idx;
-            let sq1 = ch1.to;
-            let sq2 = ch2.to;
             let pt1 = ch1.piece.piece_type();
             let pt2 = ch2.piece.piece_type();
-            i64::from(self.continuation_corrhist[sq1][pt1][sq2][pt2][turn])
+            i64::from(self.continuation_corrhist[ch1.to][pt1][ch2.to][pt2][turn])
         } else {
             0
         };
