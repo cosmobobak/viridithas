@@ -26,7 +26,7 @@ use crate::{
     search::pv::PVariation,
 };
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct Board {
     /// Copyable state for the board.
     pub(crate) state: State,
@@ -37,21 +37,6 @@ pub struct Board {
 
     height: usize,
     history: Vec<State>,
-}
-
-// manual impl so that i can detect if i'm doing anything stupid.
-impl Clone for Board {
-    fn clone(&self) -> Self {
-        #[cfg(debug_assertions)]
-        eprintln!("info string copying board");
-        Self {
-            state: self.state.clone(),
-            side: self.side,
-            ply: self.ply,
-            height: self.height,
-            history: self.history.clone(),
-        }
-    }
 }
 
 impl Debug for Board {
