@@ -1230,11 +1230,9 @@ impl Board {
         let captured = self.state.mailbox[tgt];
         let is_pawn = piece.piece_type() == PieceType::Pawn;
         let src_piece = piece;
-        let dst_piece = if is_pawn && SquareSet::BACK_RANKS.contains_square(tgt) {
-            Piece::new(src_piece.colour(), PieceType::Queen)
-        } else {
-            piece
-        };
+        let dst_piece = m
+            .promotion_type()
+            .map_or(piece, |promo| Piece::new(src_piece.colour(), promo));
 
         let mut new_key = self.state.keys.zobrist;
         new_key ^= PIECE_KEYS[src_piece][src];
