@@ -99,6 +99,8 @@ impl SquareSet {
         Self::FILE_H,
     ];
 
+    pub const BACK_RANKS: Self = Self::union(Self::RANK_1, Self::RANK_8);
+
     pub const fn from_inner(inner: u64) -> Self {
         Self { inner }
     }
