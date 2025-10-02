@@ -75,8 +75,12 @@ impl Display for PieceType {
 #[repr(u8)]
 pub enum Piece {
     #[default]
-    WP, WN, WB, WR, WQ, WK,
-    BP, BN, BB, BR, BQ, BK,
+    WP, BP,
+    WN, BN,
+    WB, BB,
+    WR, BR,
+    WQ, BQ,
+    WK, BK,
 }
 
 const _PIECE_ASSERT: () = assert!(size_of::<Piece>() == size_of::<Option<Piece>>());
@@ -176,9 +180,9 @@ impl PieceType {
 
 impl Piece {
     pub const fn new(colour: Colour, piece_type: PieceType) -> Self {
-        let index = colour as u8 * 6 + piece_type as u8;
+        let index = colour as u8 | (piece_type as u8) << 1;
         // SAFETY: Colour is {0, 1}, piece_type is {0, 1, 2, 3, 4, 5}.
-        // colour * 6 + piece_type is therefore at most 11, which corresponds
+        // colour | piece_type << 1 is therefore at most 11, which corresponds
         // to a valid enum variant.
         unsafe { std::mem::transmute(index) }
     }
@@ -193,7 +197,7 @@ impl Piece {
     }
 
     pub const fn colour(self) -> Colour {
-        if (self as u8) < 6 {
+        if (self as u8) & 1 == 0 {
             Colour::White
         } else {
             Colour::Black
@@ -201,7 +205,7 @@ impl Piece {
     }
 
     pub const fn piece_type(self) -> PieceType {
-        let pt_index = self as u8 % 6;
+        let pt_index = self as u8 >> 1;
         // SAFETY: pt_index is always within the bounds of the type.
         unsafe { PieceType::from_index_unchecked(pt_index) }
     }
@@ -224,7 +228,7 @@ impl Piece {
     }
 
     pub fn byte_char(self) -> u8 {
-        b"PNBRQKpnbrqk"[self]
+        b"PpNnBbRrQqKk"[self]
     }
 
     pub fn all() -> impl DoubleEndedIterator<Item = Self> {
