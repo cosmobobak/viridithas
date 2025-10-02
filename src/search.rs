@@ -652,14 +652,19 @@ pub fn quiescence<NT: NodeType>(
             continue;
         }
         let is_tactical = t.board.is_tactical(m);
+        let is_capture = t.board.is_capture(m);
         let is_recapture = Some(m.to()) == t.ss[height - 1].searching.map(Move::to);
         if best_score > -MINIMUM_TB_WIN_SCORE
-            && is_tactical
+            && is_capture
             && !in_check
             && !is_recapture
-            && futility <= alpha
             && !is_decisive(futility)
-            && !static_exchange_eval(&t.board, &t.info.conf, m, 1)
+            && futility
+                + see_value(
+                    t.board.state.mailbox[m.to()].unwrap().piece_type(),
+                    &t.info.conf,
+                )
+                <= alpha
         {
             if best_score < futility {
                 best_score = futility;
