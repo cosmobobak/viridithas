@@ -289,3 +289,147 @@ impl<T> IndexMut<Piece> for [T; 12] {
         unsafe { self.get_unchecked_mut(index as usize) }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn piece_construction_and_decomposition() {
+        // Test that we can construct all pieces and decompose them correctly
+        for colour in Colour::all() {
+            for piece_type in PieceType::all() {
+                let piece = Piece::new(colour, piece_type);
+                assert_eq!(
+                    piece.colour(),
+                    colour,
+                    "Colour mismatch for {colour:?} {piece_type:?}"
+                );
+                assert_eq!(
+                    piece.piece_type(),
+                    piece_type,
+                    "PieceType mismatch for {colour:?} {piece_type:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn piece_round_trip_construction() {
+        // Test that decomposing and reconstructing gives the same piece
+        for piece in Piece::all() {
+            let reconstructed = Piece::new(piece.colour(), piece.piece_type());
+            assert_eq!(piece, reconstructed, "Round-trip failed for {piece:?}");
+        }
+    }
+
+    #[test]
+    fn piece_from_index() {
+        // Test that all valid indices produce Some(piece)
+        for i in 0..12 {
+            assert!(
+                Piece::from_index(i).is_some(),
+                "from_index({i}) should be Some"
+            );
+        }
+
+        // Test that invalid indices produce None
+        for i in 12..=255 {
+            assert!(
+                Piece::from_index(i).is_none(),
+                "from_index({i}) should be None"
+            );
+        }
+    }
+
+    #[test]
+    fn piece_index_round_trip() {
+        // Test that inner() and from_index() are inverses
+        for piece in Piece::all() {
+            let index = piece.inner();
+            assert!(
+                index < 12,
+                "inner() returned out-of-range value {index} for {piece:?}"
+            );
+            assert_eq!(
+                Piece::from_index(index),
+                Some(piece),
+                "Round-trip failed for {piece:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn piece_char_case_convention() {
+        // White pieces should be uppercase, black pieces lowercase
+        for piece in Piece::all() {
+            let c = piece.char();
+            if piece.colour() == Colour::White {
+                assert!(c.is_uppercase(), "{piece:?} should have uppercase char");
+            } else {
+                assert!(c.is_lowercase(), "{piece:?} should have lowercase char");
+            }
+        }
+    }
+
+    #[test]
+    fn piece_all_iterator() {
+        let pieces: Vec<_> = Piece::all().collect();
+        assert_eq!(pieces.len(), 12, "all() should return 12 pieces");
+
+        // Verify all pieces are unique
+        for i in 0..pieces.len() {
+            for j in (i + 1)..pieces.len() {
+                assert_ne!(
+                    pieces[i], pieces[j],
+                    "Duplicate piece found at indices {i} and {j}"
+                );
+            }
+        }
+
+        // Verify the order matches the enum definition
+        assert_eq!(pieces[0], Piece::WP);
+        assert_eq!(pieces[1], Piece::BP);
+        assert_eq!(pieces[2], Piece::WN);
+        assert_eq!(pieces[3], Piece::BN);
+        assert_eq!(pieces[4], Piece::WB);
+        assert_eq!(pieces[5], Piece::BB);
+        assert_eq!(pieces[6], Piece::WR);
+        assert_eq!(pieces[7], Piece::BR);
+        assert_eq!(pieces[8], Piece::WQ);
+        assert_eq!(pieces[9], Piece::BQ);
+        assert_eq!(pieces[10], Piece::WK);
+        assert_eq!(pieces[11], Piece::BK);
+    }
+
+    #[test]
+    fn piece_array_indexing() {
+        // Test that we can use Piece to index into arrays
+        let mut arr = [0; 12];
+
+        for piece in Piece::all() {
+            arr[piece] = i32::from(piece.inner());
+        }
+
+        for piece in Piece::all() {
+            assert_eq!(arr[piece], i32::from(piece.inner()));
+        }
+    }
+
+    #[test]
+    fn specific_piece_constructions() {
+        // Test specific known pieces
+        assert_eq!(Piece::new(Colour::White, PieceType::Pawn), Piece::WP);
+        assert_eq!(Piece::new(Colour::Black, PieceType::Pawn), Piece::BP);
+        assert_eq!(Piece::new(Colour::White, PieceType::Knight), Piece::WN);
+        assert_eq!(Piece::new(Colour::Black, PieceType::Knight), Piece::BN);
+        assert_eq!(Piece::new(Colour::White, PieceType::Bishop), Piece::WB);
+        assert_eq!(Piece::new(Colour::Black, PieceType::Bishop), Piece::BB);
+        assert_eq!(Piece::new(Colour::White, PieceType::Rook), Piece::WR);
+        assert_eq!(Piece::new(Colour::Black, PieceType::Rook), Piece::BR);
+        assert_eq!(Piece::new(Colour::White, PieceType::Queen), Piece::WQ);
+        assert_eq!(Piece::new(Colour::Black, PieceType::Queen), Piece::BQ);
+        assert_eq!(Piece::new(Colour::White, PieceType::King), Piece::WK);
+        assert_eq!(Piece::new(Colour::Black, PieceType::King), Piece::BK);
+    }
+}
