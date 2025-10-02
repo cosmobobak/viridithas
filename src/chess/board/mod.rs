@@ -1222,7 +1222,7 @@ impl Board {
     }
 
     /// Makes a guess about the new position key after a move.
-    /// This is a cheap estimate, and will fail for special moves such as promotions and castling.
+    /// This is a cheap estimate, and will fail for special moves such as castling.
     pub fn key_after(&self, m: Move) -> u64 {
         let src = m.from();
         let tgt = m.to();
