@@ -1227,7 +1227,6 @@ impl Board {
     pub fn key_after(&self, m: Move) -> u64 {
         let src = m.from();
         let tgt = m.to();
-        // todo: could be a branchless lookup into a padded array
         let piece = self.state.mailbox[src].unwrap();
         let captured = self.state.mailbox[tgt];
         let is_pawn = piece.piece_type() == PieceType::Pawn;
