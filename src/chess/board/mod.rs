@@ -1222,17 +1222,21 @@ impl Board {
     }
 
     /// Makes a guess about the new position key after a move.
-    /// This is a cheap estimate, and will fail for special moves such as promotions and castling.
+    /// This is a cheap estimate, and will fail for special moves such as castling.
     pub fn key_after(&self, m: Move) -> u64 {
         let src = m.from();
         let tgt = m.to();
-        // todo: could be a branchless lookup into a padded array
         let piece = self.state.mailbox[src].unwrap();
         let captured = self.state.mailbox[tgt];
+        let is_pawn = piece.piece_type() == PieceType::Pawn;
+        let src_piece = piece;
+        let dst_piece = m
+            .promotion_type()
+            .map_or(piece, |promo| Piece::new(src_piece.colour(), promo));
 
         let mut new_key = self.state.keys.zobrist;
-        new_key ^= PIECE_KEYS[piece][src];
-        new_key ^= PIECE_KEYS[piece][tgt];
+        new_key ^= PIECE_KEYS[src_piece][src];
+        new_key ^= PIECE_KEYS[dst_piece][tgt];
 
         if let Some(captured) = captured {
             new_key ^= PIECE_KEYS[captured][tgt];
@@ -1240,7 +1244,7 @@ impl Board {
 
         new_key ^= SIDE_KEY;
 
-        let new_hmc = if captured.is_some() || piece.piece_type() == PieceType::Pawn {
+        let new_hmc = if captured.is_some() || is_pawn {
             0
         } else {
             self.state.fifty_move_counter + 1

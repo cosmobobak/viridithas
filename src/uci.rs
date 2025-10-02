@@ -736,6 +736,13 @@ pub fn main_loop() -> anyhow::Result<()> {
                 println!("{:X}", t.board);
                 Ok(())
             }
+            "debug" => {
+                let t = thread_data
+                    .first_mut()
+                    .with_context(|| "the thread headers are empty.")?;
+                println!("{:?}", t.board);
+                Ok(())
+            }
             "nnuebench" => {
                 nnue::network::inference_benchmark(
                     &thread_data[0].nnue,
