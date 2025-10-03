@@ -1145,15 +1145,81 @@ mod neon {
     }
     #[inline(always)]
     pub unsafe fn nonzero_mask_i32(vec: VecI32) -> u16 {
-        unsafe { todo!() }
+        // NEON doesn't have movemask, so we need to extract bits manually.
+        // This is slower than x86 but unavoidable.
+        unsafe {
+            // Compare each lane to zero
+            let cmp = vcgtq_s32(vec.inner(), vdupq_n_s32(0));
+            // Extract the comparison results (0xFFFFFFFF or 0x00000000) into a bitmask
+            // We extract each lane and build the mask bit by bit
+            let mut mask = 0u16;
+            mask |= ((vgetq_lane_u32(std::mem::transmute(cmp), 0) & 1) << 0) as u16;
+            mask |= ((vgetq_lane_u32(std::mem::transmute(cmp), 1) & 1) << 1) as u16;
+            mask |= ((vgetq_lane_u32(std::mem::transmute(cmp), 2) & 1) << 2) as u16;
+            mask |= ((vgetq_lane_u32(std::mem::transmute(cmp), 3) & 1) << 3) as u16;
+            return mask;
+        }
     }
     #[inline(always)]
     pub unsafe fn pack_i16_to_u8(vec0: VecI16, vec1: VecI16) -> VecI8 {
-        unsafe { todo!() }
+        // Saturate i16 -> u8 and combine two vectors
+        unsafe {
+            let low = vqmovun_s16(vec0.inner());
+            let high = vqmovun_s16(vec1.inner());
+            return VecI8::from_raw(std::mem::transmute(vcombine_u8(low, high)));
+        }
     }
     #[inline(always)]
     pub unsafe fn mul_add_u8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8) -> VecI32 {
-        unsafe { todo!() }
+        // Multiply u8 × i8 and accumulate to i32
+        unsafe {
+            #[cfg(target_feature = "dotprod")]
+            {
+                // ARMv8.2-A dot product: 4 u8×i8 -> 1 i32 per lane
+                // vdotq_s32 expects: sum (int32x4_t), a (uint8x16_t), b (int8x16_t)
+                return VecI32::from_raw(vdotq_s32(
+                    sum.inner(),
+                    std::mem::transmute(vec0.inner()),
+                    vec1.inner(),
+                ));
+            }
+            #[cfg(not(target_feature = "dotprod"))]
+            {
+                // Fallback: widen and multiply manually
+                // Split into low and high halves
+                let act = std::mem::transmute::<int8x16_t, uint8x16_t>(vec0.inner());
+                let wt = vec1.inner();
+
+                let act_lo = vget_low_u8(act);
+                let act_hi = vget_high_u8(act);
+                let wt_lo = vget_low_s8(wt);
+                let wt_hi = vget_high_s8(wt);
+
+                // Widen to 16-bit
+                let act_lo_16 = vmovl_u8(act_lo);
+                let act_hi_16 = vmovl_u8(act_hi);
+                let wt_lo_16 = vmovl_s8(wt_lo);
+                let wt_hi_16 = vmovl_s8(wt_hi);
+
+                // Multiply (u16 * i16, treating as i16 * i16)
+                let prod_lo = vmulq_s16(vreinterpretq_s16_u16(act_lo_16), wt_lo_16);
+                let prod_hi = vmulq_s16(vreinterpretq_s16_u16(act_hi_16), wt_hi_16);
+
+                // Pairwise add i16 -> i32 (horizontal reduction)
+                let sum_lo = vpaddlq_s16(prod_lo);
+                let sum_hi = vpaddlq_s16(prod_hi);
+
+                // Pairwise add again i32 (2 elements) -> i32 (1 element per pair)
+                let sum_lo_paired = vpaddq_s32(sum_lo, sum_lo); // [0+1, 2+3, 0+1, 2+3]
+                let sum_hi_paired = vpaddq_s32(sum_hi, sum_hi); // [4+5, 6+7, 4+5, 6+7]
+
+                // Combine: take lanes [0,1] from lo and [0,1] from hi
+                let combined = vcombine_s32(vget_low_s32(sum_lo_paired), vget_low_s32(sum_hi_paired));
+
+                // Add to accumulator
+                return VecI32::from_raw(vaddq_s32(sum.inner(), combined));
+            }
+        }
     }
     #[inline(always)]
     pub unsafe fn mul_add_2xu8_to_i32(
@@ -1163,7 +1229,27 @@ mod neon {
         vec2: VecI8,
         vec3: VecI8,
     ) -> VecI32 {
-        unsafe { todo!() }
+        // Multiply two pairs: (vec0 × vec1) + (vec2 × vec3), accumulate to sum
+        unsafe {
+            #[cfg(target_feature = "dotprod")]
+            {
+                let tmp = vdotq_s32(
+                    sum.inner(),
+                    std::mem::transmute(vec0.inner()),
+                    vec1.inner(),
+                );
+                return VecI32::from_raw(vdotq_s32(
+                    tmp,
+                    std::mem::transmute(vec2.inner()),
+                    vec3.inner(),
+                ));
+            }
+            #[cfg(not(target_feature = "dotprod"))]
+            {
+                let tmp = mul_add_u8_to_i32(sum, vec0, vec1);
+                return mul_add_u8_to_i32(tmp, vec2, vec3);
+            }
+        }
     }
     #[inline(always)]
     pub unsafe fn i32_to_f32(vec: VecI32) -> VecF32 {
@@ -1291,6 +1377,18 @@ pub fn reinterpret_i32s_as_i8s(vec: VecI32) -> VecI8 {
 #[inline(always)]
 pub fn reinterpret_i8s_as_i32s(vec: VecI8) -> VecI32 {
     VecI32::from_raw(vec.inner())
+}
+
+#[cfg(target_feature = "neon")]
+#[inline(always)]
+pub fn reinterpret_i32s_as_i8s(vec: VecI32) -> VecI8 {
+    unsafe { VecI8::from_raw(std::mem::transmute(vec.inner())) }
+}
+
+#[cfg(target_feature = "neon")]
+#[inline(always)]
+pub fn reinterpret_i8s_as_i32s(vec: VecI8) -> VecI32 {
+    unsafe { VecI32::from_raw(std::mem::transmute(vec.inner())) }
 }
 
 #[cfg(any(target_arch = "x86_64", target_feature = "neon"))]
