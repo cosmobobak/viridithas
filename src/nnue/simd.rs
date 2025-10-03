@@ -1125,12 +1125,13 @@ mod neon {
             let prod_lo = vmull_s16(a_lo, b_lo); // int32x4_t
             let prod_hi = vmull_s16(a_hi, b_hi); // int32x4_t
 
-            // Shift right by 16 and narrow back to i16 in one operation
-            let hi_lo = vshrn_n_s32::<16>(prod_lo);
-            let hi_hi = vshrn_n_s32::<16>(prod_hi);
-
-            // Recombine into full int16x8_t
-            let res = vcombine_s16(hi_lo, hi_hi);
+            // Select the odd-index 16-bit lanes from `prod_lo` and `prod_hi`,
+            // corresponding to the high halves of the multiplications, and
+            // concatenate them into the final result
+            let res = vuzp2q_s16(
+                vreinterpretq_s16_s32(prod_lo),
+                vreinterpretq_s16_s32(prod_hi),
+            );
 
             VecI16::from_raw(res)
         }
@@ -1282,13 +1283,10 @@ mod neon {
             let vec_b = vaddq_f32(vec.get_unchecked(1).inner(), vec.get_unchecked(3).inner());
             let vec = vaddq_f32(vec_a, vec_b);
 
-            let high = vget_high_f32(vec); // lanes [2, 3]
-            let low = vget_low_f32(vec); // lanes [0, 1]
-            let sum_64 = vadd_f32(low, high); // [0+2, 1+3]
-
-            let sum_32 = vpadd_f32(sum_64, sum_64); // [0+2+1+3, ...]
-
-            return vget_lane_f32(sum_32, 0);
+            // Transforms [a, b, c, d] into [a+b, c+d, a+b, c+d]
+            let pw_sum = vpaddq_f32(vec, vec);
+            // Sums [a+b, c+d] into a+b+c+d
+            vaddv_f32(vget_low_f32(pw_sum))
         }
     }
 
