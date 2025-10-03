@@ -659,7 +659,7 @@ pub fn quiescence<NT: NodeType>(
             && !is_recapture
             && futility <= alpha
             && !is_decisive(futility)
-            && !static_exchange_eval(&t.board, &t.info, m, 1)
+            && !static_exchange_eval(&t.board, &t.info.conf, m, 1)
         {
             if best_score < futility {
                 best_score = futility;
@@ -1295,7 +1295,7 @@ pub fn alpha_beta<NT: NodeType>(
             && t.ss[height - 1].searching.is_some()
             && !static_exchange_eval(
                 &t.board,
-                &t.info,
+                &t.info.conf,
                 m,
                 see_table[usize::from(is_quiet)]
                     - stat_score * t.info.conf.see_stat_score_mul / 1024,
@@ -1704,7 +1704,7 @@ pub fn can_win_material(pos: &Board) -> bool {
 /// the given move, from least to most valuable moved piece, and returns
 /// true if the exchange comes out with a material advantage of at
 /// least `threshold`.
-pub fn static_exchange_eval(board: &Board, info: &SearchInfo, m: Move, threshold: i32) -> bool {
+pub fn static_exchange_eval(board: &Board, conf: &Config, m: Move, threshold: i32) -> bool {
     let from = m.from();
     let to = m.to();
     let bbs = &board.state.bbs;
@@ -1714,7 +1714,7 @@ pub fn static_exchange_eval(board: &Board, info: &SearchInfo, m: Move, threshold
         |promo| promo,
     );
 
-    let mut balance = board.estimated_see(info, m) - threshold;
+    let mut balance = board.estimated_see(conf, m) - threshold;
 
     // if the best case fails, don't bother doing the full search.
     if balance < 0 {
@@ -1722,7 +1722,7 @@ pub fn static_exchange_eval(board: &Board, info: &SearchInfo, m: Move, threshold
     }
 
     // worst case is losing the piece
-    balance -= see_value(next_victim, info);
+    balance -= see_value(next_victim, conf);
 
     // if the worst case passes, we can return true immediately.
     if balance >= 0 {
@@ -1790,7 +1790,7 @@ pub fn static_exchange_eval(board: &Board, info: &SearchInfo, m: Move, threshold
 
         colour = !colour;
 
-        balance = -balance - 1 - see_value(next_victim, info);
+        balance = -balance - 1 - see_value(next_victim, conf);
 
         if balance >= 0 {
             // from Ethereal:
