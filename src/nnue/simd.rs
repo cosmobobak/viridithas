@@ -1145,11 +1145,20 @@ mod neon {
     }
     #[inline(always)]
     pub unsafe fn nonzero_mask_i32(vec: VecI32) -> u16 {
-        unsafe { todo!() }
+        static MASK: [u32; 4] = [1, 2, 4, 8];
+        unsafe {
+            let a = std::mem::transmute(vec.inner());
+            vaddvq_u32(vandq_u32(vtstq_u32(a, a), vld1q_u32(MASK.as_ptr()))) as u16
+        }
     }
     #[inline(always)]
     pub unsafe fn pack_i16_to_u8(vec0: VecI16, vec1: VecI16) -> VecI8 {
-        unsafe { todo!() }
+        unsafe {
+            return VecI8::from_raw(std::mem::transmute(vcombine_u8(
+                vqmovun_s16(vec0.inner()),
+                vqmovun_s16(vec1.inner()),
+            )));
+        }
     }
     /// Computes `c[i]:=ZeroExtend(a[i], 16) * SignExtend(b[i], 16)` for each lane i={0,...,15}.
     /// Each `c[i]` is then added onto exactly one lane of `acc`. The modified `acc` is returned.
