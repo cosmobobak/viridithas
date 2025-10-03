@@ -1219,22 +1219,9 @@ mod neon {
         vec2: VecI8,
         vec3: VecI8,
     ) -> VecI32 {
-        // Multiply two pairs: (vec0 × vec1) + (vec2 × vec3), accumulate to sum
         unsafe {
-            #[cfg(target_feature = "dotprod")]
-            {
-                let tmp = vdotq_s32(sum.inner(), std::mem::transmute(vec0.inner()), vec1.inner());
-                return VecI32::from_raw(vdotq_s32(
-                    tmp,
-                    std::mem::transmute(vec2.inner()),
-                    vec3.inner(),
-                ));
-            }
-            #[cfg(not(target_feature = "dotprod"))]
-            {
-                let tmp = mul_add_u8_to_i32(sum, vec0, vec1);
-                return mul_add_u8_to_i32(tmp, vec2, vec3);
-            }
+            let tmp = mul_add_u8_to_i32(sum, vec0, vec1);
+            return mul_add_u8_to_i32(tmp, vec2, vec3);
         }
     }
     #[inline(always)]
