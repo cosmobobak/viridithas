@@ -1186,55 +1186,29 @@ mod neon {
     }
 
     #[inline(always)]
+    /// Computes `c[i]:=ZeroExtend(a[i], 16) * SignExtend(b[i], 16)` for each lane i={0,...,15}.
+    /// Each `c[i]` is then added onto exactly one lane of `acc`. The modified `acc` is returned.
     pub unsafe fn mul_add_u8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8) -> VecI32 {
         unsafe {
-            #[cfg(target_feature = "dotprod")]
-            {
-                // ARMv8.2-A dot product: 4 u8 x i8 -> 1 i32 per lane
-                // vdotq_s32 expects: sum (int32x4_t), a (uint8x16_t), b (int8x16_t)
-                return VecI32::from_raw(vdotq_s32(
-                    sum.inner(),
-                    std::mem::transmute(vec0.inner()),
-                    vec1.inner(),
-                ));
-            }
-            #[cfg(not(target_feature = "dotprod"))]
-            {
-                // Fallback: widen and multiply manually
-                // Split into low and high halves
-                let act = std::mem::transmute::<int8x16_t, uint8x16_t>(vec0.inner());
-                let wt = vec1.inner();
+            let a = std::mem::transmute(vec0.inner());
+            let b = vec1.inner();
+            let acc = sum.inner();
 
-                let act_lo = vget_low_u8(act);
-                let act_hi = vget_high_u8(act);
-                let wt_lo = vget_low_s8(wt);
-                let wt_hi = vget_high_s8(wt);
+            // split a into low and high half, and zero extend each
+            let a_lo = vreinterpretq_s16_u16(vshll_n_u8(vget_low_u8(a), 0));
+            let a_hi = vreinterpretq_s16_u16(vshll_n_u8(vget_high_u8(a), 0));
 
-                // Widen to 16-bit
-                let act_lo_16 = vmovl_u8(act_lo);
-                let act_hi_16 = vmovl_u8(act_hi);
-                let wt_lo_16 = vmovl_s8(wt_lo);
-                let wt_hi_16 = vmovl_s8(wt_hi);
+            // split b into low and high half, and sign extend each
+            let b_lo = vshll_n_s8(vget_low_s8(b), 0);
+            let b_hi = vshll_n_s8(vget_high_s8(b), 0);
 
-                // Multiply (u16 * i16, treating as i16 * i16)
-                let prod_lo = vmulq_s16(vreinterpretq_s16_u16(act_lo_16), wt_lo_16);
-                let prod_hi = vmulq_s16(vreinterpretq_s16_u16(act_hi_16), wt_hi_16);
+            let mul_lo = vmulq_s16(a_lo, b_lo);
+            let mul_hi = vmulq_s16(a_hi, b_hi);
 
-                // Pairwise add i16 -> i32 (horizontal reduction)
-                let sum_lo = vpaddlq_s16(prod_lo);
-                let sum_hi = vpaddlq_s16(prod_hi);
+            let acc = vpadalq_s16(acc, mul_lo);
+            let acc = vpadalq_s16(acc, mul_hi);
 
-                // Pairwise add again i32 (2 elements) -> i32 (1 element per pair)
-                let sum_lo_paired = vpaddq_s32(sum_lo, sum_lo); // [0+1, 2+3, 0+1, 2+3]
-                let sum_hi_paired = vpaddq_s32(sum_hi, sum_hi); // [4+5, 6+7, 4+5, 6+7]
-
-                // Combine: take lanes [0,1] from lo and [0,1] from hi
-                let combined =
-                    vcombine_s32(vget_low_s32(sum_lo_paired), vget_low_s32(sum_hi_paired));
-
-                // Add to accumulator
-                return VecI32::from_raw(vaddq_s32(sum.inner(), combined));
-            }
+            return VecI32::from_raw(acc);
         }
     }
     #[inline(always)]
