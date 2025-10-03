@@ -1169,13 +1169,28 @@ mod neon {
             return VecI8::from_raw(std::mem::transmute(vcombine_u8(low, high)));
         }
     }
+
+    #[target_feature(enable = "dotprod")]
+    fn vdotq_s32(a: int32x4_t, b: int8x16_t, c: int8x16_t) -> int32x4_t {
+        let r: int32x4_t;
+        unsafe {
+            std::arch::asm!(
+                "sdot {a:v}.4s, {b:v}.16b, {c:v}.16b",
+                a = inout(vreg) a => r,
+                b = in(vreg) b,
+                c = in(vreg) c,
+                options(pure, nostack, nomem, preserves_flags)
+            );
+        }
+        r
+    }
+
     #[inline(always)]
     pub unsafe fn mul_add_u8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8) -> VecI32 {
-        // Multiply u8 × i8 and accumulate to i32
         unsafe {
             #[cfg(target_feature = "dotprod")]
             {
-                // ARMv8.2-A dot product: 4 u8×i8 -> 1 i32 per lane
+                // ARMv8.2-A dot product: 4 u8 x i8 -> 1 i32 per lane
                 // vdotq_s32 expects: sum (int32x4_t), a (uint8x16_t), b (int8x16_t)
                 return VecI32::from_raw(vdotq_s32(
                     sum.inner(),
@@ -1214,7 +1229,8 @@ mod neon {
                 let sum_hi_paired = vpaddq_s32(sum_hi, sum_hi); // [4+5, 6+7, 4+5, 6+7]
 
                 // Combine: take lanes [0,1] from lo and [0,1] from hi
-                let combined = vcombine_s32(vget_low_s32(sum_lo_paired), vget_low_s32(sum_hi_paired));
+                let combined =
+                    vcombine_s32(vget_low_s32(sum_lo_paired), vget_low_s32(sum_hi_paired));
 
                 // Add to accumulator
                 return VecI32::from_raw(vaddq_s32(sum.inner(), combined));
@@ -1233,11 +1249,7 @@ mod neon {
         unsafe {
             #[cfg(target_feature = "dotprod")]
             {
-                let tmp = vdotq_s32(
-                    sum.inner(),
-                    std::mem::transmute(vec0.inner()),
-                    vec1.inner(),
-                );
+                let tmp = vdotq_s32(sum.inner(), std::mem::transmute(vec0.inner()), vec1.inner());
                 return VecI32::from_raw(vdotq_s32(
                     tmp,
                     std::mem::transmute(vec2.inner()),
