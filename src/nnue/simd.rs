@@ -1194,7 +1194,10 @@ mod neon {
         vec2: VecI8,
         vec3: VecI8,
     ) -> VecI32 {
-        unsafe { todo!() }
+        unsafe {
+            let sum = mul_add_u8_to_i32(sum, vec0, vec1);
+            return mul_add_u8_to_i32(sum, vec2, vec3);
+        }
     }
     #[inline(always)]
     pub unsafe fn i32_to_f32(vec: VecI32) -> VecF32 {
@@ -1312,16 +1315,16 @@ pub use sse2::*;
 #[cfg(target_feature = "neon")]
 pub use neon::*;
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(target_arch = "x86_64", target_feature = "neon"))]
 #[inline(always)]
 pub fn reinterpret_i32s_as_i8s(vec: VecI32) -> VecI8 {
-    VecI8::from_raw(vec.inner())
+    unsafe { VecI8::from_raw(std::mem::transmute(vec.inner())) }
 }
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(target_arch = "x86_64", target_feature = "neon"))]
 #[inline(always)]
 pub fn reinterpret_i8s_as_i32s(vec: VecI8) -> VecI32 {
-    VecI32::from_raw(vec.inner())
+    unsafe { VecI32::from_raw(std::mem::transmute(vec.inner())) }
 }
 
 #[cfg(any(target_arch = "x86_64", target_feature = "neon"))]
