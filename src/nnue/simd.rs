@@ -1151,9 +1151,31 @@ mod neon {
     pub unsafe fn pack_i16_to_u8(vec0: VecI16, vec1: VecI16) -> VecI8 {
         unsafe { todo!() }
     }
+    /// Computes `c[i]:=ZeroExtend(a[i], 16) * SignExtend(b[i], 16)` for each lane i={0,...,15}.
+    /// Each `c[i]` is then added onto exactly one lane of `acc`. The modified `acc` is returned.
     #[inline(always)]
     pub unsafe fn mul_add_u8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8) -> VecI32 {
-        unsafe { todo!() }
+        unsafe {
+            let a = std::mem::transmute(vec0.inner());
+            let b = vec1.inner();
+            let acc = sum.inner();
+
+            // split a into low and high half, and zero extend each
+            let a_lo = vreinterpretq_s16_u16(vshll_n_u8(vget_low_u8(a), 0));
+            let a_hi = vreinterpretq_s16_u16(vshll_n_u8(vget_high_u8(a), 0));
+
+            // split b into low and high half, and sign extend each
+            let b_lo = vshll_n_s8(vget_low_s8(b), 0);
+            let b_hi = vshll_n_s8(vget_high_s8(b), 0);
+
+            let mul_lo = vmulq_s16(a_lo, b_lo);
+            let mul_hi = vmulq_s16(a_hi, b_hi);
+
+            let acc = vpadalq_s16(acc, mul_lo);
+            let acc = vpadalq_s16(acc, mul_hi);
+
+            return VecI32::from_raw(acc);
+        }
     }
     #[inline(always)]
     pub unsafe fn mul_add_2xu8_to_i32(
