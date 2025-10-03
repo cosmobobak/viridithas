@@ -1232,7 +1232,7 @@ mod neon {
     #[inline(always)]
     pub unsafe fn mul_add_f32(vec0: VecF32, vec1: VecF32, vec2: VecF32) -> VecF32 {
         unsafe {
-            return VecF32::from_raw(vmlaq_f32(vec2.inner(), vec0.inner(), vec1.inner()));
+            return VecF32::from_raw(vfmaq_f32(vec2.inner(), vec0.inner(), vec1.inner()));
         }
     }
     #[inline(always)]
@@ -1242,9 +1242,19 @@ mod neon {
         }
     }
     #[inline(always)]
-    pub unsafe fn reduce_add_f32s(vec: &[VecF32; 1]) -> f32 {
+    pub unsafe fn reduce_add_f32s(vec: &[VecF32; 4]) -> f32 {
         unsafe {
-            return vaddvq_f32(vec.get_unchecked(0).inner());
+            let vec_a = vaddq_f32(vec.get_unchecked(0).inner(), vec.get_unchecked(2).inner());
+            let vec_b = vaddq_f32(vec.get_unchecked(1).inner(), vec.get_unchecked(3).inner());
+            let vec = vaddq_f32(vec_a, vec_b);
+
+            let high = vget_high_f32(vec); // lanes [2, 3]
+            let low = vget_low_f32(vec); // lanes [0, 1]
+            let sum_64 = vadd_f32(low, high); // [0+2, 1+3]
+
+            let sum_32 = vpadd_f32(sum_64, sum_64); // [0+2+1+3, ...]
+
+            return vget_lane_f32(sum_32, 0);
         }
     }
 
@@ -1268,6 +1278,9 @@ pub use avx2::*;
 ))]
 pub use sse2::*;
 
+#[cfg(target_feature = "neon")]
+pub use neon::*;
+
 #[cfg(target_arch = "x86_64")]
 #[inline(always)]
 pub fn reinterpret_i32s_as_i8s(vec: VecI32) -> VecI8 {
@@ -1280,7 +1293,7 @@ pub fn reinterpret_i8s_as_i32s(vec: VecI8) -> VecI32 {
     VecI32::from_raw(vec.inner())
 }
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(target_arch = "x86_64", target_feature = "neon"))]
 pub const ARCH: &str = INNER_ARCH;
-#[cfg(not(target_arch = "x86_64"))]
+#[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
 pub const ARCH: &str = "generic";

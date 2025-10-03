@@ -513,7 +513,9 @@ impl QuantisedNetwork {
                 not(target_feature = "avx512f")
             ))]
             let num_regs = 2;
-            #[cfg(not(target_arch = "x86_64"))]
+            #[cfg(target_feature = "neon")]
+            let num_regs = 2;
+            #[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
             let num_regs = 1;
             #[cfg(target_feature = "avx512f")]
             let order = [0, 2, 4, 6, 1, 3, 5, 7];
@@ -525,7 +527,9 @@ impl QuantisedNetwork {
                 not(target_feature = "avx512f")
             ))]
             let order = [0, 1];
-            #[cfg(not(target_arch = "x86_64"))]
+            #[cfg(target_feature = "neon")]
+            let order = [0, 1];
+            #[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
             let order = [0];
 
             let mut regs = vec![[0i16; 8]; num_regs];
@@ -777,7 +781,7 @@ impl NNUEParams {
             bytes_written == expected_bytes,
             "encountered issue while decompressing NNUE weights, expected {expected_bytes} bytes, but got {bytes_written}"
         );
-        let use_simd = cfg!(target_arch = "x86_64");
+        let use_simd = cfg!(any(target_arch = "x86_64", target_feature = "neon")) && false;
         let net = net.permute(use_simd);
 
         // create a temporary file to store the weights
@@ -1462,6 +1466,12 @@ impl NNUEState {
             nn.l3_bias[out],
             &mut l3_output,
         );
+
+        // let l1_outputs = &l1_outputs[..];
+        // dbg!(l1_outputs);
+        // let l2_outputs = &l2_outputs[..];
+        // dbg!(l2_outputs);
+        // dbg!(l3_output);
 
         (l3_output * SCALE as f32) as i32
     }

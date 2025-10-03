@@ -8,7 +8,7 @@ pub static NNZ_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::Atomic
 #[cfg(feature = "nnz-counts")]
 pub static NNZ_DENOM: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
-#[cfg(not(target_arch = "x86_64"))]
+#[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
 mod generic {
     use super::{
         super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA},
@@ -129,27 +129,27 @@ mod generic {
         }
     }
 
-    /// Software implementation of the spec for simd stuff,
-    /// to retain order of operations.
-    #[inline]
-    fn reduce_add(sums: &mut [f32]) -> f32 {
-        let n = sums.len();
-        if n == 2 {
-            return sums[0] + sums[1];
-        }
-        for i in 0..n / 2 {
-            sums[i] += sums[i + n / 2];
-        }
-
-        reduce_add(&mut sums[..n / 2])
-    }
-
     pub fn propagate_l3(
         inputs: &Align64<[f32; L3_SIZE]>,
         weights: &Align64<[f32; L3_SIZE]>,
         bias: f32,
         output: &mut f32,
     ) {
+        /// Software implementation of the spec for simd stuff,
+        /// to retain order of operations.
+        #[inline]
+        fn reduce_add(sums: &mut [f32]) -> f32 {
+            let n = sums.len();
+            if n == 2 {
+                return sums[0] + sums[1];
+            }
+            for i in 0..n / 2 {
+                sums[i] += sums[i + n / 2];
+            }
+
+            reduce_add(&mut sums[..n / 2])
+        }
+
         const NUM_SUMS: usize = AVX512CHUNK;
         let mut sums = [0f32; NUM_SUMS];
 
@@ -162,8 +162,175 @@ mod generic {
     }
 }
 
+#[cfg(target_feature = "neon")]
+mod neon {
+    use super::{
+        super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA},
+        AVX512CHUNK, FT_SHIFT, L1_MUL,
+    };
+    use crate::nnue::simd::{self, F32_CHUNK_SIZE};
+
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_precision_loss,
+        clippy::cast_sign_loss
+    )]
+    fn activate_ft(
+        us: &Align64<[i16; L1_SIZE]>,
+        them: &Align64<[i16; L1_SIZE]>,
+        output: &mut Align64<[u8; L1_SIZE]>,
+    ) {
+        for (a, acc) in [us, them].into_iter().enumerate() {
+            for i in 0..L1_SIZE / 2 {
+                // SAFETY: the largest index into `acc` that we construct is `L1_SIZE / 2 + (L1_SIZE / 2 - 1)`.
+                // this is in-bounds.
+                unsafe {
+                    let l = *acc.get_unchecked(i);
+                    let r = *acc.get_unchecked(L1_SIZE / 2 + i);
+                    let cl = i16::clamp(l, 0, QA);
+                    let cr = i16::clamp(r, 0, QA);
+                    *output.get_unchecked_mut(i + a * L1_SIZE / 2) =
+                        ((i32::from(cl) * i32::from(cr)) >> FT_SHIFT) as u8;
+                }
+            }
+        }
+    }
+
+    #[allow(clippy::needless_range_loop, clippy::cast_precision_loss)]
+    fn propagate_l1(
+        inputs: &Align64<[u8; L1_SIZE]>,
+        weights: &Align64<[i8; L1_SIZE * L2_SIZE]>,
+        biases: &Align64<[f32; L2_SIZE]>,
+        output: &mut Align64<[f32; L2_SIZE]>,
+    ) {
+        // this is just autovec'd for the moment.
+        let mut sums = [0; L2_SIZE];
+        for i in 0..L1_SIZE {
+            // SAFETY: `sums` is `L2_SIZE` long, `inputs` is `L1_SIZE` long,
+            // and `weights` is `L1_SIZE * L2_SIZE` long. As such, the
+            // indices that we construct are valid.
+            unsafe {
+                let input = *inputs.get_unchecked(i);
+                if input == 0 {
+                    continue;
+                }
+                for j in 0..L2_SIZE {
+                    let weight = *weights.get_unchecked(j * L1_SIZE + i);
+                    *sums.get_unchecked_mut(j) += i32::from(input) * i32::from(weight);
+                }
+            }
+        }
+
+        for i in 0..L2_SIZE {
+            // convert to f32 and activate L1
+            // SAFETY: `sums` is `L2_SIZE` long, and `output` is `L2_SIZE` long.
+            // As such, the indices that we construct are valid.
+            unsafe {
+                let clipped = f32::clamp(
+                    (*sums.get_unchecked(i) as f32).mul_add(L1_MUL, *biases.get_unchecked(i)),
+                    0.0,
+                    1.0,
+                );
+                *output.get_unchecked_mut(i) = clipped * clipped;
+            }
+        }
+    }
+
+    pub fn activate_ft_and_propagate_l1(
+        us: &Align64<[i16; L1_SIZE]>,
+        them: &Align64<[i16; L1_SIZE]>,
+        weights: &Align64<[i8; L1_SIZE * L2_SIZE]>,
+        biases: &Align64<[f32; L2_SIZE]>,
+        output: &mut Align64<[f32; L2_SIZE]>,
+    ) {
+        let mut ft_outputs = Align64([0; L1_SIZE]);
+        activate_ft(us, them, &mut ft_outputs);
+        propagate_l1(&ft_outputs, weights, biases, output);
+    }
+
+    #[allow(clippy::needless_range_loop, clippy::cast_ptr_alignment)]
+    pub fn propagate_l2(
+        inputs: &Align64<[f32; L2_SIZE]>,
+        weights: &Align64<[f32; L2_SIZE * L3_SIZE]>,
+        biases: &Align64<[f32; L3_SIZE]>,
+        output: &mut Align64<[f32; L3_SIZE]>,
+    ) {
+        // SAFETY: Breaking it down by unsafe operations:
+        // 1. get_unchecked[_mut] / .as[_mut]_ptr().add(): We only ever index at most (L3_SIZE / F32_CHUNK_SIZE - 1) * F32_CHUNK_SIZE
+        // into the `sums` and `biases` arrays. This is in bounds, as `sums` has length L3_SIZE and
+        // `biases` has length L3_SIZE. We only ever index at most
+        // (L2_SIZE - 1) * L3_SIZE + (L3_SIZE / F32_CHUNK_SIZE - 1) * F32_CHUNK_SIZE
+        // into the `weights` array. This is in bounds, as `weights` has length L2_SIZE * L3_SIZE.
+        // We only ever index at most L2_SIZE - 1 into the `inputs` array. This is in bounds, as `inputs`
+        // has length L2_SIZE.
+        // 2. SIMD instructions: All of our loads and stores are aligned.
+        unsafe {
+            let mut sums = biases.clone();
+
+            // affine transform
+            for i in 0..L2_SIZE {
+                let input_vec = simd::splat_f32(*inputs.get_unchecked(i));
+                for j in 0..L3_SIZE / F32_CHUNK_SIZE {
+                    simd::store_f32(
+                        sums.as_mut_ptr().add(j * F32_CHUNK_SIZE),
+                        simd::mul_add_f32(
+                            input_vec,
+                            simd::load_f32(weights.as_ptr().add(i * L3_SIZE + j * F32_CHUNK_SIZE)),
+                            simd::load_f32(sums.as_ptr().add(j * F32_CHUNK_SIZE)),
+                        ),
+                    );
+                }
+            }
+
+            // squared clipped ReLU activation
+            let one = simd::splat_f32(1.0);
+            for i in 0..L3_SIZE / F32_CHUNK_SIZE {
+                let clipped = simd::min_f32(
+                    simd::max_f32(
+                        simd::load_f32(sums.as_ptr().add(i * F32_CHUNK_SIZE)),
+                        simd::zero_f32(),
+                    ),
+                    one,
+                );
+                let squared = simd::mul_f32(clipped, clipped);
+                simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK_SIZE), squared);
+            }
+        }
+    }
+
+    pub fn propagate_l3(
+        inputs: &Align64<[f32; L3_SIZE]>,
+        weights: &Align64<[f32; L3_SIZE]>,
+        bias: f32,
+        output: &mut f32,
+    ) {
+        // These weird multiple-sum shenanigans is to make sure we add the floats in the exact same manner
+        // and order on ALL architectures, so that behaviour is deterministic
+        // We multiply the weights by the inputs, and sum them up
+        const NUM_SUMS: usize = AVX512CHUNK / F32_CHUNK_SIZE;
+        // SAFETY: Breaking it down by unsafe operations:
+        // 1. get_unchecked[_mut] / .as[_mut]_ptr().add(): We only ever index at most (L3_SIZE / F32_CHUNK_SIZE - 1) * F32_CHUNK_SIZE
+        // into the `weights` and `inputs` arrays. This is in bounds, as `weights` has length L3_SIZE and
+        // `inputs` has length L3_SIZE.
+        // 2. SIMD instructions: All of our loads and stores are aligned.
+        unsafe {
+            let mut sum_vecs = [simd::zero_f32(); NUM_SUMS];
+
+            // affine transform
+            for i in 0..L3_SIZE / F32_CHUNK_SIZE {
+                let weight_vec = simd::load_f32(weights.as_ptr().add(i * F32_CHUNK_SIZE));
+                let input_vec = simd::load_f32(inputs.as_ptr().add(i * F32_CHUNK_SIZE));
+                sum_vecs[i % NUM_SUMS] =
+                    simd::mul_add_f32(input_vec, weight_vec, sum_vecs[i % NUM_SUMS]);
+            }
+
+            *output = simd::reduce_add_f32s(&sum_vecs) + bias;
+        }
+    }
+}
+
 #[cfg(target_arch = "x86_64")]
-mod x86simd {
+mod x86 {
     use crate::{
         nnue::{
             network::{
@@ -551,9 +718,12 @@ mod x86simd {
 }
 
 #[cfg(target_arch = "x86_64")]
-pub use x86simd::*;
+pub use x86::*;
 
-#[cfg(not(target_arch = "x86_64"))]
+#[cfg(target_feature = "neon")]
+pub use neon::*;
+
+#[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
 pub use generic::*;
 
 use super::{QA, QB};
