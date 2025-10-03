@@ -983,25 +983,25 @@ mod neon {
     #[inline(always)]
     pub unsafe fn zero_i16() -> VecI16 {
         unsafe {
-            return VecI16::from_raw(vld1q_dup_s16(&0));
+            return VecI16::from_raw(vdupq_n_s16(0));
         }
     }
     #[inline(always)]
     pub unsafe fn zero_i32() -> VecI32 {
         unsafe {
-            return VecI32::from_raw(vld1q_dup_s32(&0));
+            return VecI32::from_raw(vdupq_n_s32(0));
         }
     }
     #[inline(always)]
     pub unsafe fn splat_i16(n: i16) -> VecI16 {
         unsafe {
-            return VecI16::from_raw(vld1q_dup_s16(&n));
+            return VecI16::from_raw(vdupq_n_s16(n));
         }
     }
     #[inline(always)]
     pub unsafe fn splat_i32(n: i32) -> VecI32 {
         unsafe {
-            return VecI32::from_raw(vld1q_dup_s32(&n));
+            return VecI32::from_raw(vdupq_n_s32(n));
         }
     }
     #[inline(always)]
@@ -1145,36 +1145,15 @@ mod neon {
     }
     #[inline(always)]
     pub unsafe fn nonzero_mask_i32(vec: VecI32) -> u16 {
-        unsafe {
-            return vcgtzq_s32(vec.inner()) as u16;
-        }
+        unsafe { todo!() }
     }
     #[inline(always)]
     pub unsafe fn pack_i16_to_u8(vec0: VecI16, vec1: VecI16) -> VecI8 {
-        unsafe {
-            let packed = _mm512_packus_epi16(vec0.inner(), vec1.inner());
-            // return VecI8::from_raw(_mm512_permutexvar_epi64(_mm512_setr_epi64(0, 2, 4, 6, 1, 3, 5, 7), packed));
-            return VecI8::from_raw(packed);
-        }
+        unsafe { todo!() }
     }
     #[inline(always)]
     pub unsafe fn mul_add_u8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8) -> VecI32 {
-        unsafe {
-            #[cfg(target_feature = "avx512vnni")]
-            {
-                return VecI32::from_raw(_mm512_dpbusd_epi32(
-                    sum.inner(),
-                    vec0.inner(),
-                    vec1.inner(),
-                ));
-            }
-            #[cfg(not(target_feature = "avx512vnni"))]
-            {
-                let product16 = _mm512_maddubs_epi16(vec0.inner(), vec1.inner());
-                let product32 = _mm512_madd_epi16(product16, _mm512_set1_epi16(1));
-                return VecI32::from_raw(_mm512_add_epi32(sum.inner(), product32));
-            }
-        }
+        unsafe { todo!() }
     }
     #[inline(always)]
     pub unsafe fn mul_add_2xu8_to_i32(
@@ -1184,43 +1163,24 @@ mod neon {
         vec2: VecI8,
         vec3: VecI8,
     ) -> VecI32 {
-        unsafe {
-            #[cfg(target_feature = "avx512vnni")]
-            {
-                return VecI32::from_raw(_mm512_dpbusd_epi32(
-                    _mm512_dpbusd_epi32(sum.inner(), vec0.inner(), vec1.inner()),
-                    vec2.inner(),
-                    vec3.inner(),
-                ));
-            }
-            #[cfg(not(target_feature = "avx512vnni"))]
-            {
-                let product16a = _mm512_maddubs_epi16(vec0.inner(), vec1.inner());
-                let product16b = _mm512_maddubs_epi16(vec2.inner(), vec3.inner());
-                let product32 = _mm512_madd_epi16(
-                    _mm512_add_epi16(product16a, product16b),
-                    _mm512_set1_epi16(1),
-                );
-                return VecI32::from_raw(_mm512_add_epi32(sum.inner(), product32));
-            }
-        }
+        unsafe { todo!() }
     }
     #[inline(always)]
     pub unsafe fn i32_to_f32(vec: VecI32) -> VecF32 {
         unsafe {
-            return VecF32::from_raw(_mm512_cvtepi32_ps(vec.inner()));
+            return VecF32::from_raw(vcvtq_f32_s32(vec.inner()));
         }
     }
     #[inline(always)]
     pub unsafe fn zero_f32() -> VecF32 {
         unsafe {
-            return VecF32::from_raw(_mm512_setzero_ps());
+            return VecF32::from_raw(vdupq_n_f32(0.0));
         }
     }
     #[inline(always)]
     pub unsafe fn splat_f32(n: f32) -> VecF32 {
         unsafe {
-            return VecF32::from_raw(_mm512_set1_ps(n));
+            return VecF32::from_raw(vdupq_n_f32(n));
         }
     }
     #[inline(always)]
@@ -1228,7 +1188,7 @@ mod neon {
         unsafe {
             // check alignment in debug mode
             debug_assert!((src as usize) % std::mem::align_of::<VecF32>() == 0);
-            return VecF32::from_raw(_mm512_load_ps(src));
+            return VecF32::from_raw(vld1q_f32(src));
         }
     }
     #[inline(always)]
@@ -1236,55 +1196,55 @@ mod neon {
         unsafe {
             // check alignment in debug mode
             debug_assert!((dst as usize) % std::mem::align_of::<VecF32>() == 0);
-            _mm512_store_ps(dst, vec.inner());
+            vst1q_f32(dst, vec.inner());
         }
     }
     #[inline(always)]
     pub unsafe fn add_f32(vec0: VecF32, vec1: VecF32) -> VecF32 {
         unsafe {
-            return VecF32::from_raw(_mm512_add_ps(vec0.inner(), vec1.inner()));
+            return VecF32::from_raw(vaddq_f32(vec0.inner(), vec1.inner()));
         }
     }
     #[inline(always)]
     pub unsafe fn mul_f32(vec0: VecF32, vec1: VecF32) -> VecF32 {
         unsafe {
-            return VecF32::from_raw(_mm512_mul_ps(vec0.inner(), vec1.inner()));
+            return VecF32::from_raw(vmulq_f32(vec0.inner(), vec1.inner()));
         }
     }
     #[inline(always)]
     pub unsafe fn div_f32(vec0: VecF32, vec1: VecF32) -> VecF32 {
         unsafe {
-            return VecF32::from_raw(_mm512_div_ps(vec0.inner(), vec1.inner()));
+            return VecF32::from_raw(vdivq_f32(vec0.inner(), vec1.inner()));
         }
     }
     #[inline(always)]
     pub unsafe fn max_f32(vec0: VecF32, vec1: VecF32) -> VecF32 {
         unsafe {
-            return VecF32::from_raw(_mm512_max_ps(vec0.inner(), vec1.inner()));
+            return VecF32::from_raw(vmaxq_f32(vec0.inner(), vec1.inner()));
         }
     }
     #[inline(always)]
     pub unsafe fn min_f32(vec0: VecF32, vec1: VecF32) -> VecF32 {
         unsafe {
-            return VecF32::from_raw(_mm512_min_ps(vec0.inner(), vec1.inner()));
+            return VecF32::from_raw(vminq_f32(vec0.inner(), vec1.inner()));
         }
     }
     #[inline(always)]
     pub unsafe fn mul_add_f32(vec0: VecF32, vec1: VecF32, vec2: VecF32) -> VecF32 {
         unsafe {
-            return VecF32::from_raw(_mm512_fmadd_ps(vec0.inner(), vec1.inner(), vec2.inner()));
+            return VecF32::from_raw(vmlaq_f32(vec2.inner(), vec0.inner(), vec1.inner()));
         }
     }
     #[inline(always)]
     pub unsafe fn sum_f32(vec: VecF32) -> f32 {
         unsafe {
-            return _mm512_reduce_add_ps(vec.inner());
+            return vaddvq_f32(vec.inner());
         }
     }
     #[inline(always)]
     pub unsafe fn reduce_add_f32s(vec: &[VecF32; 1]) -> f32 {
         unsafe {
-            return _mm512_reduce_add_ps(vec.get_unchecked(0).inner());
+            return vaddvq_f32(vec.get_unchecked(0).inner());
         }
     }
 
