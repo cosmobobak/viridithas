@@ -73,17 +73,17 @@ pub fn cont_history_malus(conf: &Config, depth: i32, index: usize) -> i32 {
     }
 }
 
-pub const MAX_HISTORY: i16 = i16::MAX / 2;
+pub const MAX_HISTORY: i32 = i16::MAX as i32 / 2;
 pub const CORRECTION_HISTORY_SIZE: usize = 16_384;
 pub const CORRECTION_HISTORY_GRAIN: i32 = 256;
-pub const CORRECTION_HISTORY_MAX: i32 = CORRECTION_HISTORY_GRAIN * 32;
+pub const CORRECTION_HISTORY_MAX: i32 = 1024;
 
 pub fn update_history(val: &mut i16, delta: i32) {
-    gravity_update::<{ MAX_HISTORY as i32 }>(val, delta);
+    gravity_update::<MAX_HISTORY>(val, delta);
 }
 
 pub fn update_correction(val: &mut i16, delta: i32) {
-    gravity_update::<{ CORRECTION_HISTORY_MAX }>(val, delta);
+    gravity_update::<CORRECTION_HISTORY_MAX>(val, delta);
 }
 
 fn gravity_update<const MAX: i32>(val: &mut i16, delta: i32) {

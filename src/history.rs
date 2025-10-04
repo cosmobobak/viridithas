@@ -143,7 +143,7 @@ impl ThreadData<'_> {
         let height = self.board.height();
 
         let bonus = i32::clamp(
-            diff * (depth + 1),
+            diff * depth / 8,
             -CORRECTION_HISTORY_MAX / 4,
             CORRECTION_HISTORY_MAX / 4,
         );

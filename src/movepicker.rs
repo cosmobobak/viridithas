@@ -14,7 +14,7 @@ use crate::{
 };
 
 pub const WINNING_CAPTURE_BONUS: i32 = 10_000_000;
-pub const MIN_WINNING_SEE_SCORE: i32 = WINNING_CAPTURE_BONUS - MAX_HISTORY as i32;
+pub const MIN_WINNING_SEE_SCORE: i32 = WINNING_CAPTURE_BONUS - MAX_HISTORY;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Stage {
