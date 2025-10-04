@@ -6,9 +6,9 @@ use crate::{
         types::Square,
     },
     historytable::{
-        CORRECTION_HISTORY_GRAIN, CORRECTION_HISTORY_MAX, cont_history_bonus, cont_history_malus,
-        main_history_bonus, main_history_malus, tactical_history_bonus, tactical_history_malus,
-        update_correction, update_history,
+        CORRECTION_HISTORY_MAX, cont_history_bonus, cont_history_malus, main_history_bonus,
+        main_history_malus, tactical_history_bonus, tactical_history_malus, update_correction,
+        update_history,
     },
     threadlocal::ThreadData,
     util::MAX_DEPTH,
@@ -208,7 +208,7 @@ impl ThreadData<'_> {
             + (white + black) * i64::from(self.info.conf.nonpawn_corrhist_weight)
             + cont * i64::from(self.info.conf.continuation_corrhist_weight);
 
-        (adjustment / 1024) as i32 / CORRECTION_HISTORY_GRAIN
+        (adjustment * 12 / 0x40000) as i32
     }
 }
 

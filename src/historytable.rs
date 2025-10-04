@@ -75,7 +75,6 @@ pub fn cont_history_malus(conf: &Config, depth: i32, index: usize) -> i32 {
 
 pub const MAX_HISTORY: i32 = i16::MAX as i32 / 2;
 pub const CORRECTION_HISTORY_SIZE: usize = 16_384;
-pub const CORRECTION_HISTORY_GRAIN: i32 = 256;
 pub const CORRECTION_HISTORY_MAX: i32 = 1024;
 
 pub fn update_history(val: &mut i16, delta: i32) {
