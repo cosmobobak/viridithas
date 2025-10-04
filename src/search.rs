@@ -29,8 +29,8 @@ use crate::{
     },
     history::caphist_piece_type,
     historytable::{
-        CORRECTION_HISTORY_GRAIN, CORRECTION_HISTORY_MAX, cont1_history_bonus, cont1_history_malus,
-        cont2_history_bonus, cont2_history_malus, main_history_bonus, main_history_malus,
+        cont1_history_bonus, cont1_history_malus, cont2_history_bonus, cont2_history_malus,
+        main_history_bonus, main_history_malus,
     },
     lookups::HM_CLOCK_KEYS,
     movepicker::{MovePicker, Stage},
@@ -1582,12 +1582,7 @@ pub fn alpha_beta<NT: NodeType>(
             || flag == Bound::Lower && best_score <= static_eval
             || flag == Bound::Upper && best_score >= static_eval)
         {
-            let bonus = i32::clamp(
-                (best_score - static_eval) * depth * CORRECTION_HISTORY_GRAIN,
-                -CORRECTION_HISTORY_MAX / 4,
-                CORRECTION_HISTORY_MAX / 4,
-            );
-            t.update_correction_history(depth, bonus);
+            t.update_correction_history(depth, best_score - static_eval);
         }
         t.tt.store(
             key,
