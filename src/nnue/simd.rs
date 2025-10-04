@@ -1283,10 +1283,7 @@ mod neon {
             let vec_b = vaddq_f32(vec.get_unchecked(1).inner(), vec.get_unchecked(3).inner());
             let vec = vaddq_f32(vec_a, vec_b);
 
-            // Transforms [a, b, c, d] into [a+b, c+d, a+b, c+d]
-            let pw_sum = vpaddq_f32(vec, vec);
-            // Sums [a+b, c+d] into a+b+c+d
-            vaddv_f32(vget_low_f32(pw_sum))
+            vaddvq_f32(vec)
         }
     }
 
