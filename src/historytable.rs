@@ -80,10 +80,13 @@ pub const CORRECTION_HISTORY_WEIGHT_SCALE: i32 = 256;
 pub const CORRECTION_HISTORY_MAX: i32 = CORRECTION_HISTORY_GRAIN * 32;
 
 pub fn update_history(val: &mut i16, delta: i32) {
+    gravity_update::<{ MAX_HISTORY as i32 }>(val, delta);
+}
+
+pub fn gravity_update<const MAX: i32>(val: &mut i16, delta: i32) {
     #![allow(clippy::cast_possible_truncation)]
-    const MAX_HISTORY: i32 = crate::historytable::MAX_HISTORY as i32;
     let curr = i32::from(*val);
-    *val += delta as i16 - (curr * delta.abs() / MAX_HISTORY) as i16;
+    *val += delta as i16 - (curr * delta.abs() / MAX) as i16;
 }
 
 #[repr(transparent)]

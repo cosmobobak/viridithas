@@ -7,8 +7,8 @@ use crate::{
     },
     historytable::{
         CORRECTION_HISTORY_GRAIN, CORRECTION_HISTORY_MAX, CORRECTION_HISTORY_WEIGHT_SCALE,
-        cont_history_bonus, cont_history_malus, main_history_bonus, main_history_malus,
-        tactical_history_bonus, tactical_history_malus, update_history,
+        cont_history_bonus, cont_history_malus, gravity_update, main_history_bonus,
+        main_history_malus, tactical_history_bonus, tactical_history_malus, update_history,
     },
     threadlocal::ThreadData,
     util::MAX_DEPTH,
@@ -134,25 +134,18 @@ impl ThreadData<'_> {
     }
 
     /// Update the correction history for a pawn pattern.
-    pub fn update_correction_history(&mut self, depth: i32, diff: i32) {
+    pub fn update_correction_history(&mut self, depth: i32, bonus: i32) {
         #![allow(clippy::cast_possible_truncation)]
 
         use Colour::{Black, White};
 
-        let scaled_diff = diff * CORRECTION_HISTORY_GRAIN;
         let new_weight = 16.min(1 + depth);
         debug_assert!(new_weight <= CORRECTION_HISTORY_WEIGHT_SCALE);
         let us = self.board.turn();
         let height = self.board.height();
 
         let update = |entry: &mut i16| {
-            let update = i32::from(*entry) * (CORRECTION_HISTORY_WEIGHT_SCALE - new_weight)
-                + scaled_diff * new_weight;
-            *entry = i32::clamp(
-                update / CORRECTION_HISTORY_WEIGHT_SCALE,
-                -CORRECTION_HISTORY_MAX,
-                CORRECTION_HISTORY_MAX,
-            ) as i16;
+            gravity_update::<CORRECTION_HISTORY_MAX>(entry, bonus);
         };
 
         let keys = &self.board.state.keys;
