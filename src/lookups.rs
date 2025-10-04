@@ -23,6 +23,14 @@ const fn init_hash_keys() -> ([[u64; 64]; 12], [u64; 64], [u64; 16], u64, [u64; 
     let mut state = XorShiftState::new();
     let mut piece_keys = [[0; 64]; 12];
     cfor!(let mut index = 0; index < 12; index += 1; {
+        // pointless repermutation to cope
+        // with old behaviour - we used to
+        // encode Piece as colour * 6 + piece_type,
+        // but now we use colour | piece_type << 1.
+        // This step keeps the same keys as before.
+        let c = (index >= 6) as usize;
+        let p = index % 6;
+        let index = c | p << 1;
         cfor!(let mut sq = 0; sq < 64; sq += 1; {
             let key;
             (key, state) = state.next_self();

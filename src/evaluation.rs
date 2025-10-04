@@ -8,7 +8,7 @@ use crate::{
         squareset::SquareSet,
     },
     nnue::network,
-    search::draw_score,
+    search::{draw_score, parameters::Config},
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
     util::MAX_DEPTH,
@@ -81,16 +81,16 @@ impl Board {
         (us & (kings | pawns)) != us
     }
 
-    pub fn estimated_see(&self, info: &SearchInfo, m: Move) -> i32 {
+    pub fn estimated_see(&self, conf: &Config, m: Move) -> i32 {
         // initially take the value of the thing on the target square
-        let mut value = self.state.mailbox[m.to()].map_or(0, |p| see_value(p.piece_type(), info));
+        let mut value = self.state.mailbox[m.to()].map_or(0, |p| see_value(p.piece_type(), conf));
 
         if let Some(promo) = m.promotion_type() {
             // if it's a promo, swap a pawn for the promoted piece type
-            value += see_value(promo, info) - info.conf.see_pawn_value;
+            value += see_value(promo, conf) - conf.see_pawn_value;
         } else if m.is_ep() {
             // for e.p. we will miss a pawn because the target square is empty
-            value = info.conf.see_pawn_value;
+            value = conf.see_pawn_value;
         }
 
         value
@@ -129,13 +129,13 @@ pub fn evaluate(t: &mut ThreadData, nodes: u64) -> i32 {
     evaluate_nnue(t)
 }
 
-pub const fn see_value(piece_type: PieceType, info: &SearchInfo) -> i32 {
+pub const fn see_value(piece_type: PieceType, conf: &Config) -> i32 {
     match piece_type {
-        PieceType::Pawn => info.conf.see_pawn_value,
-        PieceType::Knight => info.conf.see_knight_value,
-        PieceType::Bishop => info.conf.see_bishop_value,
-        PieceType::Rook => info.conf.see_rook_value,
-        PieceType::Queen => info.conf.see_queen_value,
+        PieceType::Pawn => conf.see_pawn_value,
+        PieceType::Knight => conf.see_knight_value,
+        PieceType::Bishop => conf.see_bishop_value,
+        PieceType::Rook => conf.see_rook_value,
+        PieceType::Queen => conf.see_queen_value,
         PieceType::King => 0,
     }
 }

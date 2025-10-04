@@ -659,7 +659,7 @@ pub fn quiescence<NT: NodeType>(
             && !is_recapture
             && futility <= alpha
             && !is_decisive(futility)
-            && !static_exchange_eval(&t.board, &t.info, m, 1)
+            && !static_exchange_eval(&t.board, &t.info.conf, m, 1)
         {
             if best_score < futility {
                 best_score = futility;
@@ -1306,7 +1306,7 @@ pub fn alpha_beta<NT: NodeType>(
             && t.ss[height - 1].searching.is_some()
             && !static_exchange_eval(
                 &t.board,
-                &t.info,
+                &t.info.conf,
                 m,
                 see_table[usize::from(is_quiet)]
                     - stat_score * t.info.conf.see_stat_score_mul / 1024,
@@ -1329,12 +1329,8 @@ pub fn alpha_beta<NT: NodeType>(
         if NT::ROOT {
             extension = 0;
         } else if maybe_singular && Some(m) == tt_move {
-            let TTHit {
-                value: tt_value,
-                bound,
-                ..
-            } = tt_hit.unwrap();
-            let r_beta = singularity_margin(tt_value, depth);
+            let tte = tt_hit.unwrap();
+            let r_beta = singularity_margin(tte.value, depth);
             let r_depth = (depth - 1) / 2;
 
             t.ss[t.board.height()].excluded = Some(m);
@@ -1348,14 +1344,12 @@ pub fn alpha_beta<NT: NodeType>(
             );
             t.ss[t.board.height()].excluded = None;
 
-            if value != VALUE_NONE && value >= r_beta && r_beta >= beta {
-                // multi-cut: if a move other than the best one beats beta,
-                // then we can cut with relatively high confidence.
-                return singularity_margin(tt_value, depth);
-            }
-
             if value == VALUE_NONE {
                 extension = 1; // extend if there's only one legal move.
+            } else if value >= r_beta && r_beta >= beta {
+                // multi-cut: if a move other than the best one beats beta,
+                // then we can cut with relatively high confidence.
+                return singularity_margin(tte.value, depth);
             } else if value < r_beta {
                 if !NT::PV
                     && t.ss[t.board.height()].dextensions <= 12
@@ -1370,13 +1364,17 @@ pub fn alpha_beta<NT: NodeType>(
             } else if cut_node {
                 // produce a strong negative extension if we didn't fail low on a cut-node.
                 extension = -2;
-            } else if tt_value >= beta {
+            } else if tte.value >= beta {
                 // the tt_value >= beta condition is a sort of "light multi-cut"
                 extension = -3 + i32::from(NT::PV);
-            } else if tt_value <= alpha {
+            } else if tte.value <= alpha {
                 // the tt_value <= alpha condition is from Weiss (https://github.com/TerjeKir/weiss/compare/2a7b4ed0...effa8349/).
                 extension = -1;
-            } else if depth < 8 && !in_check && static_eval < alpha - 25 && bound == Bound::Lower {
+            } else if depth < 8
+                && !in_check
+                && static_eval < alpha - 25
+                && tte.bound == Bound::Lower
+            {
                 // low-depth singular extension.
                 extension = 1;
             } else {
@@ -1725,7 +1723,7 @@ pub fn can_win_material(pos: &Board) -> bool {
 /// the given move, from least to most valuable moved piece, and returns
 /// true if the exchange comes out with a material advantage of at
 /// least `threshold`.
-pub fn static_exchange_eval(board: &Board, info: &SearchInfo, m: Move, threshold: i32) -> bool {
+pub fn static_exchange_eval(board: &Board, conf: &Config, m: Move, threshold: i32) -> bool {
     let from = m.from();
     let to = m.to();
     let bbs = &board.state.bbs;
@@ -1735,7 +1733,7 @@ pub fn static_exchange_eval(board: &Board, info: &SearchInfo, m: Move, threshold
         |promo| promo,
     );
 
-    let mut balance = board.estimated_see(info, m) - threshold;
+    let mut balance = board.estimated_see(conf, m) - threshold;
 
     // if the best case fails, don't bother doing the full search.
     if balance < 0 {
@@ -1743,7 +1741,7 @@ pub fn static_exchange_eval(board: &Board, info: &SearchInfo, m: Move, threshold
     }
 
     // worst case is losing the piece
-    balance -= see_value(next_victim, info);
+    balance -= see_value(next_victim, conf);
 
     // if the worst case passes, we can return true immediately.
     if balance >= 0 {
@@ -1811,7 +1809,7 @@ pub fn static_exchange_eval(board: &Board, info: &SearchInfo, m: Move, threshold
 
         colour = !colour;
 
-        balance = -balance - 1 - see_value(next_victim, info);
+        balance = -balance - 1 - see_value(next_victim, conf);
 
         if balance >= 0 {
             // from Ethereal:

@@ -163,7 +163,7 @@ impl MovePicker {
             );
             // test if this is a potentially-winning capture that's yet to be SEE-ed:
             if best.score >= MIN_WINNING_SEE_SCORE
-                && !static_exchange_eval(&t.board, &t.info, best.mov, self.see_threshold)
+                && !static_exchange_eval(&t.board, &t.info.conf, best.mov, self.see_threshold)
             {
                 // if it fails SEE, then we want to try the next best move, and de-mark this one.
                 best_entry_ref.set(MoveListEntry {
