@@ -845,20 +845,6 @@ pub fn alpha_beta<NT: NodeType>(
         None // do not probe the TT if we're in a singular-verification search.
     };
 
-    let tt_complexity = if let Some(tte) = &tt_hit {
-        if !is_decisive(tte.value)
-            && (tte.bound == Bound::Exact
-                || (tte.bound == Bound::Upper && tte.value < t.ss[height].static_eval)
-                || (tte.bound == Bound::Lower && tte.value > t.ss[height].static_eval))
-        {
-            (t.ss[height].static_eval - tte.value).abs()
-        } else {
-            0
-        }
-    } else {
-        0
-    };
-
     if excluded.is_none() {
         t.ss[height].ttpv = NT::PV || tt_hit.is_some_and(|hit| hit.was_pv);
     }
@@ -986,6 +972,18 @@ pub fn alpha_beta<NT: NodeType>(
 
     t.ss[height].static_eval = static_eval;
     t.ss[height].eval = eval;
+
+    let tt_complexity = tt_hit.as_ref().map_or(0, |tte| {
+        if !is_decisive(tte.value)
+            && (tte.bound == Bound::Exact
+                || (tte.bound == Bound::Upper && tte.value < static_eval)
+                || (tte.bound == Bound::Lower && tte.value > static_eval))
+        {
+            i32::abs(static_eval - tte.value)
+        } else {
+            0
+        }
+    });
 
     // value-difference based policy update.
     if let Some(ss_prev) = t.ss.get(height.wrapping_sub(1))
