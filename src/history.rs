@@ -134,16 +134,20 @@ impl ThreadData<'_> {
     }
 
     /// Update the correction history for a pawn pattern.
-    pub fn update_correction_history(&mut self, depth: i32, diff: i32) {
-        #![allow(clippy::cast_possible_truncation)]
+    pub fn update_correction_history(&mut self, depth: i32, tt_complexity: i32, diff: i32) {
+        #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
 
         use Colour::{Black, White};
 
         let us = self.board.turn();
         let height = self.board.height();
 
+        // wow! floating point in a chess engine!
+        let tt_complexity_factor =
+            ((1.0 + (tt_complexity as f32 + 1.0).log2() / 10.0) * 8.0) as i32;
+
         let bonus = i32::clamp(
-            diff * depth / 8,
+            diff * depth * tt_complexity_factor / 64,
             -CORRECTION_HISTORY_MAX / 4,
             CORRECTION_HISTORY_MAX / 4,
         );
