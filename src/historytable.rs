@@ -3,7 +3,7 @@ use std::ops::{Deref, DerefMut};
 use crate::{
     chess::{
         piece::{Colour, Piece},
-        types::{ContHistIndex, Square},
+        types::Square,
     },
     search::parameters::Config,
     util::BOARD_N_SQUARES,
@@ -73,17 +73,22 @@ pub fn cont_history_malus(conf: &Config, depth: i32, index: usize) -> i32 {
     }
 }
 
-pub const MAX_HISTORY: i16 = i16::MAX / 2;
+pub const MAX_HISTORY: i32 = i16::MAX as i32 / 2;
 pub const CORRECTION_HISTORY_SIZE: usize = 16_384;
-pub const CORRECTION_HISTORY_GRAIN: i32 = 256;
-pub const CORRECTION_HISTORY_WEIGHT_SCALE: i32 = 256;
-pub const CORRECTION_HISTORY_MAX: i32 = CORRECTION_HISTORY_GRAIN * 32;
+pub const CORRECTION_HISTORY_MAX: i32 = 1024;
 
 pub fn update_history(val: &mut i16, delta: i32) {
+    gravity_update::<MAX_HISTORY>(val, delta);
+}
+
+pub fn update_correction(val: &mut i16, delta: i32) {
+    gravity_update::<CORRECTION_HISTORY_MAX>(val, delta);
+}
+
+fn gravity_update<const MAX: i32>(val: &mut i16, delta: i32) {
     #![allow(clippy::cast_possible_truncation)]
-    const MAX_HISTORY: i32 = crate::historytable::MAX_HISTORY as i32;
     let curr = i32::from(*val);
-    *val += delta as i16 - (curr * delta.abs() / MAX_HISTORY) as i16;
+    *val += delta as i16 - (curr * delta.abs() / MAX) as i16;
 }
 
 #[repr(transparent)]
@@ -240,14 +245,6 @@ impl DoubleHistoryTable {
             .flatten()
             .for_each(HistoryTable::clear);
     }
-
-    pub fn get_index_mut(&mut self, index: ContHistIndex) -> &mut HistoryTable {
-        &mut self.table[index.piece][index.square]
-    }
-
-    pub fn get_index(&self, index: ContHistIndex) -> &HistoryTable {
-        &self.table[index.piece][index.square]
-    }
 }
 
 impl Deref for DoubleHistoryTable {
@@ -309,6 +306,51 @@ impl Deref for CorrectionHistoryTable {
 }
 
 impl DerefMut for CorrectionHistoryTable {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.table
+    }
+}
+
+#[repr(transparent)]
+pub struct ContinuationCorrectionHistoryTable {
+    table: [[[[[i16; 2]; 6]; 64]; 6]; 64],
+}
+
+impl ContinuationCorrectionHistoryTable {
+    pub fn boxed() -> Box<Self> {
+        #![allow(clippy::cast_ptr_alignment)]
+        // SAFETY: we're allocating a zeroed block of memory, and then casting it to a Box<Self>
+        // this is fine! because [[HistoryTable; BOARD_N_SQUARES]; 12] is just a bunch of i16s
+        // at base, which are fine to zero-out.
+        unsafe {
+            let layout = std::alloc::Layout::new::<Self>();
+            let ptr = std::alloc::alloc_zeroed(layout);
+            if ptr.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
+            Box::from_raw(ptr.cast())
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.table
+            .iter_mut()
+            .flatten()
+            .flatten()
+            .flatten()
+            .for_each(|t| t.fill(0));
+    }
+}
+
+impl Deref for ContinuationCorrectionHistoryTable {
+    type Target = [[[[[i16; 2]; 6]; 64]; 6]; 64];
+
+    fn deref(&self) -> &Self::Target {
+        &self.table
+    }
+}
+
+impl DerefMut for ContinuationCorrectionHistoryTable {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.table
     }

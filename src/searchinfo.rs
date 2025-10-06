@@ -1,10 +1,11 @@
 use std::sync::{
+    Mutex,
     atomic::{AtomicBool, AtomicU64, Ordering},
-    mpsc, Mutex,
+    mpsc,
 };
 
 use crate::{
-    search::{parameters::Config, LMTable},
+    search::{LMTable, parameters::Config},
     timemgmt::TimeManager,
     uci,
     util::BatchedAtomicCounter,
@@ -34,7 +35,7 @@ pub struct SearchInfo<'a> {
     /// LMR + LMP lookup table.
     pub lm_table: LMTable,
     /// The time manager.
-    pub time_manager: TimeManager,
+    pub clock: TimeManager,
 
     /* Conditionally-compiled stat trackers: */
     /// The number of fail-highs found (beta cutoffs).
@@ -66,7 +67,7 @@ impl<'a> SearchInfo<'a> {
             print_to_stdout: true,
             conf: Config::default(),
             lm_table: LMTable::default(),
-            time_manager: TimeManager::default(),
+            clock: TimeManager::default(),
             #[cfg(feature = "stats")]
             failhigh: 0,
             #[cfg(feature = "stats")]
@@ -88,7 +89,7 @@ impl<'a> SearchInfo<'a> {
         for rmnc in self.root_move_nodes.iter_mut().flatten() {
             *rmnc = 0;
         }
-        self.time_manager.reset_for_id(&self.conf);
+        self.clock.reset_for_id(&self.conf);
         #[cfg(feature = "stats")]
         {
             self.failhigh = 0;
@@ -108,20 +109,16 @@ impl<'a> SearchInfo<'a> {
         if already_stopped {
             return true;
         }
-        let res = self
-            .time_manager
-            .check_up(self.stopped, self.nodes.get_global());
+        let res = self.clock.check_up(self.stopped, self.nodes.get_global());
         if let Some(Ok(cmd)) = self.stdin_rx.map(|m| m.lock().unwrap().try_recv()) {
             let cmd = cmd.trim();
             if cmd == "ponderhit" {
-                println!("info string limit was {:?}", self.time_manager.limit());
-                let unpondering_limit = self.time_manager.limit().clone().from_pondering();
+                println!("info string limit was {:?}", self.clock.limit());
+                let unpondering_limit = self.clock.limit().clone().from_pondering();
                 println!("info string unpondering limit is {unpondering_limit:?}");
-                self.time_manager.set_limit(unpondering_limit);
-                self.time_manager.start();
-                return self
-                    .time_manager
-                    .check_up(self.stopped, self.nodes.get_global());
+                self.clock.set_limit(unpondering_limit);
+                self.clock.start();
+                return self.clock.check_up(self.stopped, self.nodes.get_global());
             }
             self.stopped.store(true, Ordering::SeqCst);
             if cmd == "quit" {
@@ -134,7 +131,7 @@ impl<'a> SearchInfo<'a> {
     }
 
     pub fn skip_print(&self) -> bool {
-        self.time_manager.time_since_start().as_millis() < 50
+        self.clock.is_dynamic() && self.clock.time_since_start().as_millis() < 50
     }
 
     pub fn stopped(&self) -> bool {
@@ -234,8 +231,8 @@ mod tests {
             &stopped,
             &nodes,
         ));
-        t.info.time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
-        let (value, mov) = search_position(&pool, array::from_mut(&mut t), tt.view());
+        t.info.clock = TimeManager::default_with_limit(SearchLimit::mate_in(2));
+        let (value, mov) = search_position(&pool, array::from_mut(&mut t));
 
         assert!(matches!(
             t.board.san(mov.unwrap()).as_deref(),
@@ -266,8 +263,8 @@ mod tests {
             &stopped,
             &nodes,
         ));
-        t.info.time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
-        let (value, mov) = search_position(&pool, array::from_mut(&mut t), tt.view());
+        t.info.clock = TimeManager::default_with_limit(SearchLimit::mate_in(2));
+        let (value, mov) = search_position(&pool, array::from_mut(&mut t));
 
         assert!(matches!(t.board.san(mov.unwrap()).as_deref(), Some("Qxd5")));
         assert_eq!(value, mate_in(4)); // 4 ply (and positive) because white mates but it's black's turn.
@@ -295,8 +292,8 @@ mod tests {
             &stopped,
             &nodes,
         ));
-        t.info.time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
-        let (value, mov) = search_position(&pool, array::from_mut(&mut t), tt.view());
+        t.info.clock = TimeManager::default_with_limit(SearchLimit::mate_in(2));
+        let (value, mov) = search_position(&pool, array::from_mut(&mut t));
 
         assert!(matches!(t.board.san(mov.unwrap()).as_deref(), Some("Qxd4")));
         assert_eq!(value, -mate_in(4)); // 4 ply (and negative) because black mates but it's white's turn.
@@ -324,8 +321,8 @@ mod tests {
             &stopped,
             &nodes,
         ));
-        t.info.time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
-        let (value, mov) = search_position(&pool, array::from_mut(&mut t), tt.view());
+        t.info.clock = TimeManager::default_with_limit(SearchLimit::mate_in(2));
+        let (value, mov) = search_position(&pool, array::from_mut(&mut t));
 
         assert!(matches!(
             t.board.san(mov.unwrap()).as_deref(),

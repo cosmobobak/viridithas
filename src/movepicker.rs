@@ -2,7 +2,7 @@ use std::cell::Cell;
 
 use crate::{
     chess::{
-        board::movegen::{pawn_attacks_by, AllMoves, MoveList, MoveListEntry, SkipQuiets},
+        board::movegen::{AllMoves, MoveList, MoveListEntry, SkipQuiets, pawn_attacks_by},
         chessmove::Move,
         piece::PieceType,
         squareset::SquareSet,
@@ -14,7 +14,7 @@ use crate::{
 };
 
 pub const WINNING_CAPTURE_BONUS: i32 = 10_000_000;
-pub const MIN_WINNING_SEE_SCORE: i32 = WINNING_CAPTURE_BONUS - MAX_HISTORY as i32;
+pub const MIN_WINNING_SEE_SCORE: i32 = WINNING_CAPTURE_BONUS - MAX_HISTORY;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Stage {
@@ -76,10 +76,10 @@ impl MovePicker {
         }
         if self.stage == Stage::TTMove {
             self.stage = Stage::GenerateCaptures;
-            if let Some(tt_move) = self.tt_move {
-                if t.board.is_pseudo_legal(tt_move) {
-                    return Some(tt_move);
-                }
+            if let Some(tt_move) = self.tt_move
+                && t.board.is_pseudo_legal(tt_move)
+            {
+                return Some(tt_move);
             }
         }
         if self.stage == Stage::GenerateCaptures {
@@ -115,13 +115,13 @@ impl MovePicker {
         }
         if self.stage == Stage::YieldKiller {
             self.stage = Stage::GenerateQuiets;
-            if !self.skip_quiets && self.killer != self.tt_move {
-                if let Some(killer) = self.killer {
-                    if t.board.is_pseudo_legal(killer) {
-                        debug_assert!(!t.board.is_tactical(killer));
-                        return Some(killer);
-                    }
-                }
+            if !self.skip_quiets
+                && self.killer != self.tt_move
+                && let Some(killer) = self.killer
+                && t.board.is_pseudo_legal(killer)
+            {
+                debug_assert!(!t.board.is_tactical(killer));
+                return Some(killer);
             }
         }
         if self.stage == Stage::GenerateQuiets {
@@ -163,7 +163,7 @@ impl MovePicker {
             );
             // test if this is a potentially-winning capture that's yet to be SEE-ed:
             if best.score >= MIN_WINNING_SEE_SCORE
-                && !static_exchange_eval(&t.board, &t.info, best.mov, self.see_threshold)
+                && !static_exchange_eval(&t.board, &t.info.conf, best.mov, self.see_threshold)
             {
                 // if it fails SEE, then we want to try the next best move, and de-mark this one.
                 best_entry_ref.set(MoveListEntry {
@@ -195,18 +195,16 @@ impl MovePicker {
     }
 
     pub fn score_quiets(t: &ThreadData, ms: &mut [MoveListEntry]) {
-        let cont_block_0 = t
-            .board
-            .height()
-            .checked_sub(1)
-            .and_then(|i| t.ss.get(i))
-            .map(|ss| t.continuation_history.get_index(ss.conthist_index));
-        let cont_block_1 = t
-            .board
-            .height()
-            .checked_sub(2)
-            .and_then(|i| t.ss.get(i))
-            .map(|ss| t.continuation_history.get_index(ss.conthist_index));
+        let height = t.board.height();
+
+        let mut cont_block_0 = None;
+        let mut cont_block_1 = None;
+        if height > 1 {
+            cont_block_0 = Some(&t.cont_hist[t.ss[height - 1].ch_idx]);
+        }
+        if height > 2 {
+            cont_block_1 = Some(&t.cont_hist[t.ss[height - 2].ch_idx]);
+        }
 
         let threats = t.board.state.threats.all;
         for m in ms {
@@ -218,7 +216,7 @@ impl MovePicker {
 
             let mut score = 0;
 
-            score += i32::from(t.main_history[from_threat][to_threat][piece][to]);
+            score += i32::from(t.main_hist[from_threat][to_threat][piece][to]);
             if let Some(cmh_block) = cont_block_0 {
                 score += i32::from(cmh_block[piece][to]);
             }
@@ -304,7 +302,7 @@ impl MovePicker {
             let mut score = WINNING_CAPTURE_BONUS;
 
             score += MVV_SCORE[capture];
-            score += i32::from(t.tactical_history[usize::from(threat_to)][capture][piece][to]);
+            score += i32::from(t.tactical_hist[usize::from(threat_to)][capture][piece][to]);
 
             m.score = score;
         }

@@ -8,7 +8,8 @@ use anyhow::Context;
 use crate::{
     chess::{board::Board, chessmove::Move, piece::Colour},
     historytable::{
-        CaptureHistoryTable, CorrectionHistoryTable, DoubleHistoryTable, ThreatsHistoryTable,
+        CaptureHistoryTable, ContinuationCorrectionHistoryTable, CorrectionHistoryTable,
+        DoubleHistoryTable, ThreatsHistoryTable,
     },
     nnue::{self, network::NNUEParams},
     search::pv::PVariation,
@@ -16,32 +17,37 @@ use crate::{
     stack::StackEntry,
     threadpool::{self, ScopeExt},
     transpositiontable::TTView,
-    util::MAX_PLY,
+    util::MAX_DEPTH,
 };
 
 #[repr(align(64))]
 pub struct ThreadData<'a> {
     // stack array is right-padded by one because singular verification
     // will try to access the next ply in an edge case.
-    pub ss: [StackEntry; MAX_PLY + 1],
+    pub ss: [StackEntry; MAX_DEPTH + 1],
     pub banned_nmp: u8,
     pub nnue: Box<nnue::network::NNUEState>,
     pub nnue_params: &'static NNUEParams,
 
-    pub main_history: ThreatsHistoryTable,
-    pub tactical_history: Box<CaptureHistoryTable>,
-    pub continuation_history: Box<DoubleHistoryTable>,
-    pub killer_move_table: [Option<Move>; MAX_PLY + 1],
+    pub main_hist: ThreatsHistoryTable,
+    pub tactical_hist: Box<CaptureHistoryTable>,
+    pub cont_hist: Box<DoubleHistoryTable>,
+    pub killer_move_table: [Option<Move>; MAX_DEPTH + 1],
     pub pawn_corrhist: Box<CorrectionHistoryTable>,
     pub nonpawn_corrhist: [Box<CorrectionHistoryTable>; 2],
     pub major_corrhist: Box<CorrectionHistoryTable>,
     pub minor_corrhist: Box<CorrectionHistoryTable>,
+    pub continuation_corrhist: Box<ContinuationCorrectionHistoryTable>,
 
     pub thread_id: usize,
 
-    pub pvs: [PVariation; MAX_PLY],
+    pub pvs: [PVariation; MAX_DEPTH],
+    /// the iterative deepening loop counter
+    pub iteration: usize,
+    /// the highest finished ID iteration
     pub completed: usize,
-    pub depth: usize,
+    /// the draft we're actually kicking off searches at
+    pub depth: i32,
 
     pub stm_at_root: Colour,
     pub optimism: [i32; 2],
@@ -70,10 +76,10 @@ impl<'a> ThreadData<'a> {
             banned_nmp: 0,
             nnue: nnue::network::NNUEState::new(&board, nnue_params),
             nnue_params,
-            main_history: ThreatsHistoryTable::new(),
-            tactical_history: CaptureHistoryTable::boxed(),
-            continuation_history: DoubleHistoryTable::boxed(),
-            killer_move_table: [None; MAX_PLY + 1],
+            main_hist: ThreatsHistoryTable::new(),
+            tactical_hist: CaptureHistoryTable::boxed(),
+            cont_hist: DoubleHistoryTable::boxed(),
+            killer_move_table: [None; MAX_DEPTH + 1],
             pawn_corrhist: CorrectionHistoryTable::boxed(),
             nonpawn_corrhist: [
                 CorrectionHistoryTable::boxed(),
@@ -81,9 +87,11 @@ impl<'a> ThreadData<'a> {
             ],
             major_corrhist: CorrectionHistoryTable::boxed(),
             minor_corrhist: CorrectionHistoryTable::boxed(),
+            continuation_corrhist: ContinuationCorrectionHistoryTable::boxed(),
             thread_id,
             #[allow(clippy::large_stack_arrays)]
-            pvs: [Self::ARRAY_REPEAT_VALUE; MAX_PLY],
+            pvs: [Self::ARRAY_REPEAT_VALUE; MAX_DEPTH],
+            iteration: 0,
             completed: 0,
             depth: 0,
             stm_at_root: board.turn(),
@@ -125,14 +133,15 @@ impl<'a> ThreadData<'a> {
     }
 
     pub fn clear_tables(&mut self) {
-        self.main_history.clear();
-        self.tactical_history.clear();
-        self.continuation_history.clear();
+        self.main_hist.clear();
+        self.tactical_hist.clear();
+        self.cont_hist.clear();
         self.pawn_corrhist.clear();
         self.nonpawn_corrhist[Colour::White].clear();
         self.nonpawn_corrhist[Colour::Black].clear();
         self.major_corrhist.clear();
         self.minor_corrhist.clear();
+        self.continuation_corrhist.clear();
         self.killer_move_table.fill(None);
         self.depth = 0;
         self.completed = 0;
@@ -149,16 +158,20 @@ impl<'a> ThreadData<'a> {
     }
 
     pub fn update_best_line(&mut self, pv: &PVariation) {
-        self.completed = self.depth;
-        self.pvs[self.depth] = pv.clone();
+        self.completed = self.iteration;
+        self.pvs[self.iteration] = pv.clone();
     }
 
     pub fn revert_best_line(&mut self) {
-        self.completed = self.depth - 1;
+        self.completed = self.iteration - 1;
     }
 
     pub const fn pv(&self) -> &PVariation {
         &self.pvs[self.completed]
+    }
+
+    pub const fn pv_mut(&mut self) -> &mut PVariation {
+        &mut self.pvs[self.completed]
     }
 }
 

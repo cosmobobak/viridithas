@@ -5,6 +5,7 @@ use std::{
 
 use crate::chess::{
     piece::PieceType,
+    squareset::SquareSet,
     types::{File, Square},
 };
 
@@ -126,8 +127,10 @@ impl Move {
     /// Handles castling moves, which are a bit weird.
     pub fn history_to_square(self) -> Square {
         if self.is_castle() {
-            let to_rank = self.from().rank();
-            if self.to() > self.from() {
+            let to = self.to();
+            let from = self.from();
+            let to_rank = from.rank();
+            if to > from {
                 // kingside castling, king goes to the G file
                 Square::from_rank_file(to_rank, File::G)
             } else {
@@ -160,6 +163,13 @@ impl Move {
 
     pub const fn display(self, chess960: bool) -> MoveDisplay {
         MoveDisplay { m: self, chess960 }
+    }
+
+    pub fn is_double_pawn_push_ranks(self) -> bool {
+        let to = self.to().as_set();
+        let from = self.from().as_set();
+        (SquareSet::RANK_4 | SquareSet::RANK_5) & to != SquareSet::EMPTY
+            && (SquareSet::RANK_2 | SquareSet::RANK_7) & from != SquareSet::EMPTY
     }
 }
 
