@@ -973,6 +973,18 @@ pub fn alpha_beta<NT: NodeType>(
     t.ss[height].static_eval = static_eval;
     t.ss[height].eval = eval;
 
+    let tt_complexity = tt_hit.as_ref().map_or(0, |tte| {
+        if !is_decisive(tte.value)
+            && (tte.bound == Bound::Exact
+                || (tte.bound == Bound::Upper && tte.value < static_eval)
+                || (tte.bound == Bound::Lower && tte.value > static_eval))
+        {
+            i32::abs(static_eval - tte.value)
+        } else {
+            0
+        }
+    });
+
     // value-difference based policy update.
     if let Some(ss_prev) = t.ss.get(height.wrapping_sub(1))
         && let Some(mov) = ss_prev.searching
@@ -1582,7 +1594,7 @@ pub fn alpha_beta<NT: NodeType>(
             || flag == Bound::Lower && best_score <= static_eval
             || flag == Bound::Upper && best_score >= static_eval)
         {
-            t.update_correction_history(depth, best_score - static_eval);
+            t.update_correction_history(depth, tt_complexity, best_score - static_eval);
         }
         t.tt.store(
             key,
