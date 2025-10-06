@@ -55,7 +55,6 @@ macro_rules! track {
             let count = COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             if count % 8192 == 0 {
                 let total = TOTAL.load(std::sync::atomic::Ordering::Relaxed);
-                let squares_total = SQUARES_TOTAL.load(std::sync::atomic::Ordering::Relaxed);
                 let avg = total as f64 / count as f64;
                 println!("average value of {}: {}", stringify!($v), avg);
                 let total_abs = TOTAL_ABS.load(std::sync::atomic::Ordering::Relaxed);

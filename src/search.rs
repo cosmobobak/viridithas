@@ -94,7 +94,6 @@ const LMR_CUT_NODE_MUL: i32 = 1412;
 const LMR_NON_IMPROVING_MUL: i32 = 456;
 const LMR_TT_CAPTURE_MUL: i32 = 1301;
 const LMR_CHECK_MUL: i32 = 1217;
-const LMR_COMPLEXITY_MUL: i32 = 5000;
 
 const MAIN_HISTORY_BONUS_MUL: i32 = 341;
 const MAIN_HISTORY_BONUS_OFFSET: i32 = 178;
@@ -906,21 +905,19 @@ pub fn alpha_beta<NT: NodeType>(
     let raw_eval;
     let static_eval;
     let eval;
-    let correction;
+    let correction = t.correction();
 
     if in_check {
         // when we're in check, it could be checkmate, so it's unsound to use evaluate().
         raw_eval = VALUE_NONE;
         static_eval = VALUE_NONE;
         eval = VALUE_NONE;
-        correction = 0;
     } else if excluded.is_some() {
         // if we're in a singular-verification search, we already have the static eval.
         // we can set raw_eval to whatever we like, because we're not going to be saving it.
         raw_eval = VALUE_NONE;
         static_eval = t.ss[height].static_eval;
         eval = t.ss[height].eval;
-        correction = 0;
         t.nnue.hint_common_access(&t.board, t.nnue_params);
     } else if let Some(tte) = &tt_hit {
         let v = tte.eval; // if we have a TT hit, check the cached TT eval.
@@ -934,7 +931,6 @@ pub fn alpha_beta<NT: NodeType>(
                 t.nnue.hint_common_access(&t.board, t.nnue_params);
             }
         }
-        correction = t.correction();
         static_eval = adj_shuffle(t, raw_eval, clock) + correction;
         if tte.value != VALUE_NONE
             && !is_decisive(tte.value)
@@ -966,7 +962,6 @@ pub fn alpha_beta<NT: NodeType>(
             t.ss[height].ttpv,
         );
 
-        correction = t.correction();
         static_eval = adj_shuffle(t, raw_eval, clock) + correction;
         eval = static_eval;
     }
@@ -1423,7 +1418,7 @@ pub fn alpha_beta<NT: NodeType>(
                 // reduce less if the move gives check
                 r -= i32::from(t.board.in_check()) * t.info.conf.lmr_check_mul;
                 // reduce less when the static eval is way off-base
-                r -= t.correction().pow(2) * 256 / 16384 - 300;
+                r -= correction.pow(2) * 256 / 16384 - 200;
 
                 t.ss[height].reduction = r;
                 r / 1024
