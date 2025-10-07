@@ -10,7 +10,9 @@ pub trait Col {
     const COLOUR: Colour;
 
     const PAWN_LEFT_OFFSET: i8;
+    const PAWN_FWD_OFFSET: i8;
     const PAWN_RIGHT_OFFSET: i8;
+    const PAWN_DOUBLE_OFFSET: i8;
 }
 
 pub struct White;
@@ -22,7 +24,9 @@ impl Col for White {
     const COLOUR: Colour = Colour::White;
 
     const PAWN_LEFT_OFFSET: i8 = 7;
+    const PAWN_FWD_OFFSET: i8 = 8;
     const PAWN_RIGHT_OFFSET: i8 = 9;
+    const PAWN_DOUBLE_OFFSET: i8 = 16;
 }
 
 impl Col for Black {
@@ -31,7 +35,9 @@ impl Col for Black {
     const COLOUR: Colour = Colour::Black;
 
     const PAWN_LEFT_OFFSET: i8 = -9;
+    const PAWN_FWD_OFFSET: i8 = -8;
     const PAWN_RIGHT_OFFSET: i8 = -7;
+    const PAWN_DOUBLE_OFFSET: i8 = -16;
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
