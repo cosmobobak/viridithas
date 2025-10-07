@@ -296,29 +296,29 @@ impl Square {
     }
 
     /// SAFETY: You may not call this function with a square and offset such that
-    /// `square as u8 + offset` is outwith `0..64`.
-    pub const unsafe fn add_unchecked(self, offset: u8) -> Self {
+    /// `square as i8 + offset` is outwith `0..64`.
+    pub const unsafe fn add_unchecked(self, offset: i8) -> Self {
         #![allow(
             clippy::cast_possible_truncation,
             clippy::cast_possible_wrap,
             clippy::cast_sign_loss
         )]
-        let res = self as u8 + offset;
+        let res = self as i8 + offset;
         // Safety: caller's precondition.
-        unsafe { Self::new_unchecked(res) }
+        unsafe { Self::new_unchecked(res as u8) }
     }
 
     /// SAFETY: You may not call this function with a square and offset such that
-    /// `square as u8 - offset` is outwith `0..64`.
-    pub const unsafe fn sub_unchecked(self, offset: u8) -> Self {
+    /// `square as i8 - offset` is outwith `0..64`.
+    pub const unsafe fn sub_unchecked(self, offset: i8) -> Self {
         #![allow(
             clippy::cast_possible_truncation,
             clippy::cast_possible_wrap,
             clippy::cast_sign_loss
         )]
-        let res = self as u8 - offset;
+        let res = self as i8 - offset;
         // Safety: caller's precondition.
-        unsafe { Self::new_unchecked(res) }
+        unsafe { Self::new_unchecked(res as u8) }
     }
 
     pub const fn sub(self, offset: u8) -> Option<Self> {

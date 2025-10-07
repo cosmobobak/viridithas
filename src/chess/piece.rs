@@ -8,6 +8,9 @@ pub trait Col {
     type Opposite: Col;
     const WHITE: bool;
     const COLOUR: Colour;
+
+    const PAWN_LEFT_OFFSET: i8;
+    const PAWN_RIGHT_OFFSET: i8;
 }
 
 pub struct White;
@@ -17,12 +20,18 @@ impl Col for White {
     type Opposite = Black;
     const WHITE: bool = true;
     const COLOUR: Colour = Colour::White;
+
+    const PAWN_LEFT_OFFSET: i8 = 7;
+    const PAWN_RIGHT_OFFSET: i8 = 9;
 }
 
 impl Col for Black {
     type Opposite = White;
     const WHITE: bool = false;
     const COLOUR: Colour = Colour::Black;
+
+    const PAWN_LEFT_OFFSET: i8 = -9;
+    const PAWN_RIGHT_OFFSET: i8 = -7;
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

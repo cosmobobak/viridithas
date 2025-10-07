@@ -1547,6 +1547,7 @@ pub fn alpha_beta<NT: NodeType>(
             // this heuristic is on the whole unmotivated, beyond mere empiricism.
             // perhaps it's really important to know which quiet moves are good in "bad" positions?
             let boost = i32::from(!in_check && static_eval <= best_score);
+
             update_quiet_history(t, &quiets_tried, best_move, depth + boost);
         }
 

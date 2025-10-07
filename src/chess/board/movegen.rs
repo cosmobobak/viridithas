@@ -363,19 +363,48 @@ impl MoveGenMode for AllMoves {
 }
 
 impl Board {
-    fn add_pawn_caps(move_list: &mut MoveList, from_mask: SquareSet, to_mask: SquareSet) {
-        for (from, to) in from_mask.into_iter().zip(to_mask) {
+    fn generate_pawn_caps<C: Col, Mode: MoveGenMode>(
+        &self,
+        move_list: &mut MoveList,
+        valid_target_squares: SquareSet,
+    ) {
+        #![allow(clippy::useless_let_if_seq)]
+
+        use PieceType::{Bishop, Knight, Pawn, Queen, Rook};
+
+        let bbs = &self.state.bbs;
+        let our_pawns = bbs.pieces[Pawn] & bbs.colours[C::COLOUR];
+        let valid_targets = bbs.colours[!C::COLOUR] & valid_target_squares;
+        let promo_rank = [SquareSet::RANK_7, SquareSet::RANK_2][C::COLOUR];
+
+        let attacking_west;
+        let attacking_east;
+
+        // to determine which pawns can capture,
+        // we shift the opponent's pieces backwards and find the intersection.
+        if C::WHITE {
+            attacking_west = valid_targets.south_east_one() & our_pawns;
+            attacking_east = valid_targets.south_west_one() & our_pawns;
+        } else {
+            attacking_west = valid_targets.north_east_one() & our_pawns;
+            attacking_east = valid_targets.north_west_one() & our_pawns;
+        }
+
+        for from in attacking_west & !promo_rank {
+            // SAFETY: masking guarantees a valid square
+            let to = unsafe { from.add_unchecked(C::PAWN_LEFT_OFFSET) };
             move_list.push(Move::new(from, to));
         }
-    }
 
-    fn add_pawn_promo_caps<Mode: MoveGenMode>(
-        move_list: &mut MoveList,
-        from_mask: SquareSet,
-        to_mask: SquareSet,
-    ) {
-        use PieceType::{Bishop, Knight, Queen, Rook};
-        for (from, to) in from_mask.into_iter().zip(to_mask) {
+        for from in attacking_east & !promo_rank {
+            // SAFETY: masking guarantees a valid square
+            let to = unsafe { from.add_unchecked(C::PAWN_RIGHT_OFFSET) };
+            move_list.push(Move::new(from, to));
+        }
+
+        for from in attacking_west & promo_rank {
+            // SAFETY: masking guarantees a valid square
+            let to = unsafe { from.add_unchecked(C::PAWN_LEFT_OFFSET) };
             // in quiescence search, we only generate promotions to queen.
             if Mode::SKIP_QUIETS {
                 move_list.push(Move::new_with_promo(from, to, Queen));
@@ -385,44 +414,18 @@ impl Board {
                 }
             }
         }
-    }
 
-    fn generate_pawn_caps<C: Col, Mode: MoveGenMode>(
-        &self,
-        move_list: &mut MoveList,
-        valid_target_squares: SquareSet,
-    ) {
-        use PieceType::Pawn;
-        let bbs = &self.state.bbs;
-        let our_pawns = bbs.pieces[Pawn] & bbs.colours[C::COLOUR];
-        let valid_targets = bbs.colours[!C::COLOUR] & valid_target_squares;
-        let promo_rank = [SquareSet::RANK_7, SquareSet::RANK_2][C::COLOUR];
-
-        // to determine which pawns can capture, we shift the opponent's pieces backwards and find the intersection
-        if C::WHITE {
-            let attacking_west = valid_targets.south_east_one() & our_pawns;
-            let attacking_east = valid_targets.south_west_one() & our_pawns;
-
-            let from_mask = attacking_west & !promo_rank;
-            Self::add_pawn_caps(move_list, from_mask, from_mask.north_west_one());
-            let from_mask = attacking_east & !promo_rank;
-            Self::add_pawn_caps(move_list, from_mask, from_mask.north_east_one());
-            let from_mask = attacking_west & promo_rank;
-            Self::add_pawn_promo_caps::<Mode>(move_list, from_mask, from_mask.north_west_one());
-            let from_mask = attacking_east & promo_rank;
-            Self::add_pawn_promo_caps::<Mode>(move_list, from_mask, from_mask.north_east_one());
-        } else {
-            let attacking_west = valid_targets.north_east_one() & our_pawns;
-            let attacking_east = valid_targets.north_west_one() & our_pawns;
-
-            let from_mask = attacking_west & !promo_rank;
-            Self::add_pawn_caps(move_list, from_mask, from_mask.south_west_one());
-            let from_mask = attacking_east & !promo_rank;
-            Self::add_pawn_caps(move_list, from_mask, from_mask.south_east_one());
-            let from_mask = attacking_west & promo_rank;
-            Self::add_pawn_promo_caps::<Mode>(move_list, from_mask, from_mask.south_west_one());
-            let from_mask = attacking_east & promo_rank;
-            Self::add_pawn_promo_caps::<Mode>(move_list, from_mask, from_mask.south_east_one());
+        for from in attacking_east & promo_rank {
+            // SAFETY: masking guarantees a valid square
+            let to = unsafe { from.add_unchecked(C::PAWN_RIGHT_OFFSET) };
+            // in quiescence search, we only generate promotions to queen.
+            if Mode::SKIP_QUIETS {
+                move_list.push(Move::new_with_promo(from, to, Queen));
+            } else {
+                for promo in [Queen, Rook, Bishop, Knight] {
+                    move_list.push(Move::new_with_promo(from, to, promo));
+                }
+            }
         }
     }
 
