@@ -823,40 +823,32 @@ impl Board {
     }
 
     fn generate_pawn_quiet<C: Col>(&self, move_list: &mut MoveList, valid_target: SquareSet) {
+        #![allow(clippy::useless_let_if_seq)]
+
         use PieceType::Pawn;
+
         let bbs = &self.state.bbs;
-        let start_rank = if C::WHITE {
-            SquareSet::RANK_2
+        let start_rank = SquareSet::RANK_2.relative_to(C::COLOUR);
+        let promo_rank = SquareSet::RANK_7.relative_to(C::COLOUR);
+
+        let shifted_empty_squares;
+        let double_shifted_empty;
+        let shifted_valid;
+        let double_shifted_valid;
+
+        if C::WHITE {
+            shifted_empty_squares = bbs.empty().south_one();
+            double_shifted_empty = bbs.empty().south_one().south_one();
+            shifted_valid = valid_target.south_one();
+            double_shifted_valid = valid_target.south_one().south_one();
         } else {
-            SquareSet::RANK_7
-        };
-        let promo_rank = if C::WHITE {
-            SquareSet::RANK_7
-        } else {
-            SquareSet::RANK_2
-        };
-        let shifted_empty_squares = if C::WHITE {
-            bbs.empty() >> 8
-        } else {
-            bbs.empty() << 8
-        };
-        let double_shifted_empty = if C::WHITE {
-            bbs.empty() >> 16
-        } else {
-            bbs.empty() << 16
-        };
-        let shifted_valid = if C::WHITE {
-            valid_target >> 8
-        } else {
-            valid_target << 8
-        };
-        let double_shifted_valid = if C::WHITE {
-            valid_target >> 16
-        } else {
-            valid_target << 16
-        };
-        let our_pawns = bbs.pieces[Pawn] & bbs.colours[C::COLOUR];
-        let pushable = our_pawns & shifted_empty_squares;
+            shifted_empty_squares = bbs.empty().north_one();
+            double_shifted_empty = bbs.empty().north_one().north_one();
+            shifted_valid = valid_target.north_one();
+            double_shifted_valid = valid_target.north_one().north_one();
+        }
+
+        let pushable = bbs.pieces[Pawn] & bbs.colours[C::COLOUR] & shifted_empty_squares;
         for from in pushable & !promo_rank & shifted_valid {
             // SAFETY: masking guarantees a valid square
             let to = unsafe { from.add_unchecked(C::PAWN_FWD_OFFSET) };
