@@ -363,19 +363,48 @@ impl MoveGenMode for AllMoves {
 }
 
 impl Board {
-    fn add_pawn_caps(move_list: &mut MoveList, from_mask: SquareSet, to_mask: SquareSet) {
-        for (from, to) in from_mask.into_iter().zip(to_mask) {
+    fn generate_pawn_caps<C: Col, Mode: MoveGenMode>(
+        &self,
+        move_list: &mut MoveList,
+        valid_target_squares: SquareSet,
+    ) {
+        #![allow(clippy::useless_let_if_seq)]
+
+        use PieceType::{Bishop, Knight, Pawn, Queen, Rook};
+
+        let bbs = &self.state.bbs;
+        let our_pawns = bbs.pieces[Pawn] & bbs.colours[C::COLOUR];
+        let valid_targets = bbs.colours[!C::COLOUR] & valid_target_squares;
+        let promo_rank = [SquareSet::RANK_7, SquareSet::RANK_2][C::COLOUR];
+
+        let attacking_west;
+        let attacking_east;
+
+        // to determine which pawns can capture,
+        // we shift the opponent's pieces backwards and find the intersection.
+        if C::WHITE {
+            attacking_west = valid_targets.south_east_one() & our_pawns;
+            attacking_east = valid_targets.south_west_one() & our_pawns;
+        } else {
+            attacking_west = valid_targets.north_east_one() & our_pawns;
+            attacking_east = valid_targets.north_west_one() & our_pawns;
+        }
+
+        for from in attacking_west & !promo_rank {
+            // SAFETY: masking guarantees a valid square
+            let to = unsafe { from.add_unchecked(C::PAWN_LEFT_OFFSET) };
             move_list.push(Move::new(from, to));
         }
-    }
 
-    fn add_pawn_promo_caps<Mode: MoveGenMode>(
-        move_list: &mut MoveList,
-        from_mask: SquareSet,
-        to_mask: SquareSet,
-    ) {
-        use PieceType::{Bishop, Knight, Queen, Rook};
-        for (from, to) in from_mask.into_iter().zip(to_mask) {
+        for from in attacking_east & !promo_rank {
+            // SAFETY: masking guarantees a valid square
+            let to = unsafe { from.add_unchecked(C::PAWN_RIGHT_OFFSET) };
+            move_list.push(Move::new(from, to));
+        }
+
+        for from in attacking_west & promo_rank {
+            // SAFETY: masking guarantees a valid square
+            let to = unsafe { from.add_unchecked(C::PAWN_LEFT_OFFSET) };
             // in quiescence search, we only generate promotions to queen.
             if Mode::SKIP_QUIETS {
                 move_list.push(Move::new_with_promo(from, to, Queen));
@@ -385,44 +414,18 @@ impl Board {
                 }
             }
         }
-    }
 
-    fn generate_pawn_caps<C: Col, Mode: MoveGenMode>(
-        &self,
-        move_list: &mut MoveList,
-        valid_target_squares: SquareSet,
-    ) {
-        use PieceType::Pawn;
-        let bbs = &self.state.bbs;
-        let our_pawns = bbs.pieces[Pawn] & bbs.colours[C::COLOUR];
-        let valid_targets = bbs.colours[!C::COLOUR] & valid_target_squares;
-        let promo_rank = [SquareSet::RANK_7, SquareSet::RANK_2][C::COLOUR];
-
-        // to determine which pawns can capture, we shift the opponent's pieces backwards and find the intersection
-        if C::WHITE {
-            let attacking_west = valid_targets.south_east_one() & our_pawns;
-            let attacking_east = valid_targets.south_west_one() & our_pawns;
-
-            let from_mask = attacking_west & !promo_rank;
-            Self::add_pawn_caps(move_list, from_mask, from_mask.north_west_one());
-            let from_mask = attacking_east & !promo_rank;
-            Self::add_pawn_caps(move_list, from_mask, from_mask.north_east_one());
-            let from_mask = attacking_west & promo_rank;
-            Self::add_pawn_promo_caps::<Mode>(move_list, from_mask, from_mask.north_west_one());
-            let from_mask = attacking_east & promo_rank;
-            Self::add_pawn_promo_caps::<Mode>(move_list, from_mask, from_mask.north_east_one());
-        } else {
-            let attacking_west = valid_targets.north_east_one() & our_pawns;
-            let attacking_east = valid_targets.north_west_one() & our_pawns;
-
-            let from_mask = attacking_west & !promo_rank;
-            Self::add_pawn_caps(move_list, from_mask, from_mask.south_west_one());
-            let from_mask = attacking_east & !promo_rank;
-            Self::add_pawn_caps(move_list, from_mask, from_mask.south_east_one());
-            let from_mask = attacking_west & promo_rank;
-            Self::add_pawn_promo_caps::<Mode>(move_list, from_mask, from_mask.south_west_one());
-            let from_mask = attacking_east & promo_rank;
-            Self::add_pawn_promo_caps::<Mode>(move_list, from_mask, from_mask.south_east_one());
+        for from in attacking_east & promo_rank {
+            // SAFETY: masking guarantees a valid square
+            let to = unsafe { from.add_unchecked(C::PAWN_RIGHT_OFFSET) };
+            // in quiescence search, we only generate promotions to queen.
+            if Mode::SKIP_QUIETS {
+                move_list.push(Move::new_with_promo(from, to, Queen));
+            } else {
+                for promo in [Queen, Rook, Bishop, Knight] {
+                    move_list.push(Move::new_with_promo(from, to, promo));
+                }
+            }
         }
     }
 
@@ -449,58 +452,48 @@ impl Board {
         move_list: &mut MoveList,
         valid_target_squares: SquareSet,
     ) {
+        #![allow(clippy::useless_let_if_seq)]
+
         use PieceType::{Bishop, Knight, Pawn, Queen, Rook};
+
         let bbs = &self.state.bbs;
         let promo_rank = [SquareSet::RANK_7, SquareSet::RANK_2][C::COLOUR];
         let start_rank = [SquareSet::RANK_2, SquareSet::RANK_7][C::COLOUR];
         let our_pawns = bbs.pieces[Pawn] & bbs.colours[C::COLOUR];
         let empty = bbs.empty();
 
+        let shifted_valid_squares;
+        let double_shifted_valid_squares;
+        let pushable_pawns;
+        let double_pushable_pawns;
+
         if C::WHITE {
-            let shifted_valid_squares = valid_target_squares.south_one();
-            let pushable_pawns = our_pawns & empty.south_one();
-            let double_pushable_pawns = pushable_pawns & empty.south_one().south_one() & start_rank;
-            let promoting_pawns = pushable_pawns & promo_rank;
-
-            let from_mask = pushable_pawns & !promoting_pawns & shifted_valid_squares;
-            let to_mask = from_mask.north_one();
-            for (from, to) in from_mask.into_iter().zip(to_mask) {
-                move_list.push(Move::new(from, to));
-            }
-            let from_mask = double_pushable_pawns & valid_target_squares.south_one().south_one();
-            let to_mask = from_mask.north_one().north_one();
-            for (from, to) in from_mask.into_iter().zip(to_mask) {
-                move_list.push(Move::new(from, to));
-            }
-            let from_mask = promoting_pawns & shifted_valid_squares;
-            let to_mask = from_mask.north_one();
-            for (from, to) in from_mask.into_iter().zip(to_mask) {
-                for promo in [Queen, Knight, Rook, Bishop] {
-                    move_list.push(Move::new_with_promo(from, to, promo));
-                }
-            }
+            shifted_valid_squares = valid_target_squares.south_one();
+            double_shifted_valid_squares = valid_target_squares.south_one().south_one();
+            pushable_pawns = our_pawns & empty.south_one();
+            double_pushable_pawns = pushable_pawns & empty.south_one().south_one() & start_rank;
         } else {
-            let shifted_valid_squares = valid_target_squares.north_one();
-            let pushable_pawns = our_pawns & empty.north_one();
-            let double_pushable_pawns = pushable_pawns & empty.north_one().north_one() & start_rank;
-            let promoting_pawns = pushable_pawns & promo_rank;
+            shifted_valid_squares = valid_target_squares.north_one();
+            double_shifted_valid_squares = valid_target_squares.north_one().north_one();
+            pushable_pawns = our_pawns & empty.north_one();
+            double_pushable_pawns = pushable_pawns & empty.north_one().north_one() & start_rank;
+        }
 
-            let from_mask = pushable_pawns & !promoting_pawns & shifted_valid_squares;
-            let to_mask = from_mask.south_one();
-            for (from, to) in from_mask.into_iter().zip(to_mask) {
-                move_list.push(Move::new(from, to));
-            }
-            let from_mask = double_pushable_pawns & valid_target_squares.north_one().north_one();
-            let to_mask = from_mask.south_one().south_one();
-            for (from, to) in from_mask.into_iter().zip(to_mask) {
-                move_list.push(Move::new(from, to));
-            }
-            let from_mask = promoting_pawns & shifted_valid_squares;
-            let to_mask = from_mask.south_one();
-            for (from, to) in from_mask.into_iter().zip(to_mask) {
-                for promo in [Queen, Knight, Rook, Bishop] {
-                    move_list.push(Move::new_with_promo(from, to, promo));
-                }
+        for from in pushable_pawns & !promo_rank & shifted_valid_squares {
+            // SAFETY: masking guarantees a valid square
+            let to = unsafe { from.add_unchecked(C::PAWN_FWD_OFFSET) };
+            move_list.push(Move::new(from, to));
+        }
+        for from in double_pushable_pawns & double_shifted_valid_squares {
+            // SAFETY: masking guarantees a valid square
+            let to = unsafe { from.add_unchecked(C::PAWN_DOUBLE_OFFSET) };
+            move_list.push(Move::new(from, to));
+        }
+        for from in pushable_pawns & promo_rank & shifted_valid_squares {
+            // SAFETY: masking guarantees a valid square
+            let to = unsafe { from.add_unchecked(C::PAWN_FWD_OFFSET) };
+            for promo in [Queen, Knight, Rook, Bishop] {
+                move_list.push(Move::new_with_promo(from, to, promo));
             }
         }
     }
@@ -531,13 +524,9 @@ impl Board {
         let pushable_pawns = our_pawns & shifted_empty_squares;
         let promoting_pawns = pushable_pawns & promo_rank;
 
-        let from_mask = promoting_pawns & shifted_valid_squares;
-        let to_mask = if C::WHITE {
-            from_mask.north_one()
-        } else {
-            from_mask.south_one()
-        };
-        for (from, to) in from_mask.into_iter().zip(to_mask) {
+        for from in promoting_pawns & shifted_valid_squares {
+            // SAFETY: masking guarantees a valid square
+            let to = unsafe { from.add_unchecked(C::PAWN_FWD_OFFSET) };
             if Mode::SKIP_QUIETS {
                 // in quiescence search, we only generate promotions to queen.
                 move_list.push(Move::new_with_promo(from, to, Queen));
@@ -833,64 +822,41 @@ impl Board {
         debug_assert!(move_list.iter_moves().all(|m| m.is_valid()));
     }
 
-    fn generate_pawn_quiet<C: Col>(
-        &self,
-        move_list: &mut MoveList,
-        valid_target_squares: SquareSet,
-    ) {
-        use PieceType::Pawn;
-        let bbs = &self.state.bbs;
-        let start_rank = if C::WHITE {
-            SquareSet::RANK_2
-        } else {
-            SquareSet::RANK_7
-        };
-        let promo_rank = if C::WHITE {
-            SquareSet::RANK_7
-        } else {
-            SquareSet::RANK_2
-        };
-        let shifted_empty_squares = if C::WHITE {
-            bbs.empty() >> 8
-        } else {
-            bbs.empty() << 8
-        };
-        let double_shifted_empty_squares = if C::WHITE {
-            bbs.empty() >> 16
-        } else {
-            bbs.empty() << 16
-        };
-        let shifted_valid_squares = if C::WHITE {
-            valid_target_squares >> 8
-        } else {
-            valid_target_squares << 8
-        };
-        let double_shifted_valid_squares = if C::WHITE {
-            valid_target_squares >> 16
-        } else {
-            valid_target_squares << 16
-        };
-        let our_pawns = bbs.pieces[Pawn] & bbs.colours[C::COLOUR];
-        let pushable_pawns = our_pawns & shifted_empty_squares;
-        let double_pushable_pawns = pushable_pawns & double_shifted_empty_squares & start_rank;
-        let promoting_pawns = pushable_pawns & promo_rank;
+    fn generate_pawn_quiet<C: Col>(&self, move_list: &mut MoveList, valid_target: SquareSet) {
+        #![allow(clippy::useless_let_if_seq)]
 
-        let from_mask = pushable_pawns & !promoting_pawns & shifted_valid_squares;
-        let to_mask = if C::WHITE {
-            from_mask.north_one()
+        use PieceType::Pawn;
+
+        let bbs = &self.state.bbs;
+        let start_rank = SquareSet::RANK_2.relative_to(C::COLOUR);
+        let promo_rank = SquareSet::RANK_7.relative_to(C::COLOUR);
+
+        let shifted_empty_squares;
+        let double_shifted_empty;
+        let shifted_valid;
+        let double_shifted_valid;
+
+        if C::WHITE {
+            shifted_empty_squares = bbs.empty().south_one();
+            double_shifted_empty = bbs.empty().south_one().south_one();
+            shifted_valid = valid_target.south_one();
+            double_shifted_valid = valid_target.south_one().south_one();
         } else {
-            from_mask.south_one()
-        };
-        for (from, to) in from_mask.into_iter().zip(to_mask) {
+            shifted_empty_squares = bbs.empty().north_one();
+            double_shifted_empty = bbs.empty().north_one().north_one();
+            shifted_valid = valid_target.north_one();
+            double_shifted_valid = valid_target.north_one().north_one();
+        }
+
+        let pushable = bbs.pieces[Pawn] & bbs.colours[C::COLOUR] & shifted_empty_squares;
+        for from in pushable & !promo_rank & shifted_valid {
+            // SAFETY: masking guarantees a valid square
+            let to = unsafe { from.add_unchecked(C::PAWN_FWD_OFFSET) };
             move_list.push(Move::new(from, to));
         }
-        let from_mask = double_pushable_pawns & double_shifted_valid_squares;
-        let to_mask = if C::WHITE {
-            from_mask.north_one().north_one()
-        } else {
-            from_mask.south_one().south_one()
-        };
-        for (from, to) in from_mask.into_iter().zip(to_mask) {
+        for from in pushable & double_shifted_empty & start_rank & double_shifted_valid {
+            // SAFETY: masking guarantees a valid square
+            let to = unsafe { from.add_unchecked(C::PAWN_DOUBLE_OFFSET) };
             move_list.push(Move::new(from, to));
         }
     }

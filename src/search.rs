@@ -1546,20 +1546,16 @@ pub fn alpha_beta<NT: NodeType>(
 
             // this heuristic is on the whole unmotivated, beyond mere empiricism.
             // perhaps it's really important to know which quiet moves are good in "bad" positions?
-            let history_depth_boost = i32::from(!in_check && static_eval <= best_score);
-            update_quiet_history(
-                t,
-                quiets_tried.as_slice(),
-                best_move,
-                depth + history_depth_boost,
-            );
+            let boost = i32::from(!in_check && static_eval <= best_score);
+
+            update_quiet_history(t, &quiets_tried, best_move, depth + boost);
         }
 
         // we unconditionally update the tactical history table
         // because tactical moves ought to be good in any position,
         // so it's good to decrease tactical history scores even
         // when the best move was non-tactical.
-        update_tactical_history(t, tacticals_tried.as_slice(), best_move, depth);
+        update_tactical_history(t, &tacticals_tried, best_move, depth);
     }
 
     if let Some(ss_prev) = t.ss.get(height.wrapping_sub(1))
