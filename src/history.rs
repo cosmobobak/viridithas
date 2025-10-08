@@ -6,9 +6,9 @@ use crate::{
         types::Square,
     },
     historytable::{
-        CORRECTION_HISTORY_GRAIN, CORRECTION_HISTORY_MAX, CORRECTION_HISTORY_WEIGHT_SCALE,
-        cont_history_bonus, cont_history_malus, main_history_bonus, main_history_malus,
-        tactical_history_bonus, tactical_history_malus, update_history,
+        CORRECTION_HISTORY_MAX, cont_history_bonus, cont_history_malus, main_history_bonus,
+        main_history_malus, tactical_history_bonus, tactical_history_malus, update_correction,
+        update_history,
     },
     threadlocal::ThreadData,
     util::MAX_DEPTH,
@@ -134,83 +134,74 @@ impl ThreadData<'_> {
     }
 
     /// Update the correction history for a pawn pattern.
-    pub fn update_correction_history(&mut self, depth: i32, diff: i32) {
+    pub fn update_correction_history(&mut self, depth: i32, tt_complexity: i32, diff: i32) {
+        #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+
         use Colour::{Black, White};
-        fn update(entry: &mut i16, new_weight: i32, scaled_diff: i32) {
-            #![allow(clippy::cast_possible_truncation)]
-            let update = i32::from(*entry) * (CORRECTION_HISTORY_WEIGHT_SCALE - new_weight)
-                + scaled_diff * new_weight;
-            *entry = i32::clamp(
-                update / CORRECTION_HISTORY_WEIGHT_SCALE,
-                -CORRECTION_HISTORY_MAX,
-                CORRECTION_HISTORY_MAX,
-            ) as i16;
-        }
-        let scaled_diff = diff * CORRECTION_HISTORY_GRAIN;
-        let new_weight = 16.min(1 + depth);
-        debug_assert!(new_weight <= CORRECTION_HISTORY_WEIGHT_SCALE);
+
         let us = self.board.turn();
         let height = self.board.height();
 
+        // wow! floating point in a chess engine!
+        let tt_complexity_factor =
+            ((1.0 + (tt_complexity as f32 + 1.0).log2() / 10.0) * 8.0) as i32;
+
+        let bonus = i32::clamp(
+            diff * depth * tt_complexity_factor / 64,
+            -CORRECTION_HISTORY_MAX / 4,
+            CORRECTION_HISTORY_MAX / 4,
+        );
+
+        let update = |entry: &mut i16| {
+            update_correction(entry, bonus);
+        };
+
         let keys = &self.board.state.keys;
 
-        update(
-            self.pawn_corrhist.get_mut(us, keys.pawn),
-            new_weight,
-            scaled_diff,
-        );
-        update(
-            self.nonpawn_corrhist[White].get_mut(us, keys.non_pawn[White]),
-            new_weight,
-            scaled_diff,
-        );
-        update(
-            self.nonpawn_corrhist[Black].get_mut(us, keys.non_pawn[Black]),
-            new_weight,
-            scaled_diff,
-        );
-        update(
-            self.minor_corrhist.get_mut(us, keys.minor),
-            new_weight,
-            scaled_diff,
-        );
-        update(
-            self.major_corrhist.get_mut(us, keys.major),
-            new_weight,
-            scaled_diff,
-        );
+        let pawn = self.pawn_corrhist.get_mut(us, keys.pawn);
+        let [nonpawn_white, nonpawn_black] = &mut self.nonpawn_corrhist;
+        let nonpawn_white = nonpawn_white.get_mut(us, keys.non_pawn[White]);
+        let nonpawn_black = nonpawn_black.get_mut(us, keys.non_pawn[Black]);
+        let minor = self.minor_corrhist.get_mut(us, keys.minor);
+        let major = self.major_corrhist.get_mut(us, keys.major);
+
+        update(pawn);
+        update(nonpawn_white);
+        update(nonpawn_black);
+        update(minor);
+        update(major);
+
         if height > 2 {
             let ch1 = self.ss[height - 1].ch_idx;
             let ch2 = self.ss[height - 2].ch_idx;
             let pt1 = ch1.piece.piece_type();
             let pt2 = ch2.piece.piece_type();
-            update(
-                &mut self.continuation_corrhist[ch1.to][pt1][ch2.to][pt2][us],
-                new_weight,
-                scaled_diff,
-            );
+            update(&mut self.continuation_corrhist[ch1.to][pt1][ch2.to][pt2][us]);
         }
     }
 
     /// Adjust a raw evaluation using statistics from the correction history.
     #[allow(clippy::cast_possible_truncation)]
     pub fn correction(&self) -> i32 {
+        use Colour::{Black, White};
+
         let keys = &self.board.state.keys;
-        let turn = self.board.turn();
+        let us = self.board.turn();
         let height = self.board.height();
 
-        let pawn = self.pawn_corrhist.get(turn, keys.pawn);
-        let white = self.nonpawn_corrhist[Colour::White].get(turn, keys.non_pawn[Colour::White]);
-        let black = self.nonpawn_corrhist[Colour::Black].get(turn, keys.non_pawn[Colour::Black]);
-        let minor = self.minor_corrhist.get(turn, keys.minor);
-        let major = self.major_corrhist.get(turn, keys.major);
+        let pawn = self.pawn_corrhist.get(us, keys.pawn);
+        let [white, black] = &self.nonpawn_corrhist;
+        let white = white.get(us, keys.non_pawn[White]);
+        let black = black.get(us, keys.non_pawn[Black]);
+        let minor = self.minor_corrhist.get(us, keys.minor);
+        let major = self.major_corrhist.get(us, keys.major);
 
         let cont = if height > 2 {
             let ch1 = self.ss[height - 1].ch_idx;
             let ch2 = self.ss[height - 2].ch_idx;
             let pt1 = ch1.piece.piece_type();
             let pt2 = ch2.piece.piece_type();
-            i64::from(self.continuation_corrhist[ch1.to][pt1][ch2.to][pt2][turn])
+            i64::from(self.continuation_corrhist[ch1.to][pt1][ch2.to][pt2][us])
         } else {
             0
         };
@@ -220,7 +211,8 @@ impl ThreadData<'_> {
             + minor * i64::from(self.info.conf.minor_corrhist_weight)
             + (white + black) * i64::from(self.info.conf.nonpawn_corrhist_weight)
             + cont * i64::from(self.info.conf.continuation_corrhist_weight);
-        (adjustment / 1024) as i32 / CORRECTION_HISTORY_GRAIN
+
+        (adjustment * 12 / 0x40000) as i32
     }
 }
 

@@ -73,17 +73,22 @@ pub fn cont_history_malus(conf: &Config, depth: i32, index: usize) -> i32 {
     }
 }
 
-pub const MAX_HISTORY: i16 = i16::MAX / 2;
+pub const MAX_HISTORY: i32 = i16::MAX as i32 / 2;
 pub const CORRECTION_HISTORY_SIZE: usize = 16_384;
-pub const CORRECTION_HISTORY_GRAIN: i32 = 256;
-pub const CORRECTION_HISTORY_WEIGHT_SCALE: i32 = 256;
-pub const CORRECTION_HISTORY_MAX: i32 = CORRECTION_HISTORY_GRAIN * 32;
+pub const CORRECTION_HISTORY_MAX: i32 = 1024;
 
 pub fn update_history(val: &mut i16, delta: i32) {
+    gravity_update::<MAX_HISTORY>(val, delta);
+}
+
+pub fn update_correction(val: &mut i16, delta: i32) {
+    gravity_update::<CORRECTION_HISTORY_MAX>(val, delta);
+}
+
+fn gravity_update<const MAX: i32>(val: &mut i16, delta: i32) {
     #![allow(clippy::cast_possible_truncation)]
-    const MAX_HISTORY: i32 = crate::historytable::MAX_HISTORY as i32;
     let curr = i32::from(*val);
-    *val += delta as i16 - (curr * delta.abs() / MAX_HISTORY) as i16;
+    *val += delta as i16 - (curr * delta.abs() / MAX) as i16;
 }
 
 #[repr(transparent)]
