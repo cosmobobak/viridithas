@@ -1048,7 +1048,7 @@ pub fn dry_run() -> anyhow::Result<()> {
     println!("[#] Generating network state");
     let state = NNUEState::new(&start_pos, nnue_params);
     println!("[#] Running forward pass");
-    let eval = state.evaluate(nnue_params, start_pos.turn(), output_bucket(&start_pos));
+    let eval = state.evaluate(nnue_params, &start_pos);
     std::hint::black_box(eval);
     Ok(())
 }
@@ -1432,7 +1432,10 @@ impl NNUEState {
 
     /// Evaluate the final layer on the partial activations.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-    pub fn evaluate(&self, nn: &NNUEParams, stm: Colour, out: usize) -> i32 {
+    pub fn evaluate(&self, nn: &NNUEParams, board: &Board) -> i32 {
+        let stm = board.turn();
+        let out = output_bucket(board);
+
         let acc = &self.accumulators[self.current_acc];
 
         debug_assert!(acc.correct[0] && acc.correct[1]);
@@ -1444,6 +1447,7 @@ impl NNUEState {
         };
 
         let mut l1_outputs = Align64([0.0; L2_SIZE]);
+        let mut l1_outputs_dbg = Align64([0.0; L2_SIZE]);
         let mut l2_outputs = Align64([0.0; L3_SIZE]);
         let mut l3_output = 0.0;
 
@@ -1453,6 +1457,13 @@ impl NNUEState {
             &nn.l1_weights[out],
             &nn.l1_bias[out],
             &mut l1_outputs,
+        );
+        layers::generic::activate_ft_and_propagate_l1(
+            us,
+            them,
+            &nn.l1_weights[out],
+            &nn.l1_bias[out],
+            &mut l1_outputs_dbg,
         );
         layers::propagate_l2(
             &l1_outputs,
@@ -1466,6 +1477,14 @@ impl NNUEState {
             nn.l3_bias[out],
             &mut l3_output,
         );
+
+        if l1_outputs != l1_outputs_dbg {
+            let l1_outputs = &l1_outputs[..];
+            let l1_outputs_dbg = &l1_outputs_dbg[..];
+            dbg!(l1_outputs);
+            dbg!(l1_outputs_dbg);
+            panic!("position: {board}");
+        }
 
         // let l1_outputs = &l1_outputs[..];
         // dbg!(l1_outputs);
@@ -1481,11 +1500,11 @@ impl NNUEState {
 /// (everything after the feature extraction)
 pub fn inference_benchmark(state: &NNUEState, nnue_params: &NNUEParams) {
     let start = std::time::Instant::now();
+    let board = Board::default();
     for _ in 0..1_000_000 {
         std::hint::black_box(std::hint::black_box(state).evaluate(
             std::hint::black_box(nnue_params),
-            std::hint::black_box(Colour::White),
-            std::hint::black_box(0),
+            std::hint::black_box(&board),
         ));
     }
     let elapsed = start.elapsed();

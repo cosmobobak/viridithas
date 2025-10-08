@@ -58,8 +58,8 @@ unsafe fn reinterpret_as_i32s(
     unsafe { &*ptr.cast::<Align64<[i32; L1_SIZE / 4]>>() }
 }
 
-#[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
-mod generic {
+// #[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
+pub mod generic {
     use super::{
         super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA},
         AVX512CHUNK, FT_SHIFT, L1_MUL,

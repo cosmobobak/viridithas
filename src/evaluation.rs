@@ -7,7 +7,6 @@ use crate::{
         piece::{Colour, PieceType},
         squareset::SquareSet,
     },
-    nnue::network,
     search::{draw_score, parameters::Config},
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
@@ -99,10 +98,7 @@ impl Board {
 
 pub fn evaluate_nnue(t: &ThreadData) -> i32 {
     // get the raw network output
-    let output_bucket = network::output_bucket(&t.board);
-    let v = t
-        .nnue
-        .evaluate(t.nnue_params, t.board.turn(), output_bucket);
+    let v = t.nnue.evaluate(t.nnue_params, &t.board);
 
     // clamp the value into the valid range.
     // this basically never comes up, but the network will
