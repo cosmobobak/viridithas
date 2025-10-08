@@ -1,5 +1,5 @@
 const AVX512CHUNK: usize = 512 / 32;
-const FT_SHIFT: u32 = 10;
+const FT_SHIFT: u32 = 9;
 #[allow(clippy::cast_precision_loss)]
 const L1_MUL: f32 = (1 << FT_SHIFT) as f32 / (QA as i32 * QA as i32 * QB as i32) as f32;
 
