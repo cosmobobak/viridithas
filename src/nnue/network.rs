@@ -781,7 +781,7 @@ impl NNUEParams {
             bytes_written == expected_bytes,
             "encountered issue while decompressing NNUE weights, expected {expected_bytes} bytes, but got {bytes_written}"
         );
-        let use_simd = cfg!(any(target_arch = "x86_64", target_feature = "neon")) && false;
+        let use_simd = cfg!(any(target_arch = "x86_64", target_feature = "neon"));
         let net = net.permute(use_simd);
 
         // create a temporary file to store the weights
