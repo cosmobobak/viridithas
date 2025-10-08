@@ -623,15 +623,12 @@ mod neon {
 
 #[cfg(target_arch = "x86_64")]
 mod x86 {
-    use crate::{
-        nnue::{
-            network::{
-                Align64, L1_CHUNK_PER_32, L1_SIZE, L2_SIZE, L3_SIZE, QA,
-                layers::{AVX512CHUNK, FT_SHIFT, L1_MUL},
-            },
-            simd::{self, F32_CHUNK_SIZE, I16_CHUNK_SIZE, S, U8_CHUNK_SIZE, VecI32},
+    use crate::nnue::{
+        network::{
+            Align64, L1_CHUNK_PER_32, L1_SIZE, L2_SIZE, L3_SIZE, QA,
+            layers::{AVX512CHUNK, FT_SHIFT, L1_MUL, NNZ_TABLE, reinterpret_as_i32s},
         },
-        util::from_ref,
+        simd::{self, F32_CHUNK_SIZE, I16_CHUNK_SIZE, S, U8_CHUNK_SIZE, VecI32},
     };
     use std::{
         arch::x86_64::{
