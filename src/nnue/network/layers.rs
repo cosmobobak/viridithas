@@ -301,10 +301,10 @@ mod neon {
                     let clipped1d = simd::min_i16(input1d, ft_one);
 
                     // shift and mulhi such that the high bits we get are equal to crelu(x1) * crelu(x2)
-                    let producta = simd::mul_high_i16(simd::shl_i16::<SHIFT>(clipped0a), clipped1a);
-                    let productb = simd::mul_high_i16(simd::shl_i16::<SHIFT>(clipped0b), clipped1b);
-                    let productc = simd::mul_high_i16(simd::shl_i16::<SHIFT>(clipped0c), clipped1c);
-                    let productd = simd::mul_high_i16(simd::shl_i16::<SHIFT>(clipped0d), clipped1d);
+                    let producta = simd::shift_mul_high_i16::<SHIFT>(clipped0a, clipped1a);
+                    let productb = simd::shift_mul_high_i16::<SHIFT>(clipped0b, clipped1b);
+                    let productc = simd::shift_mul_high_i16::<SHIFT>(clipped0c, clipped1c);
+                    let productd = simd::shift_mul_high_i16::<SHIFT>(clipped0d, clipped1d);
 
                     // pack the resulting values in to u8s
                     let product_one = simd::pack_i16_to_u8(producta, productb);
@@ -722,10 +722,10 @@ mod x86 {
                     let clipped1d = simd::min_i16(input1d, ft_one);
 
                     // shift and mulhi such that the high bits we get are equal to crelu(x1) * crelu(x2)
-                    let producta = simd::mul_high_i16(simd::shl_i16::<SHIFT>(clipped0a), clipped1a);
-                    let productb = simd::mul_high_i16(simd::shl_i16::<SHIFT>(clipped0b), clipped1b);
-                    let productc = simd::mul_high_i16(simd::shl_i16::<SHIFT>(clipped0c), clipped1c);
-                    let productd = simd::mul_high_i16(simd::shl_i16::<SHIFT>(clipped0d), clipped1d);
+                    let producta = simd::shift_mul_high_i16::<SHIFT>(clipped0a, clipped1a);
+                    let productb = simd::shift_mul_high_i16::<SHIFT>(clipped0b, clipped1b);
+                    let productc = simd::shift_mul_high_i16::<SHIFT>(clipped0c, clipped1c);
+                    let productd = simd::shift_mul_high_i16::<SHIFT>(clipped0d, clipped1d);
 
                     // pack the resulting values in to u8s
                     let product_one = simd::pack_i16_to_u8(producta, productb);

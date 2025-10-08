@@ -206,6 +206,12 @@ mod avx512 {
         }
     }
     #[inline(always)]
+    pub unsafe fn shift_mul_high_i16<const SHIFT: u32>(vec0: VecI16, vec1: VecI16) -> VecI16 {
+        unsafe {
+            return VecI16::from_raw(_mm512_mulhi_epi16(_mm512_slli_epi16(vec0.inner(), SHIFT), vec1.inner()));
+        }
+    }
+    #[inline(always)]
     pub unsafe fn nonzero_mask_i32(vec: VecI32) -> u16 {
         unsafe {
             return _mm512_cmpgt_epi32_mask(vec.inner(), _mm512_setzero_si512()) as u16;
@@ -508,6 +514,12 @@ mod avx2 {
     pub unsafe fn shl_i16<const SHIFT: i32>(vec: VecI16) -> VecI16 {
         unsafe {
             return VecI16::from_raw(_mm256_slli_epi16(vec.inner(), SHIFT));
+        }
+    }
+    #[inline(always)]
+    pub unsafe fn shift_mul_high_i16<const SHIFT: i32>(vec0: VecI16, vec1: VecI16) -> VecI16 {
+        unsafe {
+            return VecI16::from_raw(_mm256_mulhi_epi16(_mm256_slli_epi16(vec0.inner(), SHIFT), vec1.inner()));
         }
     }
     #[inline(always)]
@@ -820,6 +832,12 @@ mod sse2 {
     pub unsafe fn shl_i16<const SHIFT: i32>(vec: VecI16) -> VecI16 {
         unsafe {
             return VecI16::from_raw(_mm_slli_epi16(vec.inner(), SHIFT));
+        }
+    }
+    #[inline(always)]
+    pub unsafe fn shift_mul_high_i16<const SHIFT: i32>(vec0: VecI16, vec1: VecI16) -> VecI16 {
+        unsafe {
+            return VecI16::from_raw(_mm_mulhi_epi16(_mm_slli_epi16(vec0.inner(), SHIFT), vec1.inner()));
         }
     }
     #[inline(always)]
