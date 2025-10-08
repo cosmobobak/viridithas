@@ -1199,34 +1199,29 @@ mod neon {
             )));
         }
     }
-    /// Computes `c[i]:=ZeroExtend(a[i], 16) * SignExtend(b[i], 16)` for each lane i={0,...,15}.
-    /// Each `c[i]` is then added onto exactly one lane of `acc`. The modified `acc` is returned.
+    // NOTE: This operation is limited and does not do exactly what it seems.
+    // NEON only supports i8-i8 dotprod, so this function will misbehave if
+    // vec0 contains values outwith 0..127.
     #[inline(always)]
     pub unsafe fn mul_add_u8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8) -> VecI32 {
+        // Assembly implementation of vdotq_s32 very generously provided by
+        // sp00ph (https://github.com/Sp00ph), tysm <3.
+        #[target_feature(enable = "dotprod")]
+        fn vdotq_s32(a: int32x4_t, b: int8x16_t, c: int8x16_t) -> int32x4_t {
+            let r: int32x4_t;
+            unsafe {
+                std::arch::asm!(
+                    "sdot {a:v}.4s, {b:v}.16b, {c:v}.16b",
+                    a = inout(vreg) a => r,
+                    b = in(vreg) b,
+                    c = in(vreg) c,
+                    options(pure, nostack, nomem, preserves_flags)
+                );
+            }
+            r
+        }
         unsafe {
-            let i0 = vreinterpretq_u8_s8(vec0.inner());
-            return VecI32::from_raw(vdotq_s32(sum, i0, vec1.inner()));
-
-            // old impl below vvvvvv
-            let a = std::mem::transmute(vec0.inner());
-            let b = vec1.inner();
-            let acc = sum.inner();
-
-            // split a into low and high half, and zero extend each
-            let a_lo = vreinterpretq_s16_u16(vshll_n_u8(vget_low_u8(a), 0));
-            let a_hi = vreinterpretq_s16_u16(vshll_n_u8(vget_high_u8(a), 0));
-
-            // split b into low and high half, and sign extend each
-            let b_lo = vshll_n_s8(vget_low_s8(b), 0);
-            let b_hi = vshll_n_s8(vget_high_s8(b), 0);
-
-            let mul_lo = vmulq_s16(a_lo, b_lo);
-            let mul_hi = vmulq_s16(a_hi, b_hi);
-
-            let acc = vpadalq_s16(acc, mul_lo);
-            let acc = vpadalq_s16(acc, mul_hi);
-
-            return VecI32::from_raw(acc);
+            return VecI32::from_raw(vdotq_s32(sum.inner(), vec0.inner(), vec1.inner()));
         }
     }
     #[inline(always)]
