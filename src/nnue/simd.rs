@@ -1112,7 +1112,7 @@ mod neon {
     wrap_simd_register!(int64x2_t, i64, VecI64);
     wrap_simd_register!(float32x4_t, i8, VecF32);
 
-    pub type Vec128U16 = VecI16;
+    wrap_simd_register!(uint16x8_t, u16, Vec128U16);
 
     #[inline(always)]
     pub unsafe fn zero_i16() -> VecI16 {
