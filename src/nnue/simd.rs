@@ -208,7 +208,10 @@ mod avx512 {
     #[inline(always)]
     pub unsafe fn shift_mul_high_i16<const SHIFT: u32>(vec0: VecI16, vec1: VecI16) -> VecI16 {
         unsafe {
-            return VecI16::from_raw(_mm512_mulhi_epi16(_mm512_slli_epi16(vec0.inner(), SHIFT), vec1.inner()));
+            return VecI16::from_raw(_mm512_mulhi_epi16(
+                _mm512_slli_epi16(vec0.inner(), SHIFT),
+                vec1.inner(),
+            ));
         }
     }
     #[inline(always)]
@@ -519,7 +522,10 @@ mod avx2 {
     #[inline(always)]
     pub unsafe fn shift_mul_high_i16<const SHIFT: i32>(vec0: VecI16, vec1: VecI16) -> VecI16 {
         unsafe {
-            return VecI16::from_raw(_mm256_mulhi_epi16(_mm256_slli_epi16(vec0.inner(), SHIFT), vec1.inner()));
+            return VecI16::from_raw(_mm256_mulhi_epi16(
+                _mm256_slli_epi16(vec0.inner(), SHIFT),
+                vec1.inner(),
+            ));
         }
     }
     #[inline(always)]
@@ -837,7 +843,10 @@ mod sse2 {
     #[inline(always)]
     pub unsafe fn shift_mul_high_i16<const SHIFT: i32>(vec0: VecI16, vec1: VecI16) -> VecI16 {
         unsafe {
-            return VecI16::from_raw(_mm_mulhi_epi16(_mm_slli_epi16(vec0.inner(), SHIFT), vec1.inner()));
+            return VecI16::from_raw(_mm_mulhi_epi16(
+                _mm_slli_epi16(vec0.inner(), SHIFT),
+                vec1.inner(),
+            ));
         }
     }
     #[inline(always)]
@@ -1163,6 +1172,17 @@ mod neon {
         }
     }
     #[inline(always)]
+    pub unsafe fn shift_mul_high_i16<const SHIFT: i32>(vec0: VecI16, vec1: VecI16) -> VecI16 {
+        unsafe {
+            // return VecI16::from_raw(_mm512_mulhi_epi16(_mm512_slli_epi16(vec0.inner(), SHIFT), vec1.inner()));
+            // Approach taken from Stormphrax's shiftLeftMulHiI16.
+            // the instruction used for mulhi here, VQDMULH, doubles the results.
+            // this is effectively a shift by another bit, so shift by one less
+            let shifted = vshlq_s16(vec0.inner(), vdupq_n_s16((SHIFT - 1) as i16));
+            return VecI16::from_raw(vqdmulhq_s16(shifted, vec1.inner()));
+        }
+    }
+    #[inline(always)]
     pub unsafe fn nonzero_mask_i32(vec: VecI32) -> u16 {
         static MASK: [u32; 4] = [1, 2, 4, 8];
         unsafe {
@@ -1184,6 +1204,10 @@ mod neon {
     #[inline(always)]
     pub unsafe fn mul_add_u8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8) -> VecI32 {
         unsafe {
+            let i0 = vreinterpretq_u8_s8(vec0.inner());
+            return VecI32::from_raw(vdotq_s32(sum, i0, vec1.inner()));
+
+            // old impl below vvvvvv
             let a = std::mem::transmute(vec0.inner());
             let b = vec1.inner();
             let acc = sum.inner();

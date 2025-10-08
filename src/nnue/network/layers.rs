@@ -207,7 +207,7 @@ mod generic {
 #[cfg(target_feature = "neon")]
 mod neon {
     use std::{
-        arch::aarch64::{vadd_u16, vaddq_u16, vdupq_n_s16, vdupq_n_u16, vld1q_u16, vst1q_u16},
+        arch::aarch64::{vaddq_u16, vdupq_n_u16, vld1q_u16, vst1q_u16},
         mem::MaybeUninit,
     };
 
