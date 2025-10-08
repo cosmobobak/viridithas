@@ -273,11 +273,7 @@ mod simd {
                 MaybeUninit::uninit().assume_init();
             let mut nnz_count = 0;
 
-            // let mut base = vec128_zero();
-            // let mut base = vdupq_n_u16(0);
             let mut base = simd::v128_zero();
-            // let increment = vec128_set_16(8);
-            // let increment = vdupq_n_u16(8);
             let increment = simd::v128_splat(8);
 
             let mut offset = 0;
@@ -338,24 +334,12 @@ mod simd {
                     for j in 0..NNZ_OUTPUTS_PER_CHUNK {
                         let lookup = (nnz_mask >> (j * 8)) & 0xFF;
                         let entry = NNZ_TABLE.table.as_ptr().add(lookup as usize);
-                        // let offsets = vec128_load(entry.cast());
-                        // let offsets = vld1q_u16(entry.cast());
                         let offsets = simd::v128_load(entry.cast());
-                        // vec128_storeu(
-                        //     nnz.as_mut_ptr().add(nnz_count).cast(),
-                        //     vec128_add(base, offsets),
-                        // );
-                        // vst1q_u16(
-                        //     nnz.as_mut_ptr().add(nnz_count).cast(),
-                        //     vaddq_u16(base, offsets),
-                        // );
                         simd::v128_store(
                             nnz.as_mut_ptr().add(nnz_count).cast(),
                             simd::v128_add(base, offsets),
                         );
                         nnz_count += u32::count_ones(lookup) as usize;
-                        // base = vec128_add(base, increment);
-                        // base = vaddq_u16(base, increment);
                         base = simd::v128_add(base, increment);
                     }
                 }
