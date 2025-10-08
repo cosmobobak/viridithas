@@ -1136,32 +1136,36 @@ mod neon {
     }
     #[inline(always)]
     pub unsafe fn mul_high_i16(vec0: VecI16, vec1: VecI16) -> VecI16 {
-        // TODO: Consider alternative using vqdmulhq_s16 or vqrdmulhq_s16,
-        // as this is unlikely to be very fast.
-        unsafe {
-            let a = vec0.inner();
-            let b = vec1.inner();
+        let _ = vec0;
+        let _ = vec1;
+        unimplemented!("This function cannot be made efficient");
+        // Below emulated implementation provided by sp00ph.
+        // // TODO: Consider alternative using vqdmulhq_s16 or vqrdmulhq_s16,
+        // // as this is unlikely to be very fast.
+        // unsafe {
+        //     let a = vec0.inner();
+        //     let b = vec1.inner();
 
-            // Split into low and high halves
-            let a_lo = vget_low_s16(a);
-            let a_hi = vget_high_s16(a);
-            let b_lo = vget_low_s16(b);
-            let b_hi = vget_high_s16(b);
+        //     // Split into low and high halves
+        //     let a_lo = vget_low_s16(a);
+        //     let a_hi = vget_high_s16(a);
+        //     let b_lo = vget_low_s16(b);
+        //     let b_hi = vget_high_s16(b);
 
-            // Multiply to get full 32-bit products
-            let prod_lo = vmull_s16(a_lo, b_lo); // int32x4_t
-            let prod_hi = vmull_s16(a_hi, b_hi); // int32x4_t
+        //     // Multiply to get full 32-bit products
+        //     let prod_lo = vmull_s16(a_lo, b_lo); // i32×4
+        //     let prod_hi = vmull_s16(a_hi, b_hi); // i32×4
 
-            // Select the odd-index 16-bit lanes from `prod_lo` and `prod_hi`,
-            // corresponding to the high halves of the multiplications, and
-            // concatenate them into the final result
-            let res = vuzp2q_s16(
-                vreinterpretq_s16_s32(prod_lo),
-                vreinterpretq_s16_s32(prod_hi),
-            );
+        //     // Select the odd-index 16-bit lanes from `prod_lo` and `prod_hi`,
+        //     // corresponding to the high halves of the multiplications, and
+        //     // concatenate them into the final result
+        //     let res = vuzp2q_s16(
+        //         vreinterpretq_s16_s32(prod_lo),
+        //         vreinterpretq_s16_s32(prod_hi),
+        //     );
 
-            VecI16::from_raw(res)
-        }
+        //     VecI16::from_raw(res)
+        // }
     }
     // stupid hack for the different intrinsics
     pub type S = i32;
@@ -1174,7 +1178,6 @@ mod neon {
     #[inline(always)]
     pub unsafe fn shift_mul_high_i16<const SHIFT: i32>(vec0: VecI16, vec1: VecI16) -> VecI16 {
         unsafe {
-            // return VecI16::from_raw(_mm512_mulhi_epi16(_mm512_slli_epi16(vec0.inner(), SHIFT), vec1.inner()));
             // Approach taken from Stormphrax's shiftLeftMulHiI16.
             // the instruction used for mulhi here, VQDMULH, doubles the results.
             // this is effectively a shift by another bit, so shift by one less
