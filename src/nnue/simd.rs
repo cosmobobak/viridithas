@@ -375,14 +375,12 @@ mod avx512 {
     }
     #[inline(always)]
     pub unsafe fn v128_load(src: *const u16) -> Vec128U16 {
-        debug_assert!((src as usize) % std::mem::align_of::<Vec128U16>() == 0);
         unsafe {
             return Vec128U16::from_raw(_mm_load_si128(src.cast()));
         }
     }
     #[inline(always)]
     pub unsafe fn v128_store(dst: *mut u16, vec: Vec128U16) {
-        debug_assert!((dst as usize) % std::mem::align_of::<Vec128U16>() == 0);
         unsafe {
             _mm_storeu_si128(dst.cast(), vec.inner());
         }
@@ -727,14 +725,12 @@ mod avx2 {
     }
     #[inline(always)]
     pub unsafe fn v128_load(src: *const u16) -> Vec128U16 {
-        debug_assert!((src as usize) % std::mem::align_of::<Vec128U16>() == 0);
         unsafe {
             return Vec128U16::from_raw(_mm_load_si128(src.cast()));
         }
     }
     #[inline(always)]
     pub unsafe fn v128_store(dst: *mut u16, vec: Vec128U16) {
-        debug_assert!((dst as usize) % std::mem::align_of::<Vec128U16>() == 0);
         unsafe {
             _mm_storeu_si128(dst.cast(), vec.inner());
         }
@@ -1073,14 +1069,12 @@ mod sse2 {
     }
     #[inline(always)]
     pub unsafe fn v128_load(src: *const u16) -> Vec128U16 {
-        debug_assert!((src as usize) % std::mem::align_of::<Vec128U16>() == 0);
         unsafe {
             return Vec128U16::from_raw(_mm_load_si128(src.cast()));
         }
     }
     #[inline(always)]
     pub unsafe fn v128_store(dst: *mut u16, vec: Vec128U16) {
-        debug_assert!((dst as usize) % std::mem::align_of::<Vec128U16>() == 0);
         unsafe {
             _mm_storeu_si128(dst.cast(), vec.inner());
         }
@@ -1448,14 +1442,12 @@ mod neon {
     }
     #[inline(always)]
     pub unsafe fn v128_load(src: *const u16) -> Vec128U16 {
-        debug_assert!((src as usize) % std::mem::align_of::<Vec128U16>() == 0);
         unsafe {
             return Vec128U16::from_raw(vld1q_u16(src.cast()));
         }
     }
     #[inline(always)]
     pub unsafe fn v128_store(dst: *mut u16, vec: Vec128U16) {
-        debug_assert!((dst as usize) % std::mem::align_of::<Vec128U16>() == 0);
         unsafe {
             vst1q_u16(dst.cast(), std::mem::transmute(vec.inner()));
         }
