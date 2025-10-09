@@ -905,21 +905,19 @@ pub fn alpha_beta<NT: NodeType>(
     let raw_eval;
     let static_eval;
     let eval;
-    let correction;
+    let correction = t.correction();
 
     if in_check {
         // when we're in check, it could be checkmate, so it's unsound to use evaluate().
         raw_eval = VALUE_NONE;
         static_eval = VALUE_NONE;
         eval = VALUE_NONE;
-        correction = 0;
     } else if excluded.is_some() {
         // if we're in a singular-verification search, we already have the static eval.
         // we can set raw_eval to whatever we like, because we're not going to be saving it.
         raw_eval = VALUE_NONE;
         static_eval = t.ss[height].static_eval;
         eval = t.ss[height].eval;
-        correction = 0;
         t.nnue.hint_common_access(&t.board, t.nnue_params);
     } else if let Some(tte) = &tt_hit {
         let v = tte.eval; // if we have a TT hit, check the cached TT eval.
@@ -933,7 +931,6 @@ pub fn alpha_beta<NT: NodeType>(
                 t.nnue.hint_common_access(&t.board, t.nnue_params);
             }
         }
-        correction = t.correction();
         static_eval = adj_shuffle(t, raw_eval, clock) + correction;
         if tte.value != VALUE_NONE
             && !is_decisive(tte.value)
@@ -965,13 +962,24 @@ pub fn alpha_beta<NT: NodeType>(
             t.ss[height].ttpv,
         );
 
-        correction = t.correction();
         static_eval = adj_shuffle(t, raw_eval, clock) + correction;
         eval = static_eval;
     }
 
     t.ss[height].static_eval = static_eval;
     t.ss[height].eval = eval;
+
+    let tt_complexity = tt_hit.as_ref().map_or(0, |tte| {
+        if !is_decisive(tte.value)
+            && (tte.bound == Bound::Exact
+                || (tte.bound == Bound::Upper && tte.value < static_eval)
+                || (tte.bound == Bound::Lower && tte.value > static_eval))
+        {
+            i32::abs(static_eval - tte.value)
+        } else {
+            0
+        }
+    });
 
     // value-difference based policy update.
     if let Some(ss_prev) = t.ss.get(height.wrapping_sub(1))
@@ -1409,6 +1417,9 @@ pub fn alpha_beta<NT: NodeType>(
                 r += i32::from(tt_capture) * t.info.conf.lmr_tt_capture_mul;
                 // reduce less if the move gives check
                 r -= i32::from(t.board.in_check()) * t.info.conf.lmr_check_mul;
+                // reduce less when the static eval is way off-base
+                r -= correction.pow(2) * 256 / 16384 - 200;
+
                 t.ss[height].reduction = r;
                 r / 1024
             } else {
@@ -1468,6 +1479,12 @@ pub fn alpha_beta<NT: NodeType>(
         // record subtree size for TimeManager
         if NT::ROOT && t.thread_id == 0 {
             let subtree_size = t.info.nodes.get_local() - nodes_before_search;
+            #[cfg(feature = "stats")]
+            println!(
+                "info string subtree {} size {}",
+                m.display(CHESS960.load(Ordering::Relaxed)),
+                subtree_size
+            );
             t.info.root_move_nodes[from][hist_to] += subtree_size;
         }
 
@@ -1535,22 +1552,16 @@ pub fn alpha_beta<NT: NodeType>(
 
             // this heuristic is on the whole unmotivated, beyond mere empiricism.
             // perhaps it's really important to know which quiet moves are good in "bad" positions?
-            // note: if in check, static_eval will be VALUE_NONE, but this probably doesn't cause
-            // any issues.
-            let history_depth_boost = i32::from(static_eval <= alpha);
-            update_quiet_history(
-                t,
-                quiets_tried.as_slice(),
-                best_move,
-                depth + history_depth_boost,
-            );
+            let boost = i32::from(!in_check && static_eval <= best_score);
+
+            update_quiet_history(t, &quiets_tried, best_move, depth + boost);
         }
 
         // we unconditionally update the tactical history table
         // because tactical moves ought to be good in any position,
         // so it's good to decrease tactical history scores even
         // when the best move was non-tactical.
-        update_tactical_history(t, tacticals_tried.as_slice(), best_move, depth);
+        update_tactical_history(t, &tacticals_tried, best_move, depth);
     }
 
     if let Some(ss_prev) = t.ss.get(height.wrapping_sub(1))
@@ -1582,7 +1593,7 @@ pub fn alpha_beta<NT: NodeType>(
             || flag == Bound::Lower && best_score <= static_eval
             || flag == Bound::Upper && best_score >= static_eval)
         {
-            t.update_correction_history(depth, best_score - static_eval);
+            t.update_correction_history(depth, tt_complexity, best_score - static_eval);
         }
         t.tt.store(
             key,

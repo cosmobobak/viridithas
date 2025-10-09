@@ -46,8 +46,8 @@ unsafe fn slice_to_aligned(slice: &[i16]) -> &Align64<[i16; L1_SIZE]> {
     }
 }
 
-#[cfg(target_arch = "x86_64")]
-mod x86simd {
+#[cfg(any(target_arch = "x86_64", target_feature = "neon"))]
+mod simd {
     use arrayvec::ArrayVec;
 
     use super::{Align64, FeatureIndex, INPUT, L1_SIZE, slice_to_aligned};
@@ -227,7 +227,7 @@ mod x86simd {
     }
 }
 
-#[cfg(not(target_arch = "x86_64"))]
+#[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
 mod generic {
     use arrayvec::ArrayVec;
 
@@ -399,8 +399,8 @@ mod generic {
     }
 }
 
-#[cfg(target_arch = "x86_64")]
-pub use x86simd::*;
+#[cfg(any(target_arch = "x86_64", target_feature = "neon"))]
+pub use simd::*;
 
-#[cfg(not(target_arch = "x86_64"))]
+#[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
 pub use generic::*;

@@ -6,9 +6,9 @@ use crate::{
         types::Square,
     },
     historytable::{
-        CORRECTION_HISTORY_GRAIN, CORRECTION_HISTORY_MAX, CORRECTION_HISTORY_WEIGHT_SCALE,
-        cont_history_bonus, cont_history_malus, main_history_bonus, main_history_malus,
-        tactical_history_bonus, tactical_history_malus, update_history,
+        CORRECTION_HISTORY_MAX, cont_history_bonus, cont_history_malus, main_history_bonus,
+        main_history_malus, tactical_history_bonus, tactical_history_malus, update_correction,
+        update_history,
     },
     threadlocal::ThreadData,
     util::MAX_DEPTH,
@@ -134,25 +134,26 @@ impl ThreadData<'_> {
     }
 
     /// Update the correction history for a pawn pattern.
-    pub fn update_correction_history(&mut self, depth: i32, diff: i32) {
-        #![allow(clippy::cast_possible_truncation)]
+    pub fn update_correction_history(&mut self, depth: i32, tt_complexity: i32, diff: i32) {
+        #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
 
         use Colour::{Black, White};
 
-        let scaled_diff = diff * CORRECTION_HISTORY_GRAIN;
-        let new_weight = 16.min(1 + depth);
-        debug_assert!(new_weight <= CORRECTION_HISTORY_WEIGHT_SCALE);
         let us = self.board.turn();
         let height = self.board.height();
 
+        // wow! floating point in a chess engine!
+        let tt_complexity_factor =
+            ((1.0 + (tt_complexity as f32 + 1.0).log2() / 10.0) * 8.0) as i32;
+
+        let bonus = i32::clamp(
+            diff * depth * tt_complexity_factor / 64,
+            -CORRECTION_HISTORY_MAX / 4,
+            CORRECTION_HISTORY_MAX / 4,
+        );
+
         let update = |entry: &mut i16| {
-            let update = i32::from(*entry) * (CORRECTION_HISTORY_WEIGHT_SCALE - new_weight)
-                + scaled_diff * new_weight;
-            *entry = i32::clamp(
-                update / CORRECTION_HISTORY_WEIGHT_SCALE,
-                -CORRECTION_HISTORY_MAX,
-                CORRECTION_HISTORY_MAX,
-            ) as i16;
+            update_correction(entry, bonus);
         };
 
         let keys = &self.board.state.keys;
@@ -211,7 +212,7 @@ impl ThreadData<'_> {
             + (white + black) * i64::from(self.info.conf.nonpawn_corrhist_weight)
             + cont * i64::from(self.info.conf.continuation_corrhist_weight);
 
-        (adjustment / 1024) as i32 / CORRECTION_HISTORY_GRAIN
+        (adjustment * 12 / 0x40000) as i32
     }
 }
 
