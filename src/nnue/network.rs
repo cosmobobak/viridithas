@@ -1447,7 +1447,6 @@ impl NNUEState {
         };
 
         let mut l1_outputs = Align64([0.0; L2_SIZE]);
-        let mut l1_outputs_dbg = Align64([0.0; L2_SIZE]);
         let mut l2_outputs = Align64([0.0; L3_SIZE]);
         let mut l3_output = 0.0;
 
@@ -1457,13 +1456,6 @@ impl NNUEState {
             &nn.l1_weights[out],
             &nn.l1_bias[out],
             &mut l1_outputs,
-        );
-        layers::generic::activate_ft_and_propagate_l1(
-            us,
-            them,
-            &nn.l1_weights[out],
-            &nn.l1_bias[out],
-            &mut l1_outputs_dbg,
         );
         layers::propagate_l2(
             &l1_outputs,
@@ -1478,19 +1470,24 @@ impl NNUEState {
             &mut l3_output,
         );
 
-        if l1_outputs != l1_outputs_dbg {
-            let l1_outputs = &l1_outputs[..];
-            let l1_outputs_dbg = &l1_outputs_dbg[..];
-            dbg!(l1_outputs);
-            dbg!(l1_outputs_dbg);
-            panic!("position: {board}");
-        }
+        #[expect(clippy::items_after_statements)]
+        static TRACE_FILE: std::sync::LazyLock<
+            Option<std::sync::Mutex<std::io::BufWriter<std::fs::File>>>,
+        > = std::sync::LazyLock::new(|| {
+            std::env::var("NNUE_TRACE_FILE")
+                .ok()
+                .and_then(|s| std::fs::File::create(s).ok())
+                .map(std::io::BufWriter::new)
+                .map(std::sync::Mutex::new)
+        });
 
-        // let l1_outputs = &l1_outputs[..];
-        // dbg!(l1_outputs);
-        // let l2_outputs = &l2_outputs[..];
-        // dbg!(l2_outputs);
-        // dbg!(l3_output);
+        if let Some(file) = TRACE_FILE.as_ref() {
+            use std::io::Write;
+            let data = &l1_outputs[..];
+            let mut file = file.lock().unwrap();
+            writeln!(file, "{board} | {data:?}").unwrap();
+            drop(file);
+        }
 
         (l3_output * SCALE as f32) as i32
     }
