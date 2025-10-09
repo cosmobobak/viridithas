@@ -513,7 +513,9 @@ impl QuantisedNetwork {
                 not(target_feature = "avx512f")
             ))]
             let num_regs = 2;
-            #[cfg(not(target_arch = "x86_64"))]
+            #[cfg(target_feature = "neon")]
+            let num_regs = 2;
+            #[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
             let num_regs = 1;
             #[cfg(target_feature = "avx512f")]
             let order = [0, 2, 4, 6, 1, 3, 5, 7];
@@ -525,7 +527,9 @@ impl QuantisedNetwork {
                 not(target_feature = "avx512f")
             ))]
             let order = [0, 1];
-            #[cfg(not(target_arch = "x86_64"))]
+            #[cfg(target_feature = "neon")]
+            let order = [0, 1];
+            #[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
             let order = [0];
 
             let mut regs = vec![[0i16; 8]; num_regs];
@@ -777,7 +781,7 @@ impl NNUEParams {
             bytes_written == expected_bytes,
             "encountered issue while decompressing NNUE weights, expected {expected_bytes} bytes, but got {bytes_written}"
         );
-        let use_simd = cfg!(target_arch = "x86_64");
+        let use_simd = cfg!(any(target_arch = "x86_64", target_feature = "neon"));
         let net = net.permute(use_simd);
 
         // create a temporary file to store the weights
@@ -1044,7 +1048,7 @@ pub fn dry_run() -> anyhow::Result<()> {
     println!("[#] Generating network state");
     let state = NNUEState::new(&start_pos, nnue_params);
     println!("[#] Running forward pass");
-    let eval = state.evaluate(nnue_params, start_pos.turn(), output_bucket(&start_pos));
+    let eval = state.evaluate(nnue_params, &start_pos);
     std::hint::black_box(eval);
     Ok(())
 }
@@ -1428,7 +1432,10 @@ impl NNUEState {
 
     /// Evaluate the final layer on the partial activations.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-    pub fn evaluate(&self, nn: &NNUEParams, stm: Colour, out: usize) -> i32 {
+    pub fn evaluate(&self, nn: &NNUEParams, board: &Board) -> i32 {
+        let stm = board.turn();
+        let out = output_bucket(board);
+
         let acc = &self.accumulators[self.current_acc];
 
         debug_assert!(acc.correct[0] && acc.correct[1]);
@@ -1471,11 +1478,11 @@ impl NNUEState {
 /// (everything after the feature extraction)
 pub fn inference_benchmark(state: &NNUEState, nnue_params: &NNUEParams) {
     let start = std::time::Instant::now();
+    let board = Board::default();
     for _ in 0..1_000_000 {
         std::hint::black_box(std::hint::black_box(state).evaluate(
             std::hint::black_box(nnue_params),
-            std::hint::black_box(Colour::White),
-            std::hint::black_box(0),
+            std::hint::black_box(&board),
         ));
     }
     let elapsed = start.elapsed();

@@ -1,5 +1,13 @@
 const AVX512CHUNK: usize = 512 / 32;
+
+/// This constant determines the shift applied as part of the optimised
+/// CReLU-into-pairwise inference. This could be 10 if we were exclusively
+/// targeting x86 SIMD, but we wish to support NEON, which lacks an instruction
+/// for performing u8×N to i8×N accumulating multiply-add into i32×N. Instead
+/// we only have i8×N to i8×N into i32×N multiply via `vdotq_s32`, so we need to
+/// keep our left-hand values in 0..127. Shifting by 16 - 9 achieves this.
 const FT_SHIFT: u32 = 9;
+
 #[allow(clippy::cast_precision_loss)]
 const L1_MUL: f32 = (1 << FT_SHIFT) as f32 / (QA as i32 * QA as i32 * QB as i32) as f32;
 
@@ -8,7 +16,7 @@ pub static NNZ_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::Atomic
 #[cfg(feature = "nnz-counts")]
 pub static NNZ_DENOM: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
-#[cfg(not(target_arch = "x86_64"))]
+#[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
 mod generic {
     use super::{
         super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA},
@@ -129,27 +137,27 @@ mod generic {
         }
     }
 
-    /// Software implementation of the spec for simd stuff,
-    /// to retain order of operations.
-    #[inline]
-    fn reduce_add(sums: &mut [f32]) -> f32 {
-        let n = sums.len();
-        if n == 2 {
-            return sums[0] + sums[1];
-        }
-        for i in 0..n / 2 {
-            sums[i] += sums[i + n / 2];
-        }
-
-        reduce_add(&mut sums[..n / 2])
-    }
-
     pub fn propagate_l3(
         inputs: &Align64<[f32; L3_SIZE]>,
         weights: &Align64<[f32; L3_SIZE]>,
         bias: f32,
         output: &mut f32,
     ) {
+        /// Software implementation of the spec for simd stuff,
+        /// to retain order of operations.
+        #[inline]
+        fn reduce_add(sums: &mut [f32]) -> f32 {
+            let n = sums.len();
+            if n == 2 {
+                return sums[0] + sums[1];
+            }
+            for i in 0..n / 2 {
+                sums[i] += sums[i + n / 2];
+            }
+
+            reduce_add(&mut sums[..n / 2])
+        }
+
         const NUM_SUMS: usize = AVX512CHUNK;
         let mut sums = [0f32; NUM_SUMS];
 
@@ -162,8 +170,8 @@ mod generic {
     }
 }
 
-#[cfg(target_arch = "x86_64")]
-mod x86simd {
+#[cfg(any(target_arch = "x86_64", target_feature = "neon"))]
+mod simd {
     use crate::{
         nnue::{
             network::{
@@ -172,16 +180,9 @@ mod x86simd {
             },
             simd::{self, F32_CHUNK_SIZE, I16_CHUNK_SIZE, S, U8_CHUNK_SIZE, VecI32},
         },
-        util::from_ref,
+        util,
     };
-    use std::{
-        arch::x86_64::{
-            _mm_add_epi16 as vec128_add, _mm_load_si128 as vec128_load,
-            _mm_set1_epi16 as vec128_set_16, _mm_setzero_si128 as vec128_zero,
-            _mm_storeu_si128 as vec128_storeu,
-        },
-        mem::MaybeUninit,
-    };
+    use std::mem::MaybeUninit;
 
     #[cfg(feature = "nnz-counts")]
     use crate::nnue::network::layers::{NNZ_COUNT, NNZ_DENOM};
@@ -221,7 +222,7 @@ mod x86simd {
     unsafe fn reinterpret_as_i32s(
         ptr: &Align64<[MaybeUninit<u8>; L1_SIZE]>,
     ) -> &Align64<[i32; L1_SIZE / 4]> {
-        let ptr = from_ref(ptr);
+        let ptr = util::from_ref(ptr);
         // check that the reference is aligned:
         debug_assert!(ptr.cast::<i32>().is_aligned());
         debug_assert!(ptr.cast::<Align64<[i32; L1_SIZE / 4]>>().is_aligned());
@@ -253,7 +254,10 @@ mod x86simd {
             std::mem::size_of::<VecI32>() / std::mem::size_of::<i32>();
         const NNZ_CHUNK_SIZE: usize = max!(NNZ_INPUT_SIMD_WIDTH * 2, 8);
         const NNZ_OUTPUTS_PER_CHUNK: usize = NNZ_CHUNK_SIZE / 8;
-        const SHIFT: S = 16 - FT_SHIFT as S;
+
+        // on NEON, the instruction used for mulhi doubles the results.
+        // this is effectively a shift by another bit, so we shift by one fewer.
+        const SHIFT: S = 16 - FT_SHIFT as S - cfg!(target_feature = "neon") as S;
 
         // SAFETY: Breaking it down by unsafe operations:
         // 1. get_unchecked[_mut] / .as[_mut]_ptr().add(): We only ever index at most
@@ -274,8 +278,9 @@ mod x86simd {
             let mut nnz: Align64<[MaybeUninit<u16>; L1_SIZE / L1_CHUNK_PER_32]> =
                 MaybeUninit::uninit().assume_init();
             let mut nnz_count = 0;
-            let mut base = vec128_zero();
-            let increment = vec128_set_16(8);
+
+            let mut base = simd::v128_zero();
+            let increment = simd::v128_splat(8);
 
             let mut offset = 0;
             for acc in [us, them] {
@@ -308,10 +313,10 @@ mod x86simd {
                     let clipped1d = simd::min_i16(input1d, ft_one);
 
                     // shift and mulhi such that the high bits we get are equal to crelu(x1) * crelu(x2)
-                    let producta = simd::mul_high_i16(simd::shl_i16::<SHIFT>(clipped0a), clipped1a);
-                    let productb = simd::mul_high_i16(simd::shl_i16::<SHIFT>(clipped0b), clipped1b);
-                    let productc = simd::mul_high_i16(simd::shl_i16::<SHIFT>(clipped0c), clipped1c);
-                    let productd = simd::mul_high_i16(simd::shl_i16::<SHIFT>(clipped0d), clipped1d);
+                    let producta = simd::shift_mul_high_i16::<SHIFT>(clipped0a, clipped1a);
+                    let productb = simd::shift_mul_high_i16::<SHIFT>(clipped0b, clipped1b);
+                    let productc = simd::shift_mul_high_i16::<SHIFT>(clipped0c, clipped1c);
+                    let productd = simd::shift_mul_high_i16::<SHIFT>(clipped0d, clipped1d);
 
                     // pack the resulting values in to u8s
                     let product_one = simd::pack_i16_to_u8(producta, productb);
@@ -335,13 +340,13 @@ mod x86simd {
                     for j in 0..NNZ_OUTPUTS_PER_CHUNK {
                         let lookup = (nnz_mask >> (j * 8)) & 0xFF;
                         let entry = NNZ_TABLE.table.as_ptr().add(lookup as usize);
-                        let offsets = vec128_load(entry.cast());
-                        vec128_storeu(
+                        let offsets = simd::v128_load(entry.cast());
+                        simd::v128_store(
                             nnz.as_mut_ptr().add(nnz_count).cast(),
-                            vec128_add(base, offsets),
+                            simd::v128_add(base, offsets),
                         );
                         nnz_count += u32::count_ones(lookup) as usize;
-                        base = vec128_add(base, increment);
+                        base = simd::v128_add(base, increment);
                     }
                 }
                 offset += L1_PAIR_COUNT;
@@ -550,10 +555,10 @@ mod x86simd {
     }
 }
 
-#[cfg(target_arch = "x86_64")]
-pub use x86simd::*;
+#[cfg(any(target_arch = "x86_64", target_feature = "neon"))]
+pub use simd::*;
 
-#[cfg(not(target_arch = "x86_64"))]
+#[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
 pub use generic::*;
 
 use super::{QA, QB};
