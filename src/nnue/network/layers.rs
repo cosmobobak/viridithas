@@ -251,7 +251,9 @@ mod simd {
             std::mem::size_of::<VecI32>() / std::mem::size_of::<i32>();
         const NNZ_CHUNK_SIZE: usize = max!(NNZ_INPUT_SIMD_WIDTH * 2, 8);
         const NNZ_OUTPUTS_PER_CHUNK: usize = NNZ_CHUNK_SIZE / 8;
-        const SHIFT: S = 16 - FT_SHIFT as S;
+        // on NEON. the instruction used for mulhi doubles the results.
+        // this is effectively a shift by another bit, so shift by one less
+        const SHIFT: S = 16 - FT_SHIFT as S - cfg!(target_feature = "neon") as S;
 
         // SAFETY: Breaking it down by unsafe operations:
         // 1. get_unchecked[_mut] / .as[_mut]_ptr().add(): We only ever index at most

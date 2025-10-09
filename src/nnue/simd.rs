@@ -1148,7 +1148,7 @@ mod neon {
         unsafe {
             // check alignment in debug mode
             debug_assert!((src as usize) % std::mem::align_of::<VecI8>() == 0);
-            return VecI8::from_raw(vld1q_u8(src.cast()));
+            return VecI8::from_raw(std::mem::transmute(vld1q_u8(src.cast())));
         }
     }
     #[inline(always)]
@@ -1275,9 +1275,7 @@ mod neon {
     pub unsafe fn shift_mul_high_i16<const SHIFT: i32>(vec0: VecI16, vec1: VecI16) -> VecI16 {
         unsafe {
             // Approach taken from Stormphrax's shiftLeftMulHiI16.
-            // the instruction used for mulhi here, VQDMULH, doubles the results.
-            // this is effectively a shift by another bit, so shift by one less
-            let shifted = vshlq_n_s16(vec0.inner(), (SHIFT - 1) as i16);
+            let shifted = vshlq_n_s16::<SHIFT>(vec0.inner());
             return VecI16::from_raw(vqdmulhq_s16(shifted, vec1.inner()));
         }
     }
@@ -1305,9 +1303,8 @@ mod neon {
     pub unsafe fn mul_add_u8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8) -> VecI32 {
         // Assembly implementation of vdotq_s32 very generously provided by
         // sp00ph (https://github.com/Sp00ph), tysm <3.
-        #[target_feature(enable = "dotprod")]
         #[inline(always)]
-        fn vdotq_s32(a: int32x4_t, b: int8x16_t, c: int8x16_t) -> int32x4_t {
+        unsafe fn vdotq_s32(a: int32x4_t, b: int8x16_t, c: int8x16_t) -> int32x4_t {
             let r: int32x4_t;
             unsafe {
                 std::arch::asm!(
