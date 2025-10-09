@@ -205,7 +205,7 @@ impl SquareSet {
     }
 
     pub fn isolate_lsb(self) -> Self {
-        self & (Self::from_inner(0u64.wrapping_sub(self.inner())))
+        self & (Self::from_inner(self.inner().wrapping_neg()))
     }
 
     pub fn without_lsb(self) -> Self {

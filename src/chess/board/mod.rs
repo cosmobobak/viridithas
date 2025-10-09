@@ -811,7 +811,12 @@ impl Board {
 
     /// Checks whether a given pseudo-legal move is legal in the current position.
     pub fn is_legal(&self, m: Move) -> bool {
-        debug_assert!(self.is_pseudo_legal(m));
+        debug_assert!(
+            self.is_pseudo_legal(m),
+            "got {} in position: {}",
+            m.display(false),
+            self
+        );
 
         let turn = self.turn();
         let bbs = &self.state.bbs;

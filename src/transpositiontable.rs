@@ -7,7 +7,7 @@ use crate::{
     chess::chessmove::Move,
     evaluation::{MATE_SCORE, MINIMUM_MATE_SCORE, MINIMUM_TB_WIN_SCORE},
     threadpool::{self, ScopeExt},
-    util::{self, MEGABYTE, VALUE_NONE, depth::CompactDepthStorage},
+    util::{MEGABYTE, VALUE_NONE, depth::CompactDepthStorage},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -440,9 +440,15 @@ impl TTView<'_> {
 
             // prefetch the entry:
             _mm_prefetch(
-                util::from_ref::<TTClusterMemory>(entry).cast::<i8>(),
+                crate::util::from_ref::<TTClusterMemory>(entry).cast::<i8>(),
                 _MM_HINT_T0,
             );
+        }
+        #[cfg(target_arch = "aarch64")]
+        {
+            // Silence warnings on ARM, which lacks a prefetch equivalent.
+            let _ = self;
+            let _ = key;
         }
     }
 

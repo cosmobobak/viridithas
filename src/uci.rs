@@ -36,10 +36,7 @@ use crate::{
     cuckoo,
     errors::{FenParseError, MoveParseError},
     evaluation::{MATE_SCORE, TB_WIN_SCORE, evaluate, is_decisive, is_mate_score},
-    nnue::{
-        self,
-        network::{self, NNUEParams},
-    },
+    nnue::{self, network::NNUEParams},
     perft,
     search::{LMTable, adj_shuffle, parameters::Config, search_position},
     searchinfo::SearchInfo,
@@ -720,11 +717,7 @@ pub fn main_loop() -> anyhow::Result<()> {
                 let eval = if t.board.in_check() {
                     0
                 } else {
-                    t.nnue.evaluate(
-                        t.nnue_params,
-                        t.board.turn(),
-                        network::output_bucket(&t.board),
-                    )
+                    t.nnue.evaluate(t.nnue_params, &t.board)
                 };
                 println!("{eval}");
                 Ok(())
