@@ -1484,7 +1484,11 @@ impl NNUEState {
             use std::io::Write;
             let data = &l1_outputs[..];
             let mut file = file.lock().unwrap();
-            writeln!(file, "{board} | {data:?}").unwrap();
+            let mut prev = board.clone();
+            if !prev.history().is_empty() {
+                prev.unmake_move_base();
+            }
+            writeln!(file, "{board} {prev} | {data:?}").unwrap();
             drop(file);
         }
 
