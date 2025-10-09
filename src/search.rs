@@ -34,7 +34,6 @@ use crate::{
     },
     lookups::HM_CLOCK_KEYS,
     movepicker::{MovePicker, Stage},
-    nnue::network::TRACE_FILE,
     search::pv::PVariation,
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
@@ -325,10 +324,6 @@ pub fn search_position(
         .info
         .stopped
         .store(false, Ordering::Relaxed);
-
-    if let Some(x) = &*TRACE_FILE {
-        std::io::Write::flush(&mut *x.lock().unwrap()).unwrap();
-    }
 
     (
         if thread_headers[0].board.turn() == Colour::White {

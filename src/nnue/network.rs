@@ -30,16 +30,6 @@ use super::accumulator::{self, Accumulator};
 pub mod feature;
 pub mod layers;
 
-pub static TRACE_FILE: std::sync::LazyLock<
-    Option<std::sync::Mutex<std::io::BufWriter<std::fs::File>>>,
-> = std::sync::LazyLock::new(|| {
-    std::env::var("NNUE_TRACE_FILE")
-        .ok()
-        .and_then(|s| std::fs::File::create(s).ok())
-        .map(std::io::BufWriter::new)
-        .map(std::sync::Mutex::new)
-});
-
 /// The embedded neural network parameters.
 pub static EMBEDDED_NNUE: &[u8] = include_bytes_aligned!("../../viridithas.nnue.zst");
 
@@ -1479,18 +1469,6 @@ impl NNUEState {
             nn.l3_bias[out],
             &mut l3_output,
         );
-
-        if let Some(file) = TRACE_FILE.as_ref() {
-            use std::io::Write;
-            let data = &l1_outputs[..];
-            let mut file = file.lock().unwrap();
-            let mut prev = board.clone();
-            if !prev.history().is_empty() {
-                prev.unmake_move_base();
-            }
-            writeln!(file, "{board} {prev} | {data:?}").unwrap();
-            drop(file);
-        }
 
         (l3_output * SCALE as f32) as i32
     }
