@@ -1045,13 +1045,8 @@ mod sse2 {
             let vec_a = _mm_add_ps(vec.get_unchecked(0).inner(), vec.get_unchecked(2).inner());
             let vec_b = _mm_add_ps(vec.get_unchecked(1).inner(), vec.get_unchecked(3).inner());
             let vec = _mm_add_ps(vec_a, vec_b);
-            let upper_64 = _mm_movehl_ps(vec, vec);
-            let sum_64 = _mm_add_ps(vec, upper_64);
 
-            let upper_32 = _mm_shuffle_ps(sum_64, sum_64, 1);
-            let sum_32 = _mm_add_ss(upper_32, sum_64);
-
-            return _mm_cvtss_f32(sum_32);
+            return sum_f32(VecF32::from_raw(vec));
         }
     }
 
@@ -1153,7 +1148,7 @@ mod neon {
         unsafe {
             // check alignment in debug mode
             debug_assert!((src as usize) % std::mem::align_of::<VecI8>() == 0);
-            return VecI8::from_raw(vld1q_s8(src.cast()));
+            return VecI8::from_raw(vld1q_u8(src.cast()));
         }
     }
     #[inline(always)]
@@ -1282,7 +1277,7 @@ mod neon {
             // Approach taken from Stormphrax's shiftLeftMulHiI16.
             // the instruction used for mulhi here, VQDMULH, doubles the results.
             // this is effectively a shift by another bit, so shift by one less
-            let shifted = vshlq_s16(vec0.inner(), vdupq_n_s16((SHIFT - 1) as i16));
+            let shifted = vshlq_n_s16(vec0.inner(), (SHIFT - 1) as i16);
             return VecI16::from_raw(vqdmulhq_s16(shifted, vec1.inner()));
         }
     }
@@ -1311,6 +1306,7 @@ mod neon {
         // Assembly implementation of vdotq_s32 very generously provided by
         // sp00ph (https://github.com/Sp00ph), tysm <3.
         #[target_feature(enable = "dotprod")]
+        #[inline(always)]
         fn vdotq_s32(a: int32x4_t, b: int8x16_t, c: int8x16_t) -> int32x4_t {
             let r: int32x4_t;
             unsafe {
@@ -1414,7 +1410,17 @@ mod neon {
     #[inline(always)]
     pub unsafe fn sum_f32(vec: VecF32) -> f32 {
         unsafe {
-            return vaddvq_f32(vec.inner());
+            // return vaddvq_f32(vec.inner());
+            // ^ this would be lovely, but has the
+            // wrong addition order (it does pairwise adds)
+
+            let low = vget_low_f32(vec.inner()); // [a, b]
+            let high = vget_high_f32(vec.inner()); // [c, d]
+            let sum_pairs = vadd_f32(low, high); // [a+c, b+d]
+
+            // pairwise add to get ((a+c) + (b+d))
+            let result = vpadd_f32(sum_pairs, sum_pairs);
+            vget_lane_f32(result, 0)
         }
     }
     #[inline(always)]
@@ -1424,7 +1430,7 @@ mod neon {
             let vec_b = vaddq_f32(vec.get_unchecked(1).inner(), vec.get_unchecked(3).inner());
             let vec = vaddq_f32(vec_a, vec_b);
 
-            vaddvq_f32(vec)
+            return sum_f32(VecF32::from_raw(vec));
         }
     }
 
