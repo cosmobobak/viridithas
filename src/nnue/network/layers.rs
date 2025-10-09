@@ -16,48 +16,6 @@ pub static NNZ_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::Atomic
 #[cfg(feature = "nnz-counts")]
 pub static NNZ_DENOM: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
-#[derive(Debug, Clone, Copy)]
-#[repr(C, align(16))]
-struct NNZEntry {
-    indices: [u16; 8],
-}
-
-struct NNZTable {
-    table: [NNZEntry; 256],
-}
-
-#[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-const NNZ_TABLE: NNZTable = {
-    let mut table = [NNZEntry { indices: [0; 8] }; 256];
-
-    let mut i = 0;
-    while i < 256 {
-        let mut j = i;
-        let mut k = 0;
-        while j != 0 {
-            table[i].indices[k] = j.trailing_zeros() as u16;
-            j &= j - 1;
-            k += 1;
-        }
-        i += 1;
-    }
-
-    NNZTable { table }
-};
-
-// used in only one place, separate function for clarity.
-unsafe fn reinterpret_as_i32s(
-    ptr: &Align64<[MaybeUninit<u8>; L1_SIZE]>,
-) -> &Align64<[i32; L1_SIZE / 4]> {
-    let ptr = from_ref(ptr);
-    // check that the reference is aligned:
-    debug_assert!(ptr.cast::<i32>().is_aligned());
-    debug_assert!(ptr.cast::<Align64<[i32; L1_SIZE / 4]>>().is_aligned());
-    // cast:
-    // Safety: pointer is known to be aligned.
-    unsafe { &*ptr.cast::<Align64<[i32; L1_SIZE / 4]>>() }
-}
-
 #[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
 mod generic {
     use super::{
@@ -214,12 +172,15 @@ mod generic {
 
 #[cfg(any(target_arch = "x86_64", target_feature = "neon"))]
 mod simd {
-    use crate::nnue::{
-        network::{
-            Align64, L1_CHUNK_PER_32, L1_SIZE, L2_SIZE, L3_SIZE, QA,
-            layers::{AVX512CHUNK, FT_SHIFT, L1_MUL, NNZ_TABLE, reinterpret_as_i32s},
+    use crate::{
+        nnue::{
+            network::{
+                Align64, L1_CHUNK_PER_32, L1_SIZE, L2_SIZE, L3_SIZE, QA,
+                layers::{AVX512CHUNK, FT_SHIFT, L1_MUL},
+            },
+            simd::{self, F32_CHUNK_SIZE, I16_CHUNK_SIZE, S, U8_CHUNK_SIZE, VecI32},
         },
-        simd::{self, F32_CHUNK_SIZE, I16_CHUNK_SIZE, S, U8_CHUNK_SIZE, VecI32},
+        util,
     };
     use std::mem::MaybeUninit;
 
@@ -227,6 +188,48 @@ mod simd {
     use crate::nnue::network::layers::{NNZ_COUNT, NNZ_DENOM};
     #[cfg(feature = "nnz-counts")]
     use std::sync::atomic::Ordering;
+
+    #[derive(Debug, Clone, Copy)]
+    #[repr(C, align(16))]
+    struct NNZEntry {
+        indices: [u16; 8],
+    }
+
+    struct NNZTable {
+        table: [NNZEntry; 256],
+    }
+
+    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+    const NNZ_TABLE: NNZTable = {
+        let mut table = [NNZEntry { indices: [0; 8] }; 256];
+
+        let mut i = 0;
+        while i < 256 {
+            let mut j = i;
+            let mut k = 0;
+            while j != 0 {
+                table[i].indices[k] = j.trailing_zeros() as u16;
+                j &= j - 1;
+                k += 1;
+            }
+            i += 1;
+        }
+
+        NNZTable { table }
+    };
+
+    // used in only one place, separate function for clarity.
+    unsafe fn reinterpret_as_i32s(
+        ptr: &Align64<[MaybeUninit<u8>; L1_SIZE]>,
+    ) -> &Align64<[i32; L1_SIZE / 4]> {
+        let ptr = util::from_ref(ptr);
+        // check that the reference is aligned:
+        debug_assert!(ptr.cast::<i32>().is_aligned());
+        debug_assert!(ptr.cast::<Align64<[i32; L1_SIZE / 4]>>().is_aligned());
+        // cast:
+        // Safety: pointer is known to be aligned.
+        unsafe { &*ptr.cast::<Align64<[i32; L1_SIZE / 4]>>() }
+    }
 
     #[allow(
         clippy::too_many_lines,
@@ -251,8 +254,9 @@ mod simd {
             std::mem::size_of::<VecI32>() / std::mem::size_of::<i32>();
         const NNZ_CHUNK_SIZE: usize = max!(NNZ_INPUT_SIMD_WIDTH * 2, 8);
         const NNZ_OUTPUTS_PER_CHUNK: usize = NNZ_CHUNK_SIZE / 8;
-        // on NEON. the instruction used for mulhi doubles the results.
-        // this is effectively a shift by another bit, so shift by one less
+
+        // on NEON, the instruction used for mulhi doubles the results.
+        // this is effectively a shift by another bit, so we shift by one fewer.
         const SHIFT: S = 16 - FT_SHIFT as S - cfg!(target_feature = "neon") as S;
 
         // SAFETY: Breaking it down by unsafe operations:
@@ -551,18 +555,11 @@ mod simd {
     }
 }
 
-use std::mem::MaybeUninit;
-
 #[cfg(any(target_arch = "x86_64", target_feature = "neon"))]
 pub use simd::*;
 
 #[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
 pub use generic::*;
-
-use crate::{
-    nnue::network::L1_SIZE,
-    util::{Align64, from_ref},
-};
 
 use super::{QA, QB};
 
