@@ -231,7 +231,7 @@ mod avx512 {
         }
     }
     #[inline(always)]
-    pub unsafe fn mul_add_u8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8) -> VecI32 {
+    pub unsafe fn madd_u8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8) -> VecI32 {
         unsafe {
             #[cfg(target_feature = "avx512vnni")]
             {
@@ -250,7 +250,7 @@ mod avx512 {
         }
     }
     #[inline(always)]
-    pub unsafe fn mul_add_2xu8_to_i32(
+    pub unsafe fn madd_2xu8_to_i32(
         sum: VecI32,
         vec0: VecI8,
         vec1: VecI8,
@@ -343,7 +343,7 @@ mod avx512 {
         }
     }
     #[inline(always)]
-    pub unsafe fn mul_add_f32(vec0: VecF32, vec1: VecF32, vec2: VecF32) -> VecF32 {
+    pub unsafe fn madd_f32(vec0: VecF32, vec1: VecF32, vec2: VecF32) -> VecF32 {
         unsafe {
             return VecF32::from_raw(_mm512_fmadd_ps(vec0.inner(), vec1.inner(), vec2.inner()));
         }
@@ -392,11 +392,11 @@ mod avx512 {
         }
     }
 
-    pub const U8_CHUNK_SIZE: usize = std::mem::size_of::<VecI8>() / std::mem::size_of::<u8>();
-    pub const I8_CHUNK_SIZE_I32: usize = std::mem::size_of::<i32>() / std::mem::size_of::<u8>();
-    pub const I16_CHUNK_SIZE: usize = std::mem::size_of::<VecI16>() / std::mem::size_of::<i16>();
-    pub const I32_CHUNK_SIZE: usize = std::mem::size_of::<VecI32>() / std::mem::size_of::<i32>();
-    pub const F32_CHUNK_SIZE: usize = std::mem::size_of::<VecF32>() / std::mem::size_of::<f32>();
+    pub const U8_CHUNK: usize = std::mem::size_of::<VecI8>() / std::mem::size_of::<u8>();
+    pub const I8_CHUNK_I32: usize = std::mem::size_of::<i32>() / std::mem::size_of::<u8>();
+    pub const I16_CHUNK: usize = std::mem::size_of::<VecI16>() / std::mem::size_of::<i16>();
+    pub const I32_CHUNK: usize = std::mem::size_of::<VecI32>() / std::mem::size_of::<i32>();
+    pub const F32_CHUNK: usize = std::mem::size_of::<VecF32>() / std::mem::size_of::<f32>();
 }
 
 #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
@@ -581,7 +581,7 @@ mod avx2 {
         }
     }
     #[inline(always)]
-    pub unsafe fn mul_add_u8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8) -> VecI32 {
+    pub unsafe fn madd_u8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8) -> VecI32 {
         unsafe {
             let product16 = _mm256_maddubs_epi16(vec0.inner(), vec1.inner());
             let product32 = _mm256_madd_epi16(product16, _mm256_set1_epi16(1));
@@ -589,7 +589,7 @@ mod avx2 {
         }
     }
     #[inline(always)]
-    pub unsafe fn mul_add_2xu8_to_i32(
+    pub unsafe fn madd_2xu8_to_i32(
         sum: VecI32,
         vec0: VecI8,
         vec1: VecI8,
@@ -671,7 +671,7 @@ mod avx2 {
         }
     }
     #[inline(always)]
-    pub unsafe fn mul_add_f32(vec0: VecF32, vec1: VecF32, vec2: VecF32) -> VecF32 {
+    pub unsafe fn madd_f32(vec0: VecF32, vec1: VecF32, vec2: VecF32) -> VecF32 {
         unsafe {
             return VecF32::from_raw(_mm256_fmadd_ps(vec0.inner(), vec1.inner(), vec2.inner()));
         }
@@ -742,11 +742,11 @@ mod avx2 {
         }
     }
 
-    pub const U8_CHUNK_SIZE: usize = std::mem::size_of::<VecI8>() / std::mem::size_of::<u8>();
-    pub const I8_CHUNK_SIZE_I32: usize = std::mem::size_of::<i32>() / std::mem::size_of::<u8>();
-    pub const I16_CHUNK_SIZE: usize = std::mem::size_of::<VecI16>() / std::mem::size_of::<i16>();
-    pub const I32_CHUNK_SIZE: usize = std::mem::size_of::<VecI32>() / std::mem::size_of::<i32>();
-    pub const F32_CHUNK_SIZE: usize = std::mem::size_of::<VecF32>() / std::mem::size_of::<f32>();
+    pub const U8_CHUNK: usize = std::mem::size_of::<VecI8>() / std::mem::size_of::<u8>();
+    pub const I8_CHUNK_I32: usize = std::mem::size_of::<i32>() / std::mem::size_of::<u8>();
+    pub const I16_CHUNK: usize = std::mem::size_of::<VecI16>() / std::mem::size_of::<i16>();
+    pub const I32_CHUNK: usize = std::mem::size_of::<VecI32>() / std::mem::size_of::<i32>();
+    pub const F32_CHUNK: usize = std::mem::size_of::<VecF32>() / std::mem::size_of::<f32>();
 }
 
 #[cfg(all(
@@ -934,7 +934,7 @@ mod sse2 {
         }
     }
     #[inline(always)]
-    pub unsafe fn mul_add_u8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8) -> VecI32 {
+    pub unsafe fn madd_u8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8) -> VecI32 {
         unsafe {
             let product16 = _mm_maddubs_epi16(vec0.inner(), vec1.inner());
             let product32 = _mm_madd_epi16(product16, _mm_set1_epi16(1));
@@ -942,7 +942,7 @@ mod sse2 {
         }
     }
     #[inline(always)]
-    pub unsafe fn mul_add_2xu8_to_i32(
+    pub unsafe fn madd_2xu8_to_i32(
         sum: VecI32,
         vec0: VecI8,
         vec1: VecI8,
@@ -1022,7 +1022,7 @@ mod sse2 {
         }
     }
     #[inline(always)]
-    pub unsafe fn mul_add_f32(vec0: VecF32, vec1: VecF32, vec2: VecF32) -> VecF32 {
+    pub unsafe fn madd_f32(vec0: VecF32, vec1: VecF32, vec2: VecF32) -> VecF32 {
         unsafe {
             return VecF32::from_raw(_mm_fmadd_ps(vec0.inner(), vec1.inner(), vec2.inner()));
         }
@@ -1081,11 +1081,11 @@ mod sse2 {
         }
     }
 
-    pub const U8_CHUNK_SIZE: usize = std::mem::size_of::<VecI8>() / std::mem::size_of::<u8>();
-    pub const I8_CHUNK_SIZE_I32: usize = std::mem::size_of::<i32>() / std::mem::size_of::<u8>();
-    pub const I16_CHUNK_SIZE: usize = std::mem::size_of::<VecI16>() / std::mem::size_of::<i16>();
-    pub const I32_CHUNK_SIZE: usize = std::mem::size_of::<VecI32>() / std::mem::size_of::<i32>();
-    pub const F32_CHUNK_SIZE: usize = std::mem::size_of::<VecF32>() / std::mem::size_of::<f32>();
+    pub const U8_CHUNK: usize = std::mem::size_of::<VecI8>() / std::mem::size_of::<u8>();
+    pub const I8_CHUNK_I32: usize = std::mem::size_of::<i32>() / std::mem::size_of::<u8>();
+    pub const I16_CHUNK: usize = std::mem::size_of::<VecI16>() / std::mem::size_of::<i16>();
+    pub const I32_CHUNK: usize = std::mem::size_of::<VecI32>() / std::mem::size_of::<i32>();
+    pub const F32_CHUNK: usize = std::mem::size_of::<VecF32>() / std::mem::size_of::<f32>();
 }
 
 #[cfg(target_feature = "neon")]
@@ -1300,7 +1300,7 @@ mod neon {
     // NEON only supports i8-i8 dotprod, so this function will misbehave if
     // vec0 contains values outwith 0..127.
     #[inline(always)]
-    pub unsafe fn mul_add_u8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8) -> VecI32 {
+    pub unsafe fn madd_u8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8) -> VecI32 {
         // Assembly implementation of vdotq_s32 very generously provided by
         // sp00ph (https://github.com/Sp00ph), tysm <3.
         #[inline(always)]
@@ -1322,7 +1322,7 @@ mod neon {
         }
     }
     #[inline(always)]
-    pub unsafe fn mul_add_2xu8_to_i32(
+    pub unsafe fn madd_2xu8_to_i32(
         sum: VecI32,
         vec0: VecI8,
         vec1: VecI8,
@@ -1330,8 +1330,8 @@ mod neon {
         vec3: VecI8,
     ) -> VecI32 {
         unsafe {
-            let sum = mul_add_u8_to_i32(sum, vec0, vec1);
-            return mul_add_u8_to_i32(sum, vec2, vec3);
+            let sum = madd_u8_to_i32(sum, vec0, vec1);
+            return madd_u8_to_i32(sum, vec2, vec3);
         }
     }
     #[inline(always)]
@@ -1399,7 +1399,7 @@ mod neon {
         }
     }
     #[inline(always)]
-    pub unsafe fn mul_add_f32(vec0: VecF32, vec1: VecF32, vec2: VecF32) -> VecF32 {
+    pub unsafe fn madd_f32(vec0: VecF32, vec1: VecF32, vec2: VecF32) -> VecF32 {
         unsafe {
             return VecF32::from_raw(vfmaq_f32(vec2.inner(), vec0.inner(), vec1.inner()));
         }
@@ -1465,11 +1465,11 @@ mod neon {
         }
     }
 
-    pub const U8_CHUNK_SIZE: usize = std::mem::size_of::<VecI8>() / std::mem::size_of::<u8>();
-    pub const I8_CHUNK_SIZE_I32: usize = std::mem::size_of::<i32>() / std::mem::size_of::<u8>();
-    pub const I16_CHUNK_SIZE: usize = std::mem::size_of::<VecI16>() / std::mem::size_of::<i16>();
-    pub const I32_CHUNK_SIZE: usize = std::mem::size_of::<VecI32>() / std::mem::size_of::<i32>();
-    pub const F32_CHUNK_SIZE: usize = std::mem::size_of::<VecF32>() / std::mem::size_of::<f32>();
+    pub const U8_CHUNK: usize = std::mem::size_of::<VecI8>() / std::mem::size_of::<u8>();
+    pub const I8_CHUNK_I32: usize = std::mem::size_of::<i32>() / std::mem::size_of::<u8>();
+    pub const I16_CHUNK: usize = std::mem::size_of::<VecI16>() / std::mem::size_of::<i16>();
+    pub const I32_CHUNK: usize = std::mem::size_of::<VecI32>() / std::mem::size_of::<i32>();
+    pub const F32_CHUNK: usize = std::mem::size_of::<VecF32>() / std::mem::size_of::<f32>();
 }
 
 #[cfg(target_feature = "avx512f")]
@@ -1490,13 +1490,13 @@ pub use neon::*;
 
 #[cfg(any(target_arch = "x86_64", target_feature = "neon"))]
 #[inline(always)]
-pub fn reinterpret_i32s_as_i8s(vec: VecI32) -> VecI8 {
+pub fn trans_i32_i8(vec: VecI32) -> VecI8 {
     unsafe { VecI8::from_raw(std::mem::transmute(vec.inner())) }
 }
 
 #[cfg(any(target_arch = "x86_64", target_feature = "neon"))]
 #[inline(always)]
-pub fn reinterpret_i8s_as_i32s(vec: VecI8) -> VecI32 {
+pub fn trans_i8_i32(vec: VecI8) -> VecI32 {
     unsafe { VecI32::from_raw(std::mem::transmute(vec.inner())) }
 }
 
