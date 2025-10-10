@@ -403,7 +403,7 @@ mod simd {
             let tail_start = nnz_count - (nnz_count % 4);
 
             // affine transform
-            for i in (0..nnz_count - 3).step_by(4) {
+            for i in (0..tail_start).step_by(4) {
                 // load the block indices from the sparse index list
                 let nnz_ia = *nnz_slice.get_unchecked(i + 0) as usize;
                 let nnz_ib = *nnz_slice.get_unchecked(i + 1) as usize;
