@@ -80,7 +80,7 @@ mod generic {
             // As such, the indices that we construct are valid.
             unsafe {
                 let clipped = f32::clamp(
-                    (*sums.get_unchecked(i) as f32).madd(L1_MUL, *biases.get_unchecked(i)),
+                    (*sums.get_unchecked(i) as f32).mul_add(L1_MUL, *biases.get_unchecked(i)),
                     0.0,
                     1.0,
                 );
@@ -121,7 +121,7 @@ mod generic {
                 for j in 0..L3_SIZE {
                     let sum = *sums.get_unchecked(j);
                     let w = *weights.get_unchecked(i * L3_SIZE + j);
-                    *sums.get_unchecked_mut(j) = input.madd(w, sum);
+                    *sums.get_unchecked_mut(j) = input.mul_add(w, sum);
                 }
             }
         }
@@ -163,7 +163,7 @@ mod generic {
 
         // Affine transform for L3
         for (i, (v, w)) in inputs.iter().zip(weights.iter()).enumerate() {
-            sums[i % NUM_SUMS] = f32::madd(*v, *w, sums[i % NUM_SUMS]);
+            sums[i % NUM_SUMS] = f32::mul_add(*v, *w, sums[i % NUM_SUMS]);
         }
 
         *output = reduce_add(&mut sums) + bias;
