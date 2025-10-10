@@ -357,7 +357,7 @@ mod avx512 {
     #[inline(always)]
     pub unsafe fn reduce_add_f32s(vec: &[VecF32; 1]) -> f32 {
         unsafe {
-            return _mm512_reduce_add_ps(vec.get_unchecked(0).inner());
+            return _mm512_reduce_add_ps(vec[0].inner());
         }
     }
 
@@ -695,7 +695,7 @@ mod avx2 {
     #[inline(always)]
     pub unsafe fn reduce_add_f32s(vec: &[VecF32; 2]) -> f32 {
         unsafe {
-            let vec = _mm256_add_ps(vec.get_unchecked(0).inner(), vec.get_unchecked(1).inner());
+            let vec = _mm256_add_ps(vec[0].inner(), vec[1].inner());
 
             let upper_128 = _mm256_extractf128_ps(vec, 1);
             let lower_128 = _mm256_castps256_ps128(vec);
@@ -1042,8 +1042,8 @@ mod sse2 {
     #[inline(always)]
     pub unsafe fn reduce_add_f32s(vec: &[VecF32; 4]) -> f32 {
         unsafe {
-            let vec_a = _mm_add_ps(vec.get_unchecked(0).inner(), vec.get_unchecked(2).inner());
-            let vec_b = _mm_add_ps(vec.get_unchecked(1).inner(), vec.get_unchecked(3).inner());
+            let vec_a = _mm_add_ps(vec[0].inner(), vec[2].inner());
+            let vec_b = _mm_add_ps(vec[1].inner(), vec[3].inner());
             let vec = _mm_add_ps(vec_a, vec_b);
 
             return sum_f32(VecF32::from_raw(vec));
@@ -1423,8 +1423,8 @@ mod neon {
     #[inline(always)]
     pub unsafe fn reduce_add_f32s(vec: &[VecF32; 4]) -> f32 {
         unsafe {
-            let vec_a = vaddq_f32(vec.get_unchecked(0).inner(), vec.get_unchecked(2).inner());
-            let vec_b = vaddq_f32(vec.get_unchecked(1).inner(), vec.get_unchecked(3).inner());
+            let vec_a = vaddq_f32(vec[0].inner(), vec[2].inner());
+            let vec_b = vaddq_f32(vec[1].inner(), vec[3].inner());
             let vec = vaddq_f32(vec_a, vec_b);
 
             return sum_f32(VecF32::from_raw(vec));
