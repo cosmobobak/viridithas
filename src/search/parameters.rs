@@ -22,11 +22,11 @@ use crate::{
         MAJOR_CORRHIST_WEIGHT, MINOR_CORRHIST_WEIGHT, NMP_DEPTH_MUL, NMP_IMPROVING_MARGIN,
         NMP_REDUCTION_EVAL_DIVISOR, NONPAWN_CORRHIST_WEIGHT, OPTIMISM_MATERIAL_BASE,
         OPTIMISM_OFFSET, PAWN_CORRHIST_WEIGHT, PROBCUT_IMPROVING_MARGIN, PROBCUT_MARGIN,
-        QS_FUTILITY, QS_SEE_BOUND, RAZORING_COEFF_0, RAZORING_COEFF_1, RFP_IMPROVING_MARGIN,
-        RFP_MARGIN, SEE_QUIET_MARGIN, SEE_STAT_SCORE_MUL, SEE_TACTICAL_MARGIN,
-        TACTICAL_HISTORY_BONUS_MAX, TACTICAL_HISTORY_BONUS_MUL, TACTICAL_HISTORY_BONUS_OFFSET,
-        TACTICAL_HISTORY_MALUS_MAX, TACTICAL_HISTORY_MALUS_MUL, TACTICAL_HISTORY_MALUS_OFFSET,
-        TRIPLE_EXTENSION_MARGIN,
+        PROBCUT_SEE_SCALE, QS_FUTILITY, QS_SEE_BOUND, RAZORING_COEFF_0, RAZORING_COEFF_1,
+        RFP_IMPROVING_MARGIN, RFP_MARGIN, SEE_QUIET_MARGIN, SEE_STAT_SCORE_MUL,
+        SEE_TACTICAL_MARGIN, TACTICAL_HISTORY_BONUS_MAX, TACTICAL_HISTORY_BONUS_MUL,
+        TACTICAL_HISTORY_BONUS_OFFSET, TACTICAL_HISTORY_MALUS_MAX, TACTICAL_HISTORY_MALUS_MUL,
+        TACTICAL_HISTORY_MALUS_OFFSET, TRIPLE_EXTENSION_MARGIN,
     },
     timemgmt::{
         DEFAULT_MOVES_TO_GO, FAIL_LOW_TM_BONUS, HARD_WINDOW_FRAC, INCREMENT_FRAC,
@@ -124,6 +124,7 @@ pub struct Config {
     pub optimism_offset: i32,
     pub optimism_mat_base: i32,
     pub eval_policy_update_max: i32,
+    pub probcut_see_scale: i32,
 }
 
 impl Config {
@@ -216,6 +217,7 @@ impl Config {
             optimism_offset: OPTIMISM_OFFSET,
             optimism_mat_base: OPTIMISM_MATERIAL_BASE,
             eval_policy_update_max: EVAL_POLICY_UPDATE_MAX,
+            probcut_see_scale: PROBCUT_SEE_SCALE,
         }
     }
 }
@@ -346,7 +348,8 @@ impl Config {
             HINDSIGHT_RED_EVAL = [self.hindsight_red_eval],
             OPTIMISM_OFFSET = [self.optimism_offset],
             OPTIMISM_MATERIAL_BASE = [self.optimism_mat_base],
-            EVAL_POLICY_UPDATE_MAX = [self.eval_policy_update_max]
+            EVAL_POLICY_UPDATE_MAX = [self.eval_policy_update_max],
+            PROBCUT_SEE_SCALE = [self.probcut_see_scale]
         ]
     }
 
@@ -447,7 +450,8 @@ impl Config {
             HINDSIGHT_RED_EVAL = [self.hindsight_red_eval, -4096, 4096, 8],
             OPTIMISM_OFFSET = [self.optimism_offset, -4096, 4096, 16],
             OPTIMISM_MATERIAL_BASE = [self.optimism_mat_base, 1, 8192, 256],
-            EVAL_POLICY_UPDATE_MAX = [self.eval_policy_update_max, 1, 4096, 8]
+            EVAL_POLICY_UPDATE_MAX = [self.eval_policy_update_max, 1, 4096, 8],
+            PROBCUT_SEE_SCALE = [self.probcut_see_scale, 1, 1024, 16]
         ]
     }
 

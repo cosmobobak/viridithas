@@ -85,6 +85,7 @@ const DO_DEEPER_DEPTH_MARGIN: i32 = 14;
 const HISTORY_PRUNING_MARGIN: i32 = -4942;
 const QS_FUTILITY: i32 = 341;
 const SEE_STAT_SCORE_MUL: i32 = 20;
+const PROBCUT_SEE_SCALE: i32 = 256;
 
 const HISTORY_LMR_DIVISOR: i32 = 17205;
 const LMR_REFUTATION_MUL: i32 = 860;
@@ -1169,8 +1170,9 @@ pub fn alpha_beta<NT: NodeType>(
         // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
         && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
     {
+        let see_threshold = (pc_beta - static_eval) * t.info.conf.probcut_see_scale / 256;
         let tt_move_if_capture = tt_move.filter(|m| t.board.is_tactical(*m));
-        let mut move_picker = MovePicker::new(tt_move_if_capture, None, 0);
+        let mut move_picker = MovePicker::new(tt_move_if_capture, None, see_threshold);
         move_picker.skip_quiets = true;
         while let Some(m) = move_picker.next(t) {
             t.tt.prefetch(t.board.key_after(m));
