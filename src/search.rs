@@ -1112,7 +1112,7 @@ pub fn alpha_beta<NT: NodeType>(
                 if depth < 12 && !is_decisive(beta) {
                     // don't return game-theoretic scores,
                     // as they arise from a different game than
-                    // the one this program is playing
+                    // the one this program is playing.
                     if is_decisive(null_score) {
                         return beta;
                     }
