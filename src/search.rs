@@ -1527,11 +1527,7 @@ pub fn alpha_beta<NT: NodeType>(
         return draw_score(t, t.info.nodes.get_local(), t.board.turn());
     }
 
-    if best_score >= beta
-        && best_score.abs() < MINIMUM_TB_WIN_SCORE
-        && alpha.abs() < MINIMUM_TB_WIN_SCORE
-        && beta.abs() < MINIMUM_TB_WIN_SCORE
-    {
+    if best_score >= beta && !is_decisive(best_score) && !is_decisive(alpha) && !is_decisive(beta) {
         best_score = (best_score * depth + beta) / (depth + 1);
     }
 
@@ -1671,14 +1667,14 @@ fn update_tactical_history(
 
 /// The reduced beta margin for Singular Extension.
 fn singularity_margin(tt_value: i32, depth: i32) -> i32 {
-    (tt_value - (depth * 3 / 4)).max(-MATE_SCORE)
+    (tt_value - (depth * 3 / 4)).max(-MINIMUM_TB_WIN_SCORE + 1)
 }
 
 /// Test if a move is *forced* - that is, if it is a move that is
 /// significantly better than the rest of the moves in a position,
 /// by at least `margin`. (typically ~200cp).
 pub fn is_forced(margin: i32, t: &mut ThreadData, m: Move, value: i32, depth: i32) -> bool {
-    let r_beta = (value - margin).max(-MATE_SCORE);
+    let r_beta = (value - margin).max(-MINIMUM_TB_WIN_SCORE + 1);
     let r_depth = (depth - 1) / 2;
     t.ss[t.board.height()].excluded = Some(m);
     let pts_prev = t.info.print_to_stdout;
