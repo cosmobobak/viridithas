@@ -1102,24 +1102,26 @@ pub fn alpha_beta<NT: NodeType>(
                 to: Square::A1,
             };
             t.board.make_nullmove();
-            let mut null_score = -alpha_beta::<OffPV>(l_pv, t, nm_depth, -beta, -beta + 1, false);
+            let null_score = -alpha_beta::<OffPV>(l_pv, t, nm_depth, -beta, -beta + 1, false);
             t.board.unmake_nullmove();
             if t.info.stopped() {
                 return 0;
             }
             if null_score >= beta {
-                // don't return game-theoretic scores:
-                if is_decisive(null_score) {
-                    null_score = beta;
-                }
-                // unconditionally cutoff if we're just too shallow.
+                // only perform verification when depth is high or mates are flying.
                 if depth < 12 && !is_decisive(beta) {
+                    // don't return game-theoretic scores,
+                    // as they arise from a different game than
+                    // the one this program is playing
+                    if is_decisive(null_score) {
+                        return beta;
+                    }
                     return null_score;
                 }
-                // verify that it's *actually* fine to prune,
-                // by doing a search with NMP disabled.
-                // we disallow NMP for the side to move,
-                // and if we hit the other side deeper in the tree
+                // verify that pruning makes sense by doing a search with NMP disabled.
+                // the verification search is much like probcut, in that it's just
+                // a normal search with reduced depth. To verify, we disallow NMP for
+                // the side to move, and if we hit the other side deeper in the tree
                 // with sufficient depth, we'll disallow it for them too.
                 t.ban_nmp_for(t.board.turn());
                 let veri_score = alpha_beta::<OffPV>(l_pv, t, nm_depth, beta - 1, beta, false);
