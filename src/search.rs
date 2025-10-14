@@ -737,7 +737,7 @@ pub fn alpha_beta<NT: NodeType>(
     mut depth: i32,
     mut alpha: i32,
     mut beta: i32,
-    cut_node: bool,
+    mut cut_node: bool,
 ) -> i32 {
     #[cfg(debug_assertions)]
     t.board.check_validity().unwrap();
@@ -1365,8 +1365,14 @@ pub fn alpha_beta<NT: NodeType>(
             } else if cut_node {
                 // produce a strong negative extension if we didn't fail low on a cut-node.
                 extension = -2;
-            } else if tte.value >= beta || tte.value <= alpha {
+            } else if tte.value >= beta {
                 // the tt_value >= beta condition is a sort of "light multi-cut"
+                extension = -1;
+                // if we're beating beta with the tte,
+                // *some more hand-waving*, then we expect
+                // this node to fail high.
+                cut_node = true;
+            } else if tte.value <= alpha {
                 // the tt_value <= alpha condition is from Weiss (https://github.com/TerjeKir/weiss/compare/2a7b4ed0...effa8349/).
                 extension = -1;
             } else if depth < 8
