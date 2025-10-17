@@ -34,7 +34,7 @@ use crate::{
         types::Square,
     },
     datagen::dataformat::Game,
-    evaluation::{is_decisive, is_mate_score},
+    evaluation::{MINIMUM_TB_WIN_SCORE, is_decisive, is_mate_score},
     nnue::network::NNUEParams,
     search::{parameters::Config, search_position, static_exchange_eval},
     tablebases::{self, probe::WDL},
@@ -1038,12 +1038,19 @@ impl From<&Board> for MaterialConfiguration {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 struct DataSetStats {
+    /// The total number of games in the dataset.
     games: usize,
+    /// A histogram of opening evaluations (the evaluation of the first position in each game).
     opening_eval_counts: HashMap<i32, usize>,
+    /// A histogram of game lengths (in ply).
     length_counts: HashMap<usize, usize>,
+    /// A histogram of all evaluations in the dataset.
     eval_counts: HashMap<i32, usize>,
+    /// A histogram of the number of pieces on the board across all positions in the dataset.
     piece_counts: HashMap<u8, usize>,
+    /// A histogram of material configurations across all positions in the dataset.
     material_counts: HashMap<MaterialConfiguration, usize>,
+    /// A histogram of the positions of the point-of-view king across all positions in the dataset.
     pov_king_positions: HashMap<Square, usize>,
 }
 
@@ -1136,16 +1143,16 @@ pub fn dataset_stats(dataset_path: &Path) -> anyhow::Result<()> {
     eval_counts.sort_unstable_by_key(|(eval, _)| *eval);
     let mut eval_counts_file = BufWriter::new(File::create("eval_counts.csv")?);
     writeln!(eval_counts_file, "eval,count")?;
-    for (eval, count) in eval_counts {
+    for &(eval, count) in &eval_counts {
         writeln!(eval_counts_file, "{eval},{count}")?;
     }
     eval_counts_file.flush()?;
     println!("Writing opening eval counts to opening_eval_counts.csv");
-    let mut eval_counts = stats.opening_eval_counts.into_iter().collect::<Vec<_>>();
-    eval_counts.sort_unstable_by_key(|(eval, _)| *eval);
+    let mut opening_eval_counts = stats.opening_eval_counts.into_iter().collect::<Vec<_>>();
+    opening_eval_counts.sort_unstable_by_key(|(eval, _)| *eval);
     let mut eval_counts_file = BufWriter::new(File::create("opening_eval_counts.csv")?);
     writeln!(eval_counts_file, "eval,count")?;
-    for (eval, count) in eval_counts {
+    for (eval, count) in opening_eval_counts {
         writeln!(eval_counts_file, "{eval},{count}")?;
     }
     eval_counts_file.flush()?;
@@ -1184,6 +1191,40 @@ pub fn dataset_stats(dataset_path: &Path) -> anyhow::Result<()> {
     let mean_game_len = ((total_position_count * 1000) / stats.games as u128) as f64 / 1000.0;
     println!("Mean game length: {mean_game_len}");
     println!("Total position count: {total_position_count}");
+
+    let usable_evals = eval_counts
+        .into_iter()
+        .filter(|(eval, _)| eval.abs() <= MINIMUM_TB_WIN_SCORE)
+        .collect::<Vec<_>>();
+
+    let total = usable_evals.iter().map(|(_, c)| *c as u128).sum::<u128>() as f64;
+    let mean_eval = usable_evals
+        .iter()
+        .map(|(eval, c)| i128::from(*eval) * (*c as i128))
+        .sum::<i128>() as f64
+        / total;
+
+    println!("Mean eval: {mean_eval:.2}");
+
+    let mean_abs_eval = usable_evals
+        .iter()
+        .map(|(eval, c)| u128::from(eval.unsigned_abs()) * (*c as u128))
+        .sum::<u128>() as f64
+        / total;
+
+    println!("Mean absolute eval: {mean_abs_eval:.2}");
+
+    let variance = usable_evals
+        .iter()
+        .map(|(eval, c)| {
+            let diff = i128::from(*eval) - mean_eval as i128;
+            diff * diff * (*c as i128)
+        })
+        .sum::<i128>() as f64
+        / total;
+
+    let stddev = variance.sqrt();
+    println!("Eval standard deviation: {stddev:.2}");
 
     Ok(())
 }
