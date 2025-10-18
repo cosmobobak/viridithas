@@ -176,6 +176,10 @@ pub mod util {
         pub const fn get(self) -> i16 {
             i16::from_le(self.0)
         }
+
+        pub fn set(&mut self, v: i16) {
+            self.0 = v.to_le();
+        }
     }
 
     #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]

@@ -158,6 +158,14 @@ impl Game {
         self.moves.iter().map(|(mv, _)| *mv)
     }
 
+    pub fn buffer(&self) -> &[(Move, marlinformat::util::I16Le)] {
+        &self.moves
+    }
+
+    pub fn buffer_mut(&mut self) -> &mut [(Move, marlinformat::util::I16Le)] {
+        &mut self.moves
+    }
+
     pub fn set_outcome(&mut self, outcome: GameOutcome) {
         self.initial_position.set_outcome(outcome);
     }

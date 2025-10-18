@@ -37,7 +37,7 @@ mod uci;
 mod util;
 
 #[cfg(feature = "datagen")]
-use cli::Subcommands::{Analyse, CountPositions, Datagen, Splat};
+use cli::Subcommands::{Analyse, CountPositions, Datagen, Rescale, Splat};
 use cli::Subcommands::{Bench, Merge, NNUEDryRun, Perft, Quantise, Spsa, Verbatim, VisNNUE};
 
 /// The name of the engine.
@@ -60,10 +60,6 @@ fn main() -> anyhow::Result<()> {
         Some(Quantise { input, output }) => nnue::network::quantise(&input, &output),
         Some(Merge { input, output }) => nnue::network::merge(&input, &output),
         Some(Verbatim { output }) => nnue::network::dump_verbatim(&output),
-        #[cfg(feature = "datagen")]
-        Some(Analyse { input }) => datagen::dataset_stats(&input),
-        #[cfg(feature = "datagen")]
-        Some(CountPositions { input }) => datagen::dataset_count(&input),
         Some(Spsa { json }) => {
             if json {
                 println!(
@@ -78,6 +74,16 @@ fn main() -> anyhow::Result<()> {
             }
             Ok(())
         }
+        #[cfg(feature = "datagen")]
+        Some(Analyse { input }) => datagen::dataset_stats(&input),
+        #[cfg(feature = "datagen")]
+        Some(CountPositions { input }) => datagen::dataset_count(&input),
+        #[cfg(feature = "datagen")]
+        Some(Rescale {
+            scale,
+            input,
+            output,
+        }) => datagen::run_rescale(&input, &output, scale),
         #[cfg(feature = "datagen")]
         Some(Splat {
             input,

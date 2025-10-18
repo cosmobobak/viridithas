@@ -61,6 +61,17 @@ pub enum Subcommands {
         #[clap(long)]
         json: bool,
     },
+    /// Rescale evaluations in a packed game record
+    #[cfg(feature = "datagen")]
+    Rescale {
+        /// Scaling factor to apply to evaluations
+        #[clap(long)]
+        scale: f64,
+        /// Path to input packed game record.
+        input: PathBuf,
+        /// Path to output packed game record.
+        output: PathBuf,
+    },
     /// Splat a packed game record into bulletformat records (or other format)
     #[cfg(feature = "datagen")]
     Splat {
