@@ -1346,7 +1346,9 @@ pub fn alpha_beta<NT: NodeType>(
             t.ss[t.board.height()].excluded = None;
 
             if value == VALUE_NONE {
-                extension = 1; // extend if there's only one legal move.
+                // extend if there's only one legal move.
+                // double-extend if we're in check.
+                extension = 1 + i32::from(in_check);
             } else if value >= r_beta && r_beta >= beta {
                 // multi-cut: if a move other than the best one beats beta,
                 // then we can cut with relatively high confidence.
