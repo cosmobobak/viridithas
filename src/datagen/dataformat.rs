@@ -6,7 +6,6 @@ use crate::{
         chessmove::Move,
         piece::{Colour, PieceType},
     },
-    evaluation::MINIMUM_TB_WIN_SCORE,
     tablebases::probe::WDL,
 };
 
