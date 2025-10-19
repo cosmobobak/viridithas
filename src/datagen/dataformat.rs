@@ -44,7 +44,7 @@ impl Default for Filter {
         Self {
             min_ply: 16,
             min_pieces: 4,
-            max_eval: MINIMUM_TB_WIN_SCORE.try_into().unwrap(),
+            max_eval: 20_000,
             max_opening_eval: u32::MAX,
             filter_tactical: true,
             filter_check: true,

@@ -34,7 +34,7 @@ use crate::{
         types::Square,
     },
     datagen::dataformat::Game,
-    evaluation::{MINIMUM_TB_WIN_SCORE, is_decisive, is_mate_score},
+    evaluation::{is_decisive, is_mate_score},
     nnue::network::NNUEParams,
     search::{parameters::Config, search_position, static_exchange_eval},
     tablebases::{self, probe::WDL},
@@ -971,7 +971,6 @@ pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) -> anyhow::R
 }
 
 /// Take a binpack, and write a new binpack with identical data but rescaled evaluations.
-#[allow(clippy::cast_possible_truncation)]
 pub fn run_rescale(input: &Path, output: &Path, scale: f64) -> anyhow::Result<()> {
     // check that the input file exists
     if !input.try_exists()? {
@@ -998,6 +997,7 @@ pub fn run_rescale(input: &Path, output: &Path, scale: f64) -> anyhow::Result<()
     Ok(())
 }
 
+#[allow(clippy::cast_possible_truncation)]
 fn rescale_binpacks(
     scale: f64,
     mut input_buffer: impl BufRead,
@@ -1009,7 +1009,7 @@ fn rescale_binpacks(
     {
         for (_, slot) in game.buffer_mut() {
             let value = i32::from(slot.get());
-            let new_value = if is_decisive(value) {
+            let new_value = if is_decisive(value * 2) {
                 value
             } else {
                 (f64::from(value) * scale).round() as i32
@@ -1265,7 +1265,7 @@ pub fn dataset_stats(dataset_path: &Path) -> anyhow::Result<()> {
 
     let usable_evals = eval_counts
         .into_iter()
-        .filter(|(eval, _)| eval.abs() <= MINIMUM_TB_WIN_SCORE)
+        .filter(|(eval, _)| !is_decisive(*eval * 2))
         .collect::<Vec<_>>();
 
     let total = usable_evals.iter().map(|(_, c)| *c as u128).sum::<u128>() as f64;
@@ -1436,6 +1436,7 @@ mod tests {
                 assert_eq!(m1, m2);
                 let input_eval = i32::from(input_slot.get());
                 let output_eval = i32::from(output_slot.get());
+                #[allow(clippy::cast_possible_truncation)]
                 let expected_output_eval = if is_decisive(input_eval) {
                     input_eval
                 } else {
@@ -1443,8 +1444,7 @@ mod tests {
                 };
                 assert_eq!(
                     output_eval, expected_output_eval,
-                    "Input eval: {}, Output eval: {}, Expected output eval: {}",
-                    input_eval, output_eval, expected_output_eval
+                    "Input eval: {input_eval}, Output eval: {output_eval}, Expected output eval: {expected_output_eval}"
                 );
             }
         }
