@@ -47,6 +47,12 @@ pub const INPUT: usize = (12 - MERGE_KING_PLANES as usize) * 64;
 /// This is to allow for the sigmoid activation to differentiate positions with
 /// a small difference in evaluation.
 const SCALE: i32 = 400;
+/// The renormalisation factor for the evaluation scale.
+/// This is used to cope with changes in evaluation scale between networks.
+const EVAL_SCALE_RENORM_FACTOR: f32 = 0.94;
+/// The value to multiply the final output by to get centipawn evaluation.
+#[allow(clippy::cast_precision_loss)]
+const OUT_MUL: f32 = SCALE as f32 * EVAL_SCALE_RENORM_FACTOR;
 /// The size of one-half of the hidden layer of the network.
 pub const L1_SIZE: usize = 2048;
 /// The size of the second layer of the network.
@@ -1470,7 +1476,7 @@ impl NNUEState {
             &mut l3_output,
         );
 
-        (l3_output * SCALE as f32) as i32
+        (l3_output * OUT_MUL) as i32
     }
 }
 
