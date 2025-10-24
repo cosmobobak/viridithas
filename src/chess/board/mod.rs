@@ -1458,11 +1458,8 @@ impl Board {
         let mut playout = self.clone();
         let mut out = String::new();
         for &m in pv.moves() {
-            write!(
-                out,
-                "{} ",
-                playout.san(m).unwrap_or_else(|| "???".to_string())
-            )?;
+            let san = playout.san(m).unwrap_or_else(|| "???".to_string());
+            write!(out, "{san} ")?;
             playout.make_move_simple(m);
         }
         Ok(out)
