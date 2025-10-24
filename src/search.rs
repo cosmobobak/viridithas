@@ -20,6 +20,7 @@ use crate::{
         },
         chessmove::Move,
         piece::{Colour, Piece, PieceType},
+        piecelayout::PieceLayout,
         squareset::SquareSet,
         types::{ContHistIndex, Square},
     },
@@ -1708,6 +1709,22 @@ pub fn can_win_material(pos: &Board) -> bool {
         || (pos.state.threats.leq_pawn) & (queens | rooks | bishops | knights) != SquareSet::EMPTY
 }
 
+/// find the cheapest piece type that is present in the given set of attackers.
+/// returns the PieceType with the lowest value that has at least one piece in `attackers`.
+#[inline(never)]
+fn find_cheapest_attacker(attackers: SquareSet, bbs: &PieceLayout) -> PieceType {
+    use PieceType::*;
+    // compute a 6-bit mask where bit i indicates if piece type i has attackers
+    let attacker_mask: u8 = (((attackers & bbs.pieces[Pawn]) != SquareSet::EMPTY) as u8) << 0
+        | (((attackers & bbs.pieces[Knight]) != SquareSet::EMPTY) as u8) << 1
+        | (((attackers & bbs.pieces[Bishop]) != SquareSet::EMPTY) as u8) << 2
+        | (((attackers & bbs.pieces[Rook]) != SquareSet::EMPTY) as u8) << 3
+        | (((attackers & bbs.pieces[Queen]) != SquareSet::EMPTY) as u8) << 4
+        | (((attackers & bbs.pieces[King]) != SquareSet::EMPTY) as u8) << 5;
+    // SAFETY: caller ensures attackers is non-empty, so attacker_mask has at least one bit set
+    unsafe { PieceType::from_index_unchecked(attacker_mask.trailing_zeros() as u8) }
+}
+
 /// See if a move looks like it would initiate a winning exchange.
 /// This function simulates flowing all moves on to the target square of
 /// the given move, from least to most valuable moved piece, and returns
@@ -1773,12 +1790,7 @@ pub fn static_exchange_eval(board: &Board, conf: &Config, m: Move, threshold: i3
         }
 
         // find cheapest attacker
-        for victim in PieceType::all() {
-            next_victim = victim;
-            if (my_attackers & bbs.pieces[victim]) != SquareSet::EMPTY {
-                break;
-            }
-        }
+        next_victim = find_cheapest_attacker(my_attackers, bbs);
 
         occupied ^= (my_attackers & bbs.pieces[next_victim]).isolate_lsb();
 
