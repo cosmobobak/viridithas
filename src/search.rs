@@ -1884,6 +1884,8 @@ fn readout_info(
         clippy::cast_sign_loss,
         clippy::cast_possible_truncation
     )]
+    const GREY_START: &str = "\x1b[90m";
+    const RESET: &str = "\x1b[0m";
     const PREFIX_LEN: usize = 54;
     if !info.print_to_stdout {
         return;
@@ -1923,21 +1925,38 @@ fn readout_info(
     } else {
         let value = uci::pretty_format_score(pv.score, board.turn());
         let mut pv_string = board.pv_san(pv).unwrap();
+        let pv_string_len = pv_string.len();
         // truncate the pv string if it's too long
         let max_length =
             term_size::dimensions().map_or(80 - PREFIX_LEN, |(w, _)| w.saturating_sub(PREFIX_LEN));
-        if pv_string.len() > max_length {
+        if pv_string_len > max_length {
             let final_space = pv_string
                 .match_indices(' ')
                 .filter(|(i, _)| *i < max_length)
                 .next_back()
                 .map_or(0, |(i, _)| i);
             pv_string.truncate(final_space);
-            // pad up to max length with spaces so that the line clears the terminal
-            for _ in pv_string.len()..max_length {
-                pv_string.push(' ');
-            }
         }
+        // reprocess to colourise by ply
+        let stm = board.turn();
+        pv_string = pv_string
+            .split(' ')
+            .enumerate()
+            .map(|(i, mv)| {
+                let colour = if (i % 2 == 0) == (stm == Colour::White) {
+                    ""
+                } else {
+                    GREY_START
+                };
+                format!("{colour}{mv}{RESET}")
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+        // pad up to max length with spaces so that the line clears the terminal
+        for _ in pv_string_len..max_length {
+            pv_string.push(' ');
+        }
+
         let endchr = if bound == Bound::Exact { "\n" } else { "\r" };
         eprint!(
             " {iteration:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}n\u{001b}[0m {value} {wdl} \u{001b}[38;5;243m{knps:5}kn/s\u{001b}[0m {pv_string}{endchr}",
