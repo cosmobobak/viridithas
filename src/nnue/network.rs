@@ -116,18 +116,15 @@ struct UnquantisedNetwork {
     // extra bucket for the feature-factoriser.
     ft_weights:    [f32; 12 * 64 * L1_SIZE * (BUCKETS + UNQUANTISED_HAS_FACTORISER as usize)],
     ft_biases:     [f32; L1_SIZE],
-    l1x_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
-    l1f_weights:  [[f32; L2_SIZE]; L1_SIZE],
-    l1x_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
-    l1f_biases:    [f32; L2_SIZE],
-    l2x_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
-    l2f_weights:  [[f32; L3_SIZE]; L2_SIZE],
-    l2x_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
-    l2f_biases:    [f32; L3_SIZE],
-    l3x_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
-    l3f_weights:   [f32; L3_SIZE],
-    l3x_biases:    [f32; OUTPUT_BUCKETS],
-    l3f_biases:    [f32; 1],
+    l1_weights:  [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
+    // l1f_weights:  [[f32; L2_SIZE]; L1_SIZE],
+    l1_biases:    [[f32; L2_SIZE]; OUTPUT_BUCKETS],
+    l2_weights:  [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
+    // l2f_weights:  [[f32; L3_SIZE]; L2_SIZE],
+    l2_biases:    [[f32; L3_SIZE]; OUTPUT_BUCKETS],
+    l3_weights:   [[f32; OUTPUT_BUCKETS]; L3_SIZE],
+    // l3f_weights:   [f32; L3_SIZE],
+    l3_biases:     [f32; OUTPUT_BUCKETS],
 }
 
 /// The floating-point parameters of the network, after de-factorisation.
@@ -280,41 +277,46 @@ impl UnquantisedNetwork {
         for i in 0..L1_SIZE {
             for bucket in 0..OUTPUT_BUCKETS {
                 for j in 0..L2_SIZE {
-                    net.l1_weights[i][bucket][j] =
-                        self.l1x_weights[i][bucket][j] + self.l1f_weights[i][j];
+                    net.l1_weights[i][bucket][j] = self.l1_weights[i][bucket][j]; // + self.l1f_weights[i][j];
                 }
             }
         }
         // copy the L1 biases
         for i in 0..L2_SIZE {
             for bucket in 0..OUTPUT_BUCKETS {
-                net.l1_biases[bucket][i] = self.l1x_biases[bucket][i] + self.l1f_biases[i];
+                net.l1_biases[bucket][i] = self.l1_biases[bucket][i];
             }
         }
         // copy the L2 weights
         for i in 0..L2_SIZE {
+            // eprintln!("copying l2 weights row {i}");
+            // eprintln!("f: {:?}", self.l2f_weights[i]);
             for bucket in 0..OUTPUT_BUCKETS {
+                // eprintln!("{bucket}: {:?}", self.l2_weights[i][bucket]);
                 for j in 0..L3_SIZE {
-                    net.l2_weights[i][bucket][j] =
-                        self.l2x_weights[i][bucket][j] + self.l2f_weights[i][j];
+                    net.l2_weights[i][bucket][j] = self.l2_weights[i][bucket][j]; // + self.l2f_weights[i][j];
                 }
             }
+            // eprintln!("after summation:");
+            // for bucket in 0..OUTPUT_BUCKETS {
+            //     eprintln!("{bucket}: {:?}", net.l2_weights[i][bucket]);
+            // }
         }
         // copy the L2 biases
         for i in 0..L3_SIZE {
             for bucket in 0..OUTPUT_BUCKETS {
-                net.l2_biases[bucket][i] = self.l2x_biases[bucket][i] + self.l2f_biases[i];
+                net.l2_biases[bucket][i] = self.l2_biases[bucket][i];
             }
         }
         // copy the L3 weights
         for i in 0..L3_SIZE {
             for bucket in 0..OUTPUT_BUCKETS {
-                net.l3_weights[i][bucket] = self.l3x_weights[i][bucket] + self.l3f_weights[i];
+                net.l3_weights[i][bucket] = self.l3_weights[i][bucket]; // + self.l3f_weights[i];
             }
         }
         // copy the L3 biases
         for i in 0..OUTPUT_BUCKETS {
-            net.l3_biases[i] = self.l3x_biases[i] + self.l3f_biases[0];
+            net.l3_biases[i] = self.l3_biases[i];
         }
 
         net
