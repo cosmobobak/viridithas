@@ -4,7 +4,7 @@ pub mod parameters;
 pub mod pv;
 
 use std::{
-    sync::atomic::{AtomicU64, Ordering},
+    sync::atomic::{AtomicU64, Ordering, Ordering::Relaxed},
     thread,
 };
 
@@ -141,6 +141,15 @@ const OPTIMISM_OFFSET: i32 = 189;
 const OPTIMISM_MATERIAL_BASE: i32 = 2320;
 
 static TB_HITS: AtomicU64 = AtomicU64::new(0);
+
+pub static FULLWINDOW_NODES: AtomicU64 = AtomicU64::new(0);
+pub static PV_NODES: AtomicU64 = AtomicU64::new(0);
+pub static FIRSTCUT_NODES: AtomicU64 = AtomicU64::new(0);
+pub static FIRSTMEET_NODES: AtomicU64 = AtomicU64::new(0);
+pub static FIRSTFAIL_NODES: AtomicU64 = AtomicU64::new(0);
+
+pub static FIRSTFAIL_CUT_NODES: AtomicU64 = AtomicU64::new(0);
+pub static FIRSTFAIL_ALLFAIL_NODES: AtomicU64 = AtomicU64::new(0);
 
 pub trait NodeType {
     /// Whether this node is on the principal variation.
@@ -1234,6 +1243,8 @@ pub fn alpha_beta<NT: NodeType>(
         && excluded.is_none()
         && tt_hit.is_some_and(|tte| tte.depth >= depth - 3 && tte.bound.is_lower());
 
+    let mut first_fail = false;
+
     while let Some(m) = move_picker.next(t) {
         if excluded == Some(m) {
             continue;
@@ -1402,6 +1413,18 @@ pub fn alpha_beta<NT: NodeType>(
             let new_depth = depth + extension - 1;
             score =
                 -alpha_beta::<NT::Next>(l_pv, t, new_depth, -beta, -alpha, !NT::PV && !cut_node);
+            if NT::PV {
+                FULLWINDOW_NODES.fetch_add(1, Relaxed);
+                PV_NODES.fetch_add(1, Relaxed);
+                if score >= beta {
+                    FIRSTCUT_NODES.fetch_add(1, Relaxed);
+                } else if score >= alpha {
+                    FIRSTMEET_NODES.fetch_add(1, Relaxed);
+                } else {
+                    FIRSTFAIL_NODES.fetch_add(1, Relaxed);
+                    first_fail = true;
+                }
+            }
         } else {
             // calculation of LMR stuff
             let r = if depth > 2 && moves_made > (1 + usize::from(NT::ROOT)) {
@@ -1542,6 +1565,14 @@ pub fn alpha_beta<NT: NodeType>(
     } else {
         Bound::Upper
     };
+
+    if first_fail {
+        if best_score >= beta {
+            FIRSTFAIL_CUT_NODES.fetch_add(1, Relaxed);
+        } else if best_score < original_alpha {
+            FIRSTFAIL_ALLFAIL_NODES.fetch_add(1, Relaxed);
+        }
+    }
 
     if alpha != original_alpha {
         // we raised alpha, so this is either a PV-node or a cut-node,

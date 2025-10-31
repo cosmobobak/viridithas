@@ -983,6 +983,36 @@ pub fn bench(
         println!("NNZ RATIO: {ratio:.2}%");
     }
 
+    // FULLWINDOW_NODES,PV_NODES,FIRSTCUT_NODES,FIRSTMEET_NODES,FIRSTFAIL_NODES,FIRSTFAIL_CUT_NODES,FIRSTFAIL_ALLFAIL_NODES
+    println!(
+        "FULLWINDOW_NODES: {}",
+        crate::search::FULLWINDOW_NODES.load(Ordering::Relaxed)
+    );
+    println!(
+        "PV_NODES: {}",
+        crate::search::PV_NODES.load(Ordering::Relaxed)
+    );
+    println!(
+        "FIRSTCUT_NODES: {}",
+        crate::search::FIRSTCUT_NODES.load(Ordering::Relaxed)
+    );
+    println!(
+        "FIRSTMEET_NODES: {}",
+        crate::search::FIRSTMEET_NODES.load(Ordering::Relaxed)
+    );
+    println!(
+        "FIRSTFAIL_NODES: {}",
+        crate::search::FIRSTFAIL_NODES.load(Ordering::Relaxed)
+    );
+    println!(
+        "FIRSTFAIL_CUT_NODES: {}",
+        crate::search::FIRSTFAIL_CUT_NODES.load(Ordering::Relaxed)
+    );
+    println!(
+        "FIRSTFAIL_ALLFAIL_NODES: {}",
+        crate::search::FIRSTFAIL_ALLFAIL_NODES.load(Ordering::Relaxed)
+    );
+
     Ok(())
 }
 
