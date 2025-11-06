@@ -654,18 +654,22 @@ pub fn quiescence<NT: NodeType>(
         }
         let is_tactical = t.board.is_tactical(m);
         let is_recapture = Some(m.to()) == t.ss[height - 1].searching.map(Move::to);
-        if best_score > -MINIMUM_TB_WIN_SCORE
-            && is_tactical
-            && !in_check
-            && !is_recapture
-            && futility <= alpha
-            && !is_decisive(futility)
-            && !static_exchange_eval(&t.board, &t.info.conf, m, 1)
-        {
-            if best_score < futility {
-                best_score = futility;
+        if best_score > -MINIMUM_TB_WIN_SCORE && !is_recapture {
+            if moves_made >= 2 {
+                break;
             }
-            continue;
+
+            if is_tactical
+                && !in_check
+                && futility <= alpha
+                && !is_decisive(futility)
+                && !static_exchange_eval(&t.board, &t.info.conf, m, 1)
+            {
+                if best_score < futility {
+                    best_score = futility;
+                }
+                continue;
+            }
         }
         t.ss[height].searching = Some(m);
         t.ss[height].searching_tactical = is_tactical;
