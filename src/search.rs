@@ -1063,14 +1063,21 @@ pub fn alpha_beta<NT: NodeType>(
         // reverse futility pruning, and child node futility pruning.
         // if the static eval is too high, we can prune the node.
         // this is a generalisation of stand_pat in quiescence search.
+        let rfp_margin = rfp_margin(&t.board, &t.info, depth, improving, correction);
         if !t.ss[height].ttpv
             && depth < 9
             && eval >= beta
-            && static_eval - rfp_margin(&t.board, &t.info, depth, improving, correction) >= beta
             && (tt_move.is_none() || tt_capture)
             && beta > -MINIMUM_TB_WIN_SCORE
         {
-            return beta + (static_eval - beta) / 3;
+            if static_eval - rfp_margin >= beta {
+                return beta + (static_eval - beta) / 3;
+            }
+
+            // not quite there, but almost:
+            if static_eval - (rfp_margin * 3 / 4 + 10) >= beta {
+                depth -= 1;
+            }
         }
 
         // null-move pruning.
