@@ -810,55 +810,47 @@ pub fn alpha_beta<NT: NodeType>(
 
     let excluded = t.ss[height].excluded;
     let tt_move;
-    let tt_hit = if excluded.is_none() {
-        if let Some(hit) = t.tt.probe(key, height, clock) {
-            let tt_move_legal = hit
-                .mov
-                .is_some_and(|m| t.board.is_pseudo_legal(m) && t.board.is_legal(m));
+    let tt_hit = if excluded.is_none()
+        && let Some(hit) = t.tt.probe(key, height, clock)
+    {
+        tt_move = hit
+            .mov
+            .filter(|&m| t.board.is_pseudo_legal(m) && t.board.is_legal(m));
 
-            if tt_move_legal {
-                tt_move = hit.mov;
-            } else {
-                tt_move = None;
-            }
-
-            if !NT::PV
-                && hit.value != VALUE_NONE
-                && hit.depth >= depth + i32::from(hit.value >= beta)
-                && clock < 80
-                && (hit.bound == Bound::Exact
-                    || (hit.bound == Bound::Lower && hit.value >= beta)
-                    || (hit.bound == Bound::Upper && hit.value <= alpha))
+        if !NT::PV
+            && hit.value != VALUE_NONE
+            && hit.depth >= depth + i32::from(hit.value >= beta)
+            && clock < 80
+            && (hit.bound == Bound::Exact
+                || (hit.bound == Bound::Lower && hit.value >= beta)
+                || (hit.bound == Bound::Upper && hit.value <= alpha))
+        {
+            // add to the history of a quiet move that fails high here.
+            if let Some(m) = tt_move
+                && hit.value >= beta
+                && !t.board.is_tactical(m)
             {
-                // add to the history of a quiet move that fails high here.
-                if let Some(mov) = tt_move
-                    && hit.value >= beta
-                    && !t.board.is_tactical(mov)
-                {
-                    let from = mov.from();
-                    let to = mov.history_to_square();
-                    let moved = t.board.state.mailbox[from].unwrap();
-                    let threats = t.board.state.threats.all;
-                    update_quiet_history_single::<false>(t, from, to, moved, threats, depth, true);
-                }
-
-                // only cut at high depth if the tt move is legal,
-                // or if it's absent and we're failing low.
-                if (tt_move_legal || hit.mov.is_none() && hit.bound == Bound::Upper)
-                    && !is_decisive(hit.value)
-                {
-                    return hit.value;
-                }
+                let from = m.from();
+                let to = m.history_to_square();
+                let moved = t.board.state.mailbox[from].unwrap();
+                let threats = t.board.state.threats.all;
+                update_quiet_history_single::<false>(t, from, to, moved, threats, depth, true);
             }
 
-            Some(hit)
-        } else {
-            tt_move = None;
-            None
+            // only cut at high depth if the tt move is legal,
+            // or if it's absent and we're failing low.
+            if (tt_move.is_some() || hit.mov.is_none() && hit.bound == Bound::Upper)
+                && !is_decisive(hit.value)
+            {
+                return hit.value;
+            }
         }
+
+        Some(hit)
     } else {
+        // do not probe the TT if we're in a singular-verification search.
         tt_move = None;
-        None // do not probe the TT if we're in a singular-verification search.
+        None
     };
 
     if excluded.is_none() {
