@@ -831,9 +831,8 @@ pub fn alpha_beta<NT: NodeType>(
                     || (hit.bound == Bound::Upper && hit.value <= alpha))
             {
                 // add to the history of a quiet move that fails high here.
-                if let Some(mov) = hit.mov
+                if let Some(mov) = tt_move
                     && hit.value >= beta
-                    && tt_move_legal
                     && !t.board.is_tactical(mov)
                 {
                     let from = mov.from();
@@ -845,7 +844,9 @@ pub fn alpha_beta<NT: NodeType>(
 
                 // only cut at high depth if the tt move is legal,
                 // or if it's absent and we're failing low.
-                if depth < 8 || tt_move_legal || hit.mov.is_none() && hit.bound == Bound::Upper {
+                if (tt_move_legal || hit.mov.is_none() && hit.bound == Bound::Upper)
+                    && !is_decisive(hit.value)
+                {
                     return hit.value;
                 }
             }
