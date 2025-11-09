@@ -40,8 +40,9 @@ impl ForcedMoveType {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Default)]
 pub enum SearchLimit {
+    #[default]
     Infinite,
     Depth(usize),
     Time(u64),
@@ -64,12 +65,6 @@ pub enum SearchLimit {
     Pondering {
         saved_limit: Box<SearchLimit>,
     },
-}
-
-impl Default for SearchLimit {
-    fn default() -> Self {
-        Self::Infinite
-    }
 }
 
 impl SearchLimit {
