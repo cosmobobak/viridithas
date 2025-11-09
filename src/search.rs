@@ -843,7 +843,9 @@ pub fn alpha_beta<NT: NodeType>(
                     update_quiet_history_single::<false>(t, from, to, moved, threats, depth, true);
                 }
 
-                if depth < 8 || tt_move_legal {
+                // only cut at high depth if the tt move is legal,
+                // or if it's absent and we're failing low.
+                if depth < 8 || tt_move_legal || hit.mov.is_none() && hit.bound == Bound::Upper {
                     return hit.value;
                 }
             }
