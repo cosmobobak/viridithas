@@ -809,8 +809,19 @@ pub fn alpha_beta<NT: NodeType>(
     let clock = t.board.fifty_move_counter();
 
     let excluded = t.ss[height].excluded;
+    let tt_move;
     let tt_hit = if excluded.is_none() {
         if let Some(hit) = t.tt.probe(key, height, clock) {
+            let tt_move_legal = hit
+                .mov
+                .is_some_and(|m| t.board.is_pseudo_legal(m) && t.board.is_legal(m));
+
+            if tt_move_legal {
+                tt_move = hit.mov;
+            } else {
+                tt_move = None;
+            }
+
             if !NT::PV
                 && hit.value != VALUE_NONE
                 && hit.depth >= depth + i32::from(hit.value >= beta)
@@ -819,30 +830,31 @@ pub fn alpha_beta<NT: NodeType>(
                     || (hit.bound == Bound::Lower && hit.value >= beta)
                     || (hit.bound == Bound::Upper && hit.value <= alpha))
             {
-                if let Some(mov) = hit.mov {
-                    // add to the history of a quiet move that fails high here.
-                    if hit.value >= beta
-                        && !t.board.is_tactical(mov)
-                        && t.board.is_pseudo_legal(mov)
-                    {
-                        let from = mov.from();
-                        let to = mov.history_to_square();
-                        let moved = t.board.state.mailbox[from].unwrap();
-                        let threats = t.board.state.threats.all;
-                        update_quiet_history_single::<false>(
-                            t, from, to, moved, threats, depth, true,
-                        );
-                    }
+                // add to the history of a quiet move that fails high here.
+                if let Some(mov) = hit.mov
+                    && hit.value >= beta
+                    && tt_move_legal
+                    && !t.board.is_tactical(mov)
+                {
+                    let from = mov.from();
+                    let to = mov.history_to_square();
+                    let moved = t.board.state.mailbox[from].unwrap();
+                    let threats = t.board.state.threats.all;
+                    update_quiet_history_single::<false>(t, from, to, moved, threats, depth, true);
                 }
 
-                return hit.value;
+                if depth < 8 || tt_move_legal {
+                    return hit.value;
+                }
             }
 
             Some(hit)
         } else {
+            tt_move = None;
             None
         }
     } else {
+        tt_move = None;
         None // do not probe the TT if we're in a singular-verification search.
     };
 
@@ -1027,8 +1039,7 @@ pub fn alpha_beta<NT: NodeType>(
     // clear out the next killer move.
     t.killer_move_table[height + 1] = None;
 
-    let tt_move = tt_hit.and_then(|hit| hit.mov);
-    let tt_capture = tt_move.is_some_and(|m| t.board.is_capture(m));
+    let tt_capture = tt_move.filter(|m| t.board.is_tactical(*m));
 
     // whole-node techniques:
     if !NT::ROOT && !NT::PV && !in_check && excluded.is_none() {
@@ -1067,7 +1078,7 @@ pub fn alpha_beta<NT: NodeType>(
             && depth < 9
             && eval >= beta
             && static_eval - rfp_margin(&t.board, &t.info, depth, improving, correction) >= beta
-            && (tt_move.is_none() || tt_capture)
+            && (tt_move.is_none() || tt_capture.is_some())
             && beta > -MINIMUM_TB_WIN_SCORE
         {
             return beta + (static_eval - beta) / 3;
@@ -1094,7 +1105,7 @@ pub fn alpha_beta<NT: NodeType>(
                     (static_eval - beta) / t.info.conf.nmp_reduction_eval_divisor,
                     4,
                 )
-                + i32::from(tt_capture);
+                + i32::from(tt_capture.is_some());
             let nm_depth = depth - r;
             t.ss[height].searching = None;
             t.ss[height].searching_tactical = false;
@@ -1171,8 +1182,7 @@ pub fn alpha_beta<NT: NodeType>(
         && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
     {
         let see_threshold = (pc_beta - static_eval) * t.info.conf.probcut_see_scale / 256;
-        let tt_move_if_capture = tt_move.filter(|m| t.board.is_tactical(*m));
-        let mut move_picker = MovePicker::new(tt_move_if_capture, None, see_threshold);
+        let mut move_picker = MovePicker::new(tt_capture, None, see_threshold);
         move_picker.skip_quiets = true;
         while let Some(m) = move_picker.next(t) {
             t.tt.prefetch(t.board.key_after(m));
@@ -1418,7 +1428,7 @@ pub fn alpha_beta<NT: NodeType>(
                 // reduce more if not improving
                 r += i32::from(!improving) * t.info.conf.lmr_non_improving_mul;
                 // reduce more if the move from the transposition table is tactical
-                r += i32::from(tt_capture) * t.info.conf.lmr_tt_capture_mul;
+                r += i32::from(tt_capture.is_some()) * t.info.conf.lmr_tt_capture_mul;
                 // reduce less if the move gives check
                 r -= i32::from(t.board.in_check()) * t.info.conf.lmr_check_mul;
                 // reduce less when the static eval is way off-base
