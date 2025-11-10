@@ -124,8 +124,8 @@ struct UnquantisedNetwork {
     l2f_weights:  [[f32; L3_SIZE]; L2_SIZE],
     l2x_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
     l2f_biases:    [f32; L3_SIZE],
-    l3x_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
-    l3f_weights:   [f32; L3_SIZE],
+    l3x_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE + L2_SIZE],
+    l3f_weights:   [f32; L3_SIZE + L2_SIZE],
     l3x_biases:    [f32; OUTPUT_BUCKETS],
     l3f_biases:    [f32; 1],
 }
@@ -140,7 +140,7 @@ struct MergedNetwork {
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
     l2_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
     l2_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
-    l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
+    l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE + L2_SIZE],
     l3_biases:    [f32; OUTPUT_BUCKETS],
 }
 
@@ -155,7 +155,7 @@ struct QuantisedNetwork {
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
     l2_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
     l2_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
-    l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
+    l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE + L2_SIZE],
     l3_biases:    [f32; OUTPUT_BUCKETS],
 }
 
@@ -170,7 +170,7 @@ pub struct NNUEParams {
     pub l1_bias:        [Align64<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
     pub l2_weights:     [Align64<[f32; L2_SIZE * L3_SIZE]>; OUTPUT_BUCKETS],
     pub l2_bias:        [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
-    pub l3_weights:     [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
+    pub l3_weights:     [Align64<[f32; L3_SIZE + L2_SIZE]>; OUTPUT_BUCKETS],
     pub l3_bias:        [f32; OUTPUT_BUCKETS],
 }
 
@@ -306,7 +306,7 @@ impl UnquantisedNetwork {
             }
         }
         // copy the L3 weights
-        for i in 0..L3_SIZE {
+        for i in 0..L3_SIZE + L2_SIZE {
             for bucket in 0..OUTPUT_BUCKETS {
                 net.l3_weights[i][bucket] = self.l3x_weights[i][bucket] + self.l3f_weights[i];
             }
@@ -598,7 +598,7 @@ impl QuantisedNetwork {
             }
 
             // transfer the L3 weights
-            for i in 0..L3_SIZE {
+            for i in 0..L3_SIZE + L2_SIZE {
                 net.l3_weights[bucket][i] = self.l3_weights[i][bucket];
             }
 
@@ -1483,8 +1483,11 @@ impl NNUEState {
             &nn.l2_bias[out],
             &mut l2_outputs,
         );
+        let mut combined = Align64([0.0; L3_SIZE + L2_SIZE]);
+        combined[..L3_SIZE].copy_from_slice(&*l2_outputs);
+        combined[L3_SIZE..].copy_from_slice(&*l1_outputs);
         layers::propagate_l3(
-            &l2_outputs,
+            &combined,
             &nn.l3_weights[out],
             nn.l3_bias[out],
             &mut l3_output,

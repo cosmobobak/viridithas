@@ -513,8 +513,8 @@ mod simd {
     }
 
     pub fn propagate_l3(
-        inputs: &Align64<[f32; L3_SIZE]>,
-        weights: &Align64<[f32; L3_SIZE]>,
+        inputs: &Align64<[f32; L3_SIZE + L2_SIZE]>,
+        weights: &Align64<[f32; L3_SIZE + L2_SIZE]>,
         bias: f32,
         output: &mut f32,
     ) {
@@ -531,7 +531,7 @@ mod simd {
             let mut sum_vecs = [simd::zero_f32(); NUM_SUMS];
 
             // affine transform
-            for i in 0..L3_SIZE / F32_CHUNK {
+            for i in 0..(L3_SIZE + L2_SIZE) / F32_CHUNK {
                 let act = simd::load_f32(inputs.as_ptr().add(i * F32_CHUNK));
                 let weight = simd::load_f32(weights.as_ptr().add(i * F32_CHUNK));
                 sum_vecs[i % NUM_SUMS] = simd::madd_f32(act, weight, sum_vecs[i % NUM_SUMS]);
