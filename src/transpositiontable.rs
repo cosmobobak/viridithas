@@ -362,18 +362,29 @@ impl TTView<'_> {
             best_move = tte.m;
         }
 
-        // preferentially overwrite entries that are from searches on previous positions in the game.
-        let old = (MAX_AGE + tt_age - i32::from(tte.info.age())) & AGE_MASK != 0;
+        // give entries a bonus for type:
+        // exact = 3, lower = 2, upper = 1
+        let insert_flag_bonus = i32::from(flag);
+        let record_flag_bonus = i32::from(tte.info.flag());
 
-        // compute values for each entry
-        let inbound_value = depth + i32::from(flag) + 8 * i32::from(old) + 2 * i32::from(pv) + 1;
-        let current_value = i32::from(tte.depth) + i32::from(tte.info.flag());
+        // preferentially overwrite entries that are from searches on previous positions in the game.
+        let age_differential = (MAX_AGE + tt_age - i32::from(tte.info.age())) & AGE_MASK;
+
+        // we use quadratic scaling of the age to allow entries that aren't too old to be kept,
+        // but to ensure that *really* old entries are overwritten even if they are of high depth.
+        let insert_priority =
+            depth + insert_flag_bonus + (age_differential * age_differential) / 4 + i32::from(pv);
+        let record_prority = i32::from(tte.depth) + record_flag_bonus;
 
         // replace the entry:
-        // 1. if the entry is for a different position
-        // 2. if it's an exact entry
-        // 3. if the new entry is of higher priority than the old entry
-        if tte.key != key || flag == Bound::Exact || inbound_value >= current_value {
+        // 1. unconditionally if we're in the root node (holdover from TT-pv probing)
+        // 2. if the entry is for a different position
+        // 3. if it's an exact entry, and the old entry is not exact
+        // 4. if the new entry is of higher priority than the old entry
+        if tte.key != key
+            || flag == Bound::Exact && tte.info.flag() != Bound::Exact
+            || insert_priority * 3 >= record_prority * 2
+        {
             let write = TTEntry {
                 key,
                 m: best_move,
