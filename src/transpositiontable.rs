@@ -396,9 +396,7 @@ impl TTView<'_> {
 
         let cluster = self.table[index].load();
 
-        for i in 0..CLUSTER_SIZE {
-            let entry = cluster.entries[i];
-
+        for entry in cluster.entries {
             if entry.key != key {
                 continue;
             }
