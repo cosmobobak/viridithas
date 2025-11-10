@@ -813,9 +813,11 @@ pub fn alpha_beta<NT: NodeType>(
     let tt_hit = if excluded.is_none()
         && let Some(hit) = t.tt.probe(key, height, clock)
     {
-        tt_move = hit
+        let illegal = hit
             .mov
-            .filter(|&m| t.board.is_pseudo_legal(m) && t.board.is_legal(m));
+            .is_some_and(|m| !t.board.is_pseudo_legal(m) || !t.board.is_legal(m));
+
+        tt_move = hit.mov.filter(|_| !illegal);
 
         if !NT::PV
             && hit.value != VALUE_NONE
@@ -839,14 +841,12 @@ pub fn alpha_beta<NT: NodeType>(
 
             // only cut at high depth if the tt move is legal,
             // or if it's absent and we're failing low.
-            if (tt_move.is_some() || hit.mov.is_none() && hit.bound == Bound::Upper)
-                && !is_decisive(hit.value)
-            {
+            if !illegal && !is_decisive(hit.value) {
                 return hit.value;
             }
         }
 
-        Some(hit)
+        if illegal { None } else { Some(hit) }
     } else {
         // do not probe the TT if we're in a singular-verification search.
         tt_move = None;
