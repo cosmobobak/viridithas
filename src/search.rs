@@ -809,7 +809,6 @@ pub fn alpha_beta<NT: NodeType>(
     let clock = t.board.fifty_move_counter();
 
     let excluded = t.ss[height].excluded;
-    let tt_move;
     let tt_hit = if excluded.is_none()
         && let Some(hit) = t.tt.probe(key, height, clock)
     {
@@ -817,9 +816,8 @@ pub fn alpha_beta<NT: NodeType>(
             .mov
             .is_some_and(|m| !t.board.is_pseudo_legal(m) || !t.board.is_legal(m));
 
-        tt_move = hit.mov.filter(|_| !illegal);
-
         if !NT::PV
+            && !illegal
             && hit.value != VALUE_NONE
             && hit.depth >= depth + i32::from(hit.value >= beta)
             && clock < 80
@@ -828,7 +826,7 @@ pub fn alpha_beta<NT: NodeType>(
                 || (hit.bound == Bound::Upper && hit.value <= alpha))
         {
             // add to the history of a quiet move that fails high here.
-            if let Some(m) = tt_move
+            if let Some(m) = hit.mov
                 && hit.value >= beta
                 && !t.board.is_tactical(m)
             {
@@ -839,9 +837,7 @@ pub fn alpha_beta<NT: NodeType>(
                 update_quiet_history_single::<false>(t, from, to, moved, threats, depth, true);
             }
 
-            // only cut at high depth if the tt move is legal,
-            // or if it's absent and we're failing low.
-            if !illegal && !is_decisive(hit.value) {
+            if !is_decisive(hit.value) {
                 return hit.value;
             }
         }
@@ -849,7 +845,6 @@ pub fn alpha_beta<NT: NodeType>(
         if illegal { None } else { Some(hit) }
     } else {
         // do not probe the TT if we're in a singular-verification search.
-        tt_move = None;
         None
     };
 
@@ -1034,6 +1029,7 @@ pub fn alpha_beta<NT: NodeType>(
     // clear out the next killer move.
     t.killer_move_table[height + 1] = None;
 
+    let tt_move = tt_hit.and_then(|e| e.mov);
     let tt_capture = tt_move.filter(|m| t.board.is_tactical(*m));
 
     // whole-node techniques:
