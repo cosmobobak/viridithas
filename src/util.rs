@@ -58,10 +58,6 @@ impl<'a> BatchedAtomicCounter<'a> {
         self.local = 0;
     }
 
-    pub const fn just_ticked_over(&self) -> bool {
-        self.buffer == 0
-    }
-
     pub fn flush(&mut self) {
         self.global.fetch_add(self.buffer, Ordering::Relaxed);
         self.local += self.buffer;

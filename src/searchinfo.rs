@@ -110,7 +110,7 @@ impl<'a> SearchInfo<'a> {
     }
 
     pub fn check_up(&mut self) -> bool {
-        let already_stopped = self.stopped.load(Ordering::SeqCst);
+        let already_stopped = self.stopped.load(Ordering::Relaxed);
         if already_stopped {
             return true;
         }
@@ -125,9 +125,9 @@ impl<'a> SearchInfo<'a> {
                 self.clock.start();
                 return self.clock.check_up(self.stopped, self.nodes.get_global());
             }
-            self.stopped.store(true, Ordering::SeqCst);
+            self.stopped.store(true, Ordering::Relaxed);
             if cmd == "quit" {
-                uci::QUIT.store(true, Ordering::SeqCst);
+                uci::QUIT.store(true, Ordering::Relaxed);
             }
             true
         } else {

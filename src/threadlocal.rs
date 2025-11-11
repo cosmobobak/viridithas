@@ -49,6 +49,8 @@ pub struct ThreadData<'a> {
     /// the draft we're actually kicking off searches at
     pub depth: i32,
 
+    pub clock_countdown: u32,
+
     pub stm_at_root: Colour,
     pub optimism: [i32; 2],
 
@@ -97,6 +99,7 @@ impl<'a> ThreadData<'a> {
             iteration: 0,
             completed: 0,
             depth: 0,
+            clock_countdown: 0,
             stm_at_root: board.turn(),
             optimism: [0; 2],
             tt,
@@ -149,6 +152,7 @@ impl<'a> ThreadData<'a> {
         self.killer_move_table.fill(None);
         self.depth = 0;
         self.completed = 0;
+        self.clock_countdown = 0;
         self.pvs.fill(Self::ARRAY_REPEAT_VALUE);
     }
 
@@ -156,6 +160,7 @@ impl<'a> ThreadData<'a> {
         self.killer_move_table.fill(None);
         self.depth = 0;
         self.completed = 0;
+        self.clock_countdown = 0;
         self.pvs.fill(Self::ARRAY_REPEAT_VALUE);
         self.nnue.reinit_from(&self.board, self.nnue_params);
         self.stm_at_root = self.board.turn();

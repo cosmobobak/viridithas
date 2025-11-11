@@ -560,8 +560,13 @@ pub fn quiescence<NT: NodeType>(
     #[cfg(debug_assertions)]
     t.board.check_validity().unwrap();
 
-    if t.info.nodes.just_ticked_over() && t.info.check_up() {
-        return 0;
+    if t.clock_countdown == 0 {
+        if t.info.check_up() {
+            return 0;
+        }
+        t.clock_countdown = 512;
+    } else {
+        t.clock_countdown -= 1;
     }
 
     let key = t.board.state.keys.zobrist ^ HM_CLOCK_KEYS[t.board.state.fifty_move_counter as usize];
@@ -787,20 +792,25 @@ pub fn alpha_beta<NT: NodeType>(
     #[cfg(debug_assertions)]
     t.board.check_validity().unwrap();
 
+    if depth <= 0 {
+        return quiescence::<NT::Next>(pv, t, alpha, beta);
+    }
+
+    if t.clock_countdown == 0 {
+        if t.info.check_up() {
+            return 0;
+        }
+        t.clock_countdown = 512;
+    } else {
+        t.clock_countdown -= 1;
+    }
+
     let mut local_pv = PVariation::default();
     let l_pv = &mut local_pv;
 
     let key = t.board.state.keys.zobrist ^ HM_CLOCK_KEYS[t.board.state.fifty_move_counter as usize];
 
-    if depth <= 0 {
-        return quiescence::<NT::Next>(pv, t, alpha, beta);
-    }
-
     pv.moves.clear();
-
-    if t.info.nodes.just_ticked_over() && t.info.check_up() {
-        return 0;
-    }
 
     let height = t.board.height();
 
