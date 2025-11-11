@@ -90,6 +90,7 @@ impl<'a> SearchInfo<'a> {
         self.stopped.store(false, Ordering::SeqCst);
         self.nodes.reset();
         self.tbhits.reset();
+        self.seldepth = 0;
         for rmnc in self.root_move_nodes.iter_mut().flatten() {
             *rmnc = 0;
         }
