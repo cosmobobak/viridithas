@@ -495,7 +495,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
     }
 }
 
-fn die_if_flagged(t: &ThreadData<'_>) {
+fn die_if_flagged(t: &mut ThreadData<'_>) {
     // if we've used more than the clock, die.
     if let crate::timemgmt::SearchLimit::Dynamic { our_clock, .. } = t.info.clock.limit()
         && t.info.clock.elapsed() >= std::time::Duration::from_millis(*our_clock)
@@ -511,6 +511,10 @@ fn die_if_flagged(t: &ThreadData<'_>) {
         writeln!(info, "completed: {}", t.completed).unwrap();
         writeln!(info, "depth: {}", t.depth).unwrap();
         writeln!(info, "seldepth: {}", t.info.seldepth).unwrap();
+        writeln!(info).unwrap();
+        for tm in &t.tm_stack {
+            writeln!(info, "{tm}").unwrap();
+        }
 
         let pid = std::process::id();
         let rid = format!("{:X}", t.board.state.keys.zobrist);
@@ -518,6 +522,8 @@ fn die_if_flagged(t: &ThreadData<'_>) {
         std::fs::write(format!("/home/cosmo/log/timeout-{pid}-{rid}.txt"), info).unwrap();
 
         panic!("flagged!");
+    } else if let crate::timemgmt::SearchLimit::Dynamic { .. } = t.info.clock.limit() {
+        t.tm_stack.push(format!("{:?}", t.info.clock));
     }
 }
 
