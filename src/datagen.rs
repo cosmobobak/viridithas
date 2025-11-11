@@ -434,6 +434,7 @@ fn generate_on_thread<'a>(
     tts[Colour::Black].resize(4 * MEGABYTE, from_ref(&worker_thread));
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
+    let tbhits = AtomicU64::new(0);
     let mut thread_data = std::array::from_fn::<_, 2, _>(|colour| {
         make_thread_data(
             &Board::default(),
@@ -441,6 +442,7 @@ fn generate_on_thread<'a>(
             nnue_params,
             &stopped,
             &nodes,
+            &tbhits,
             from_ref(&worker_thread),
         )
         .unwrap()

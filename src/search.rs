@@ -3,10 +3,7 @@
 pub mod parameters;
 pub mod pv;
 
-use std::{
-    sync::atomic::{AtomicU64, Ordering},
-    thread,
-};
+use std::{sync::atomic::Ordering, thread};
 
 use arrayvec::ArrayVec;
 
@@ -24,8 +21,8 @@ use crate::{
         types::{ContHistIndex, Square},
     },
     evaluation::{
-        MATE_SCORE, MINIMUM_TB_WIN_SCORE, evaluate, is_decisive, mate_in, mated_in, see_value,
-        tb_loss_in, tb_win_in,
+        MATE_SCORE, MINIMUM_TB_WIN_SCORE, evaluate, is_decisive, is_mate_score, mate_in, mated_in,
+        see_value, tb_loss_in, tb_win_in,
     },
     history::caphist_piece_type,
     historytable::{
@@ -140,8 +137,6 @@ const HINDSIGHT_RED_EVAL: i32 = 141;
 const OPTIMISM_OFFSET: i32 = 189;
 const OPTIMISM_MATERIAL_BASE: i32 = 2320;
 
-static TB_HITS: AtomicU64 = AtomicU64::new(0);
-
 pub trait NodeType {
     /// Whether this node is on the principal variation.
     const PV: bool;
@@ -204,7 +199,6 @@ pub fn search_position(
         t.info.set_up_for_search();
         t.set_up_for_search();
     }
-    TB_HITS.store(0, Ordering::Relaxed);
 
     let legal_moves = thread_headers[0].board.legal_moves();
     if legal_moves.is_empty() {
@@ -229,7 +223,8 @@ pub fn search_position(
         let pv = &mut thread_headers[0].pvs[1];
         pv.load_from(best_move, &PVariation::default());
         pv.score = score;
-        TB_HITS.store(1, Ordering::SeqCst);
+        thread_headers[0].info.tbhits.increment();
+        thread_headers[0].info.tbhits.flush();
         thread_headers[0].completed = 1;
         readout_info(
             &thread_headers[0],
@@ -837,7 +832,7 @@ pub fn alpha_beta<NT: NodeType>(
                 update_quiet_history_single::<false>(t, from, to, moved, threats, depth, true);
             }
 
-            if !is_decisive(hit.value) {
+            if !is_mate_score(hit.value) {
                 return hit.value;
             }
         }
@@ -857,14 +852,16 @@ pub fn alpha_beta<NT: NodeType>(
     let cardinality = u32::from(tablebases::probe::get_max_pieces_count());
     let n_men = t.board.state.bbs.occupied().count();
     if !NT::ROOT
-            && excluded.is_none() // do not probe the tablebases if we're in a singular-verification search.
-            && uci::SYZYGY_ENABLED.load(Ordering::SeqCst)
-            && (depth >= uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst)
-                || n_men < cardinality)
-            && n_men <= cardinality
+        && excluded.is_none()
+        && n_men <= cardinality
+        && uci::SYZYGY_ENABLED.load(Ordering::SeqCst)
+        && (depth >= uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst) || n_men < cardinality)
         && let Some(wdl) = tablebases::probe::get_wdl(&t.board)
     {
-        TB_HITS.fetch_add(1, Ordering::Relaxed);
+        t.info.tbhits.increment();
+
+        // force timemgmt checking soon:
+        t.info.nodes.flush();
 
         let tb_value = match wdl {
             WDL::Win => tb_win_in(height),
@@ -882,6 +879,7 @@ pub fn alpha_beta<NT: NodeType>(
             || (tb_bound == Bound::Lower && tb_value >= beta)
             || (tb_bound == Bound::Upper && tb_value <= alpha)
         {
+            #[expect(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
             t.tt.store(
                 key,
                 height,
@@ -889,7 +887,7 @@ pub fn alpha_beta<NT: NodeType>(
                 tb_value,
                 VALUE_NONE,
                 tb_bound,
-                depth,
+                i32::min(MAX_DEPTH as i32 - 1, depth + 6),
                 t.ss[height].ttpv,
             );
             return tb_value;
@@ -1925,7 +1923,7 @@ fn readout_info(
             info.clock.elapsed().as_millis(),
             sstr = uci::format_score(pv.score),
             hashfull = tt.hashfull(),
-            tbhits = TB_HITS.load(Ordering::SeqCst),
+            tbhits = t.info.tbhits.get_global(),
             wdl = uci::format_wdl(pv.score, board.ply()),
         );
     } else {
