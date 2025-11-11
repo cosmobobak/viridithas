@@ -96,33 +96,33 @@ impl SearchLimit {
         our_inc: u64,
         conf: &Config,
     ) -> (u64, u64, u64) {
-        // The very highest amount of time we are
-        // willing to search in a position, ever.
-        let max_time = (our_clock * 95 / 100).saturating_sub(MOVE_OVERHEAD);
+        // The absolute maximum time we could spend without losing on the clock:
+        let absolute_maximum = our_clock.saturating_sub(MOVE_OVERHEAD);
 
         // The maximum time we can spend searching before forcibly stopping:
-        let hard_time_window = (our_clock * u64::from(conf.hard_window_frac) / 100).min(max_time);
+        let hard_time_window =
+            (our_clock * u64::from(conf.hard_window_frac) / 100).min(absolute_maximum);
 
         // If we have a moves to go, we can use that to compute a time window.
         if let Some(moves_to_go) = moves_to_go {
             // Use more time if we have fewer moves to go, but not more than default_moves_to_go.
             let divisor = moves_to_go.clamp(2, u64::from(conf.default_moves_to_go));
             let computed_time_window = our_clock / divisor;
-            let optimal_time_window =
-                computed_time_window.min(max_time) * u64::from(conf.optimal_window_frac) / 100;
-            return (optimal_time_window, hard_time_window, max_time);
+            let optimal_time_window = computed_time_window.min(absolute_maximum)
+                * u64::from(conf.optimal_window_frac)
+                / 100;
+            return (optimal_time_window, hard_time_window, absolute_maximum);
         }
 
         // Otherwise, we use default_moves_to_go.
         let computed_time_window = our_clock / u64::from(conf.default_moves_to_go)
             + our_inc * u64::from(conf.increment_frac) / 100
             - MOVE_OVERHEAD;
-
-        let optimal_time_window =
-            (computed_time_window.min(max_time) * u64::from(conf.optimal_window_frac) / 100)
-                .min(hard_time_window);
-
-        (optimal_time_window, hard_time_window, max_time)
+        let optimal_time_window = (computed_time_window.min(absolute_maximum)
+            * u64::from(conf.optimal_window_frac)
+            / 100)
+            .min(hard_time_window);
+        (optimal_time_window, hard_time_window, absolute_maximum)
     }
 
     #[cfg(test)]
