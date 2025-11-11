@@ -81,7 +81,8 @@ pub fn update_history(val: &mut i16, delta: i32) {
     gravity_update::<MAX_HISTORY>(val, i32::from(*val), delta);
 }
 
-pub fn update_correction(val: &mut i16, curr: i32, delta: i32) {
+pub fn update_correction(val: &mut i16, sum: i32, delta: i32) {
+    let curr = i32::midpoint(i32::from(*val), sum);
     gravity_update::<CORRECTION_HISTORY_MAX>(val, curr, delta);
 }
 
