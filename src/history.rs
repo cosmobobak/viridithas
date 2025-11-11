@@ -152,10 +152,6 @@ impl ThreadData<'_> {
             CORRECTION_HISTORY_MAX / 4,
         );
 
-        let update = |entry: &mut i16| {
-            update_correction(entry, bonus);
-        };
-
         let keys = &self.board.state.keys;
 
         let pawn = self.pawn_corrhist.get_mut(us, keys.pawn);
@@ -164,6 +160,17 @@ impl ThreadData<'_> {
         let nonpawn_black = nonpawn_black.get_mut(us, keys.non_pawn[Black]);
         let minor = self.minor_corrhist.get_mut(us, keys.minor);
         let major = self.major_corrhist.get_mut(us, keys.major);
+
+        let mut sum = 0;
+        sum += i32::from(*pawn);
+        sum += i32::from(*nonpawn_white);
+        sum += i32::from(*nonpawn_black);
+        sum += i32::from(*minor);
+        sum += i32::from(*major);
+
+        let update = move |entry: &mut i16| {
+            update_correction(entry, sum, bonus);
+        };
 
         update(pawn);
         update(nonpawn_white);

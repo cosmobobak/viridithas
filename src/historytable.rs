@@ -78,16 +78,15 @@ pub const CORRECTION_HISTORY_SIZE: usize = 16_384;
 pub const CORRECTION_HISTORY_MAX: i32 = 1024;
 
 pub fn update_history(val: &mut i16, delta: i32) {
-    gravity_update::<MAX_HISTORY>(val, delta);
+    gravity_update::<MAX_HISTORY>(val, i32::from(*val), delta);
 }
 
-pub fn update_correction(val: &mut i16, delta: i32) {
-    gravity_update::<CORRECTION_HISTORY_MAX>(val, delta);
+pub fn update_correction(val: &mut i16, curr: i32, delta: i32) {
+    gravity_update::<CORRECTION_HISTORY_MAX>(val, curr, delta);
 }
 
-fn gravity_update<const MAX: i32>(val: &mut i16, delta: i32) {
+fn gravity_update<const MAX: i32>(val: &mut i16, curr: i32, delta: i32) {
     #![allow(clippy::cast_possible_truncation)]
-    let curr = i32::from(*val);
     *val += delta as i16 - (curr * delta.abs() / MAX) as i16;
 }
 
