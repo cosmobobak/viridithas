@@ -167,6 +167,13 @@ impl ThreadData<'_> {
         sum += i32::from(*nonpawn_black);
         sum += i32::from(*minor);
         sum += i32::from(*major);
+        if height > 2 {
+            let ch1 = self.ss[height - 1].ch_idx;
+            let ch2 = self.ss[height - 2].ch_idx;
+            let pt1 = ch1.piece.piece_type();
+            let pt2 = ch2.piece.piece_type();
+            sum += i32::from(self.continuation_corrhist[ch1.to][pt1][ch2.to][pt2][us]);
+        }
 
         let update = move |entry: &mut i16| {
             update_correction(entry, sum, bonus);
