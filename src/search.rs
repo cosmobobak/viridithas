@@ -347,6 +347,17 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
     let starting_depth = 1 + t.thread_id % 10;
     let mut average_value = VALUE_NONE;
     'deepening: for iteration in starting_depth..=max_depth {
+        if ThTy::MAIN_THREAD {
+            let timemgmt_debug_repr = format!("{:?}", t.info.clock);
+            // prepend each line with "info string "
+            let timemgmt_debug_repr = timemgmt_debug_repr
+                .lines()
+                .map(|line| format!("info string {line}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            println!("{timemgmt_debug_repr}");
+        }
+
         t.iteration = iteration;
         t.depth = i32::try_from(iteration).unwrap();
         t.optimism = [0; 2];
@@ -480,6 +491,18 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
             {
                 t.info.stopped.store(true, Ordering::SeqCst);
                 break 'deepening;
+            }
+
+            // if we've used more than the clock, die.
+            if let SearchLimit::Dynamic { our_clock, .. } = t.info.clock.limit()
+                && t.info.clock.elapsed() >= std::time::Duration::from_millis(*our_clock)
+            {
+                panic!(
+                    "time limit exceeded:\nused {:?}, limit {:?}\ntime manager state: {:?}",
+                    t.info.clock.elapsed(),
+                    our_clock,
+                    t.info.clock
+                );
             }
         }
     }
