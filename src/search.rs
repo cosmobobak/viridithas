@@ -489,8 +489,13 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
                         || t.info.clock.mate_found_breaker(pv.score)))
             {
                 t.info.stopped.store(true, Ordering::SeqCst);
+                die_if_flagged(t);
                 break 'deepening;
             }
+        }
+
+        if iteration == max_depth {
+            die_if_flagged(t);
         }
     }
 }
