@@ -495,17 +495,29 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
     }
 }
 
-fn die_if_flagged(t: &mut ThreadData<'_>) {
+fn die_if_flagged(t: &ThreadData<'_>) {
     // if we've used more than the clock, die.
     if let crate::timemgmt::SearchLimit::Dynamic { our_clock, .. } = t.info.clock.limit()
         && t.info.clock.elapsed() >= std::time::Duration::from_millis(*our_clock)
     {
-        panic!(
-            "time limit exceeded:\nused {:?}, limit {:?}\ntime manager state: {:?}",
-            t.info.clock.elapsed(),
-            our_clock,
-            t.info.clock
-        );
+        use std::fmt::Write;
+
+        let mut info = String::new();
+        writeln!(info, "flagged!").unwrap();
+        writeln!(info, "used {:?}", t.info.clock.elapsed()).unwrap();
+        writeln!(info, "limit {our_clock:?}").unwrap();
+        writeln!(info, "time manager state: {:?}", t.info.clock).unwrap();
+        writeln!(info, "board: {}", t.board).unwrap();
+        writeln!(info, "completed: {}", t.completed).unwrap();
+        writeln!(info, "depth: {}", t.depth).unwrap();
+        writeln!(info, "seldepth: {}", t.info.seldepth).unwrap();
+
+        let pid = std::process::id();
+        let rid = format!("{:X}", t.board.state.keys.zobrist);
+
+        std::fs::write(format!("/home/cosmo/log/timeout-{pid}-{rid}.txt"), info).unwrap();
+
+        panic!("flagged!");
     }
 }
 
