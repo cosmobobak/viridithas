@@ -70,6 +70,7 @@ impl<'a> ThreadData<'a> {
         nnue_params: &'static NNUEParams,
         stopped: &'a AtomicBool,
         nodes: &'a AtomicU64,
+        tbhits: &'a AtomicU64,
     ) -> Self {
         let mut td = Self {
             ss: array::from_fn(|_| StackEntry::default()),
@@ -98,7 +99,7 @@ impl<'a> ThreadData<'a> {
             optimism: [0; 2],
             tt,
             board,
-            info: SearchInfo::new(stopped, nodes),
+            info: SearchInfo::new(stopped, nodes, tbhits),
         };
 
         td.clear_tables();
@@ -181,6 +182,7 @@ pub fn make_thread_data<'a>(
     nnue_params: &'static NNUEParams,
     stopped: &'a AtomicBool,
     nodes: &'a AtomicU64,
+    tbhits: &'a AtomicU64,
     worker_threads: &[threadpool::WorkerThread],
 ) -> anyhow::Result<Vec<Box<ThreadData<'a>>>> {
     std::thread::scope(|s| -> anyhow::Result<Vec<Box<ThreadData>>> {
@@ -199,6 +201,7 @@ pub fn make_thread_data<'a>(
                             nnue_params,
                             stopped,
                             nodes,
+                            tbhits,
                         )))
                         .unwrap();
                     },

@@ -623,12 +623,14 @@ pub fn main_loop() -> anyhow::Result<()> {
     let stdin = Mutex::new(stdin);
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
+    let tbhits = AtomicU64::new(0);
     let mut thread_data = make_thread_data(
         &Board::default(),
         tt.view(),
         nnue_params,
         &stopped,
         &nodes,
+        &tbhits,
         &worker_threads,
     )?;
     thread_data[0].info.set_stdin(&stdin);
@@ -778,6 +780,7 @@ pub fn main_loop() -> anyhow::Result<()> {
                             nnue_params,
                             &stopped,
                             &nodes,
+                            &tbhits,
                             &worker_threads,
                         )?;
 
@@ -891,6 +894,7 @@ pub fn bench(
     let bench_string = format!("go depth {}\n", depth.unwrap_or(BENCH_DEPTH));
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
+    let tbhits = AtomicU64::new(0);
     let pool = threadpool::make_worker_threads(BENCH_THREADS);
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE, &pool);
@@ -900,6 +904,7 @@ pub fn bench(
         nnue_params,
         &stopped,
         &nodes,
+        &tbhits,
         &pool,
     )?;
     thread_data[0].info.conf = search_params.clone();
@@ -993,6 +998,7 @@ pub fn go_benchmark(nnue_params: &'static NNUEParams) -> anyhow::Result<()> {
     const THREADS: usize = 250;
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
+    let tbhits = AtomicU64::new(0);
     let pool = threadpool::make_worker_threads(THREADS);
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE, &pool);
@@ -1002,6 +1008,7 @@ pub fn go_benchmark(nnue_params: &'static NNUEParams) -> anyhow::Result<()> {
         nnue_params,
         &stopped,
         &nodes,
+        &tbhits,
         &pool,
     )?;
     thread_data[0].info.print_to_stdout = false;
