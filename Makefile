@@ -25,7 +25,7 @@ V3NAME := $(LXE)-$(VERSION)-$(INF)-x86_64-v3$(EXT)
 V4NAME := $(LXE)-$(VERSION)-$(INF)-x86_64-v4$(EXT)
 
 openbench:
-	cargo rustc --release -- -C target-cpu=native --emit link=$(NAME)
+	cargo rustc --release --features syzygy,bindgen -- -C target-cpu=native --emit link=$(NAME)
 
 tmp-dir:
 	mkdir $(TMPDIR)
@@ -51,5 +51,5 @@ x86-64-datagen x86-64-v2-datagen x86-64-v3-datagen x86-64-v4-datagen native-data
 	$(RMFILE) *.pdb
 
 bench:
-	cargo rustc --release -- -C target-cpu=native --features syzygy,bindgen --emit link=$(NAME)
+	cargo rustc --release -- -C target-cpu=native --emit link=$(NAME)
 	target/release/$(NAME) bench
