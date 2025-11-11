@@ -491,7 +491,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
             }
 
             // if we've used more than the clock, die.
-            if let SearchLimit::Dynamic { our_clock, .. } = t.info.clock.limit()
+            if let crate::timemgmt::SearchLimit::Dynamic { our_clock, .. } = t.info.clock.limit()
                 && t.info.clock.elapsed() >= std::time::Duration::from_millis(*our_clock)
             {
                 panic!(
