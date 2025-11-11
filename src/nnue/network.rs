@@ -53,7 +53,7 @@ pub const L1_SIZE: usize = 256;
 /// The size of the second layer of the network.
 pub const L2_SIZE: usize = 16;
 /// The size of the third layer of the network.
-pub const L3_SIZE: usize = 32;
+pub const L3_SIZE: usize = 64;
 /// The quantisation factor for the feature transformer weights.
 const QA: i16 = 255;
 /// The quantisation factor for the L1 weights.
