@@ -385,6 +385,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
             let root_draft = (t.depth - reduction).max(min_depth);
             pv.score = alpha_beta::<Root>(&mut pv, t, root_draft, alpha, beta, false);
             if t.info.check_up() {
+                die_if_flagged(t);
                 break 'deepening; // we've been told to stop searching.
             }
 
@@ -474,6 +475,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
         }
 
         if t.info.check_up() {
+            die_if_flagged(t);
             break 'deepening;
         }
 
@@ -489,19 +491,21 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
                 t.info.stopped.store(true, Ordering::SeqCst);
                 break 'deepening;
             }
-
-            // if we've used more than the clock, die.
-            if let crate::timemgmt::SearchLimit::Dynamic { our_clock, .. } = t.info.clock.limit()
-                && t.info.clock.elapsed() >= std::time::Duration::from_millis(*our_clock)
-            {
-                panic!(
-                    "time limit exceeded:\nused {:?}, limit {:?}\ntime manager state: {:?}",
-                    t.info.clock.elapsed(),
-                    our_clock,
-                    t.info.clock
-                );
-            }
         }
+    }
+}
+
+fn die_if_flagged(t: &mut ThreadData<'_>) {
+    // if we've used more than the clock, die.
+    if let crate::timemgmt::SearchLimit::Dynamic { our_clock, .. } = t.info.clock.limit()
+        && t.info.clock.elapsed() >= std::time::Duration::from_millis(*our_clock)
+    {
+        panic!(
+            "time limit exceeded:\nused {:?}, limit {:?}\ntime manager state: {:?}",
+            t.info.clock.elapsed(),
+            our_clock,
+            t.info.clock
+        );
     }
 }
 
