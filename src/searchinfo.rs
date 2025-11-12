@@ -140,7 +140,7 @@ impl<'a> SearchInfo<'a> {
     }
 
     pub fn stopped(&self) -> bool {
-        self.stopped.load(Ordering::SeqCst)
+        self.stopped.load(Ordering::Relaxed)
     }
 
     #[cfg(feature = "stats")]

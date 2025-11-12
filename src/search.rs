@@ -250,6 +250,15 @@ pub fn search_position(
 
     // start search threads:
     let (t1, rest) = thread_headers.split_first_mut().unwrap();
+
+    for t in &*rest {
+        // assert that all threads are looking at the same stop flag:
+        assert_eq!(
+            std::ptr::from_ref(global_stopped).addr(),
+            std::ptr::from_ref(t.info.stopped).addr(),
+        );
+    }
+
     let (w1, rest_workers) = pool.split_first().unwrap();
     thread::scope(|s| {
         let mut handles = Vec::with_capacity(pool.len());
@@ -830,8 +839,8 @@ pub fn alpha_beta<NT: NodeType>(
     let in_check = t.board.in_check();
 
     if !NT::ROOT {
-        // check draw
-        if t.board.is_draw() {
+        // check stopped / draw
+        if t.info.stopped() || t.board.is_draw() {
             return draw_score(t, t.info.nodes.get_local(), t.board.turn());
         }
 
