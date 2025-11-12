@@ -247,7 +247,7 @@ mod simd {
         them: &Align64<[i16; L1_SIZE]>,
         weights: &Align64<[i8; L1_SIZE * L2_SIZE]>,
         biases: &Align64<[f32; L2_SIZE]>,
-        output: &mut Align64<[f32; L2_SIZE]>,
+        output: &mut Align64<[f32; L2_SIZE * 2]>,
     ) {
         const L1_PAIR_COUNT: usize = L1_SIZE / 2;
         const NNZ_INPUT_SIMD_WIDTH: usize =
@@ -378,7 +378,7 @@ mod simd {
         nnz_slice: &[u16],
         weights: &Align64<[i8; L1_SIZE * L2_SIZE]>,
         biases: &Align64<[f32; L2_SIZE]>,
-        output: &mut Align64<[f32; L2_SIZE]>,
+        output: &mut Align64<[f32; L2_SIZE * 2]>,
     ) {
         // SAFETY: Breaking it down by unsafe operations:
         // 1. get_unchecked[_mut] / .as[_mut]_ptr().add(): We only ever index at most
@@ -453,7 +453,7 @@ mod simd {
                 }
             }
 
-            // squared clipped ReLU activation
+            // activation
             let zero = simd::zero_f32();
             let one = simd::splat_f32(1.0);
             let sum_mul = simd::splat_f32(L1_MUL);
@@ -462,20 +462,24 @@ mod simd {
                 let bias = simd::load_f32(biases.as_ptr().add(i * F32_CHUNK));
                 let unscaled = simd::i32_to_f32(simd::load_i32(sums.as_ptr().add(i * F32_CHUNK)));
                 let preact = simd::madd_f32(unscaled, sum_mul, bias);
-                // activate
+                // activate screlu
                 let clipped = simd::min_f32(simd::max_f32(preact, zero), one);
                 let squared = simd::mul_f32(clipped, clipped);
                 simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK), squared);
+                // activate clipped square
+                let squared = simd::mul_f32(preact, preact);
+                let clipped = simd::min_f32(squared, one);
+                simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK + L2_SIZE), clipped);
             }
         }
     }
 
     #[allow(clippy::needless_range_loop, clippy::cast_ptr_alignment)]
     pub fn propagate_l2(
-        inputs: &Align64<[f32; L2_SIZE]>,
-        weights: &Align64<[f32; L2_SIZE * L3_SIZE]>,
+        inputs: &Align64<[f32; L2_SIZE * 2]>,
+        weights: &Align64<[f32; L2_SIZE * 2 * L3_SIZE]>,
         biases: &Align64<[f32; L3_SIZE]>,
-        output: &mut Align64<[f32; L3_SIZE]>,
+        output: &mut Align64<[f32; L3_SIZE * 2]>,
     ) {
         // SAFETY: Breaking it down by unsafe operations:
         // 1. get_unchecked[_mut] / .as[_mut]_ptr().add(): We only ever index at most (L3_SIZE / F32_CHUNK - 1) * F32_CHUNK
@@ -490,7 +494,7 @@ mod simd {
             let mut sums = biases.clone();
 
             // affine transform
-            for i in 0..L2_SIZE {
+            for i in 0..L2_SIZE * 2 {
                 let activation = simd::splat_f32(*inputs.get_unchecked(i));
                 for j in 0..L3_SIZE / F32_CHUNK {
                     let acc = simd::load_f32(sums.as_ptr().add(j * F32_CHUNK));
@@ -500,7 +504,7 @@ mod simd {
                 }
             }
 
-            // squared clipped ReLU activation
+            // activation
             let zero = simd::zero_f32();
             let one = simd::splat_f32(1.0);
             for i in 0..L3_SIZE / F32_CHUNK {
@@ -508,13 +512,16 @@ mod simd {
                 let clipped = simd::min_f32(simd::max_f32(acc, zero), one);
                 let squared = simd::mul_f32(clipped, clipped);
                 simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK), squared);
+                let squared = simd::mul_f32(acc, acc);
+                let clipped = simd::min_f32(squared, one);
+                simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK + L3_SIZE), clipped);
             }
         }
     }
 
     pub fn propagate_l3(
-        inputs: &Align64<[f32; L3_SIZE]>,
-        weights: &Align64<[f32; L3_SIZE]>,
+        inputs: &Align64<[f32; L3_SIZE * 2]>,
+        weights: &Align64<[f32; L3_SIZE * 2]>,
         bias: f32,
         output: &mut f32,
     ) {
@@ -531,7 +538,7 @@ mod simd {
             let mut sum_vecs = [simd::zero_f32(); NUM_SUMS];
 
             // affine transform
-            for i in 0..L3_SIZE / F32_CHUNK {
+            for i in 0..L3_SIZE * 2 / F32_CHUNK {
                 let act = simd::load_f32(inputs.as_ptr().add(i * F32_CHUNK));
                 let weight = simd::load_f32(weights.as_ptr().add(i * F32_CHUNK));
                 sum_vecs[i % NUM_SUMS] = simd::madd_f32(act, weight, sum_vecs[i % NUM_SUMS]);

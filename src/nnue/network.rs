@@ -120,12 +120,12 @@ struct UnquantisedNetwork {
     // l1f_weights:  [[f32; L2_SIZE]; L1_SIZE],
     l1x_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
     // l1f_biases:    [f32; L2_SIZE],
-    l2x_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
-    l2f_weights:  [[f32; L3_SIZE]; L2_SIZE],
+    l2x_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE * 2],
+    l2f_weights:  [[f32; L3_SIZE]; L2_SIZE * 2],
     l2x_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
     l2f_biases:    [f32; L3_SIZE],
-    l3x_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
-    l3f_weights:   [f32; L3_SIZE],
+    l3x_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE * 2],
+    l3f_weights:   [f32; L3_SIZE * 2],
     l3x_biases:    [f32; OUTPUT_BUCKETS],
     l3f_biases:    [f32; 1],
 }
@@ -138,9 +138,9 @@ struct MergedNetwork {
     ft_biases:    [f32; L1_SIZE],
     l1_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
-    l2_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
+    l2_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE * 2],
     l2_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
-    l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
+    l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE * 2],
     l3_biases:    [f32; OUTPUT_BUCKETS],
 }
 
@@ -153,9 +153,9 @@ struct QuantisedNetwork {
     ft_biases:    [i16; L1_SIZE],
     l1_weights: [[[ i8; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
-    l2_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
+    l2_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE * 2],
     l2_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
-    l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
+    l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE * 2],
     l3_biases:    [f32; OUTPUT_BUCKETS],
 }
 
@@ -168,9 +168,9 @@ pub struct NNUEParams {
     pub feature_bias:    Align64<[i16; L1_SIZE]>,
     pub l1_weights:     [Align64<[ i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
     pub l1_bias:        [Align64<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
-    pub l2_weights:     [Align64<[f32; L2_SIZE * L3_SIZE]>; OUTPUT_BUCKETS],
+    pub l2_weights:     [Align64<[f32; L2_SIZE * 2 * L3_SIZE]>; OUTPUT_BUCKETS],
     pub l2_bias:        [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
-    pub l3_weights:     [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
+    pub l3_weights:     [Align64<[f32; L3_SIZE * 2]>; OUTPUT_BUCKETS],
     pub l3_bias:        [f32; OUTPUT_BUCKETS],
 }
 
@@ -291,7 +291,7 @@ impl UnquantisedNetwork {
             }
         }
         // copy the L2 weights
-        for i in 0..L2_SIZE {
+        for i in 0..L2_SIZE * 2 {
             for bucket in 0..OUTPUT_BUCKETS {
                 for j in 0..L3_SIZE {
                     net.l2_weights[i][bucket][j] =
@@ -306,7 +306,7 @@ impl UnquantisedNetwork {
             }
         }
         // copy the L3 weights
-        for i in 0..L3_SIZE {
+        for i in 0..L3_SIZE * 2 {
             for bucket in 0..OUTPUT_BUCKETS {
                 net.l3_weights[i][bucket] = self.l3x_weights[i][bucket] + self.l3f_weights[i];
             }
@@ -586,7 +586,7 @@ impl QuantisedNetwork {
             }
 
             // transpose the L2 weights
-            for i in 0..L2_SIZE {
+            for i in 0..L2_SIZE * 2 {
                 for j in 0..L3_SIZE {
                     net.l2_weights[bucket][i * L3_SIZE + j] = self.l2_weights[i][bucket][j];
                 }
@@ -598,7 +598,7 @@ impl QuantisedNetwork {
             }
 
             // transfer the L3 weights
-            for i in 0..L3_SIZE {
+            for i in 0..L3_SIZE * 2 {
                 net.l3_weights[bucket][i] = self.l3_weights[i][bucket];
             }
 
@@ -1466,8 +1466,8 @@ impl NNUEState {
             (&acc.black, &acc.white)
         };
 
-        let mut l1_outputs = Align64([0.0; L2_SIZE]);
-        let mut l2_outputs = Align64([0.0; L3_SIZE]);
+        let mut l1_outputs = Align64([0.0; L2_SIZE * 2]);
+        let mut l2_outputs = Align64([0.0; L3_SIZE * 2]);
         let mut l3_output = 0.0;
 
         layers::activate_ft_and_propagate_l1(
