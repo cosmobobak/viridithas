@@ -287,6 +287,8 @@ pub fn search_position(
         "time taken to halt all threads: {:?}",
         sent_stop.unwrap().elapsed()
     ));
+    t1.trace
+        .push(format!("runtime: {:?}", t1.info.clock.elapsed()));
 
     let best_thread = select_best(thread_headers);
     let pv = best_thread.pv();
@@ -544,6 +546,7 @@ fn die_if_flagged(t: &mut ThreadData<'_>) {
         panic!("flagged!");
     } else if let crate::timemgmt::SearchLimit::Dynamic { .. } = t.info.clock.limit() {
         t.trace.push(format!("{:?}", t.info.clock));
+        t.trace.push(format!("used {:?}", t.info.clock.elapsed()));
     }
 }
 
