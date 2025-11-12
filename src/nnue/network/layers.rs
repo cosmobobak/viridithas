@@ -131,6 +131,8 @@ mod generic {
             // As such, the indices that we construct are valid.
             unsafe {
                 let preact = *sums.get_unchecked(i);
+                let preact = f32::clamp(preact, 0.0, 1.0);
+                let preact = preact * preact;
                 let clipped = f32::clamp(preact, 0.0, 1.0);
                 *output.get_unchecked_mut(i) = clipped * clipped;
                 *output.get_unchecked_mut(i + L3_SIZE) = (preact * preact).min(1.0);
