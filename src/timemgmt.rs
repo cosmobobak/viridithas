@@ -97,7 +97,7 @@ impl SearchLimit {
         conf: &Config,
     ) -> (u64, u64, u64) {
         // The absolute maximum time we could spend without losing on the clock:
-        let absolute_maximum = our_clock.saturating_sub(MOVE_OVERHEAD);
+        let absolute_maximum = (our_clock / 2).saturating_sub(MOVE_OVERHEAD);
 
         // The maximum time we can spend searching before forcibly stopping:
         let hard_time_window =
