@@ -259,7 +259,6 @@ pub fn search_position(
         );
     }
 
-    let mut sent_stop = None;
     let (w1, rest_workers) = pool.split_first().unwrap();
     thread::scope(|s| {
         let mut handles = Vec::with_capacity(pool.len());
@@ -267,7 +266,6 @@ pub fn search_position(
             || {
                 iterative_deepening::<MainThread>(t1);
                 global_stopped.store(true, Ordering::SeqCst);
-                sent_stop = Some(std::time::Instant::now());
             },
             w1,
         ));
@@ -283,12 +281,6 @@ pub fn search_position(
             handle.join();
         }
     });
-    t1.trace.push(format!(
-        "time taken to halt all threads: {:?}",
-        sent_stop.unwrap().elapsed()
-    ));
-    t1.trace
-        .push(format!("runtime: {:?}", t1.info.clock.elapsed()));
 
     let best_thread = select_best(thread_headers);
     let pv = best_thread.pv();
@@ -402,7 +394,6 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
             let root_draft = (t.depth - reduction).max(min_depth);
             pv.score = alpha_beta::<Root>(&mut pv, t, root_draft, alpha, beta, false);
             if t.info.check_up() {
-                die_if_flagged(t);
                 break 'deepening; // we've been told to stop searching.
             }
 
@@ -492,7 +483,6 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
         }
 
         if t.info.check_up() {
-            die_if_flagged(t);
             break 'deepening;
         }
 
@@ -506,47 +496,9 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
                         || t.info.clock.mate_found_breaker(pv.score)))
             {
                 t.info.stopped.store(true, Ordering::SeqCst);
-                die_if_flagged(t);
                 break 'deepening;
             }
         }
-
-        if iteration == max_depth {
-            die_if_flagged(t);
-        }
-    }
-}
-
-fn die_if_flagged(t: &mut ThreadData<'_>) {
-    // if we've used more than the clock, die.
-    if let crate::timemgmt::SearchLimit::Dynamic { our_clock, .. } = t.info.clock.limit()
-        && t.info.clock.elapsed() >= std::time::Duration::from_millis(*our_clock)
-    {
-        use std::fmt::Write;
-
-        let mut info = String::new();
-        writeln!(info, "flagged!").unwrap();
-        writeln!(info, "used {:?}", t.info.clock.elapsed()).unwrap();
-        writeln!(info, "limit {our_clock:?}").unwrap();
-        writeln!(info, "time manager state: {:?}", t.info.clock).unwrap();
-        writeln!(info, "board: {}", t.board).unwrap();
-        writeln!(info, "completed: {}", t.completed).unwrap();
-        writeln!(info, "depth: {}", t.depth).unwrap();
-        writeln!(info, "seldepth: {}", t.info.seldepth).unwrap();
-        writeln!(info).unwrap();
-        for tm in &t.trace {
-            writeln!(info, "{tm}").unwrap();
-        }
-
-        let pid = std::process::id();
-        let rid = format!("{:X}", t.board.state.keys.zobrist);
-
-        std::fs::write(format!("/home/cosmo/log/timeout-{pid}-{rid}.txt"), info).unwrap();
-
-        panic!("flagged!");
-    } else if let crate::timemgmt::SearchLimit::Dynamic { .. } = t.info.clock.limit() {
-        t.trace.push(format!("{:?}", t.info.clock));
-        t.trace.push(format!("used {:?}", t.info.clock.elapsed()));
     }
 }
 

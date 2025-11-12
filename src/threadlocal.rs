@@ -58,8 +58,6 @@ pub struct ThreadData<'a> {
 
     pub board: Board,
     pub info: SearchInfo<'a>,
-
-    pub trace: Vec<String>,
 }
 
 impl<'a> ThreadData<'a> {
@@ -105,7 +103,6 @@ impl<'a> ThreadData<'a> {
             tt,
             board,
             info: SearchInfo::new(stopped, nodes, tbhits),
-            trace: Vec::new(),
         };
 
         td.clear_tables();
