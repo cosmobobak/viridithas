@@ -354,16 +354,16 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
     let starting_depth = 1 + t.thread_id % 10;
     let mut average_value = VALUE_NONE;
     'deepening: for iteration in starting_depth..=max_depth {
-        if ThTy::MAIN_THREAD {
-            let timemgmt_debug_repr = format!("{:?}", t.info.clock);
-            // prepend each line with "info string "
-            let timemgmt_debug_repr = timemgmt_debug_repr
-                .lines()
-                .map(|line| format!("info string {line}"))
-                .collect::<Vec<_>>()
-                .join("\n");
-            println!("{timemgmt_debug_repr}");
-        }
+        // if ThTy::MAIN_THREAD {
+        //     let timemgmt_debug_repr = format!("{:?}", t.info.clock);
+        //     // prepend each line with "info string "
+        //     let timemgmt_debug_repr = timemgmt_debug_repr
+        //         .lines()
+        //         .map(|line| format!("info string {line}"))
+        //         .collect::<Vec<_>>()
+        //         .join("\n");
+        //     println!("{timemgmt_debug_repr}");
+        // }
 
         t.iteration = iteration;
         t.depth = i32::try_from(iteration).unwrap();
