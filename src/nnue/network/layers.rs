@@ -131,8 +131,6 @@ mod generic {
             // As such, the indices that we construct are valid.
             unsafe {
                 let preact = *sums.get_unchecked(i);
-                let preact = f32::clamp(preact, 0.0, 1.0);
-                let preact = preact * preact;
                 let clipped = f32::clamp(preact, 0.0, 1.0);
                 *output.get_unchecked_mut(i) = clipped * clipped;
                 *output.get_unchecked_mut(i + L3_SIZE) = (preact * preact).min(1.0);
@@ -512,8 +510,6 @@ mod simd {
             let one = simd::splat_f32(1.0);
             for i in 0..L3_SIZE / F32_CHUNK {
                 let acc = simd::load_f32(sums.as_ptr().add(i * F32_CHUNK));
-                let clipped = simd::min_f32(simd::max_f32(acc, zero), one);
-                let acc = simd::mul_f32(clipped, clipped);
                 let clipped = simd::min_f32(simd::max_f32(acc, zero), one);
                 let squared = simd::mul_f32(clipped, clipped);
                 simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK), squared);
