@@ -259,6 +259,7 @@ pub fn search_position(
         );
     }
 
+    let mut sent_stop = None;
     let (w1, rest_workers) = pool.split_first().unwrap();
     thread::scope(|s| {
         let mut handles = Vec::with_capacity(pool.len());
@@ -266,6 +267,7 @@ pub fn search_position(
             || {
                 iterative_deepening::<MainThread>(t1);
                 global_stopped.store(true, Ordering::SeqCst);
+                sent_stop = Some(std::time::Instant::now());
             },
             w1,
         ));
@@ -281,6 +283,10 @@ pub fn search_position(
             handle.join();
         }
     });
+    t1.trace.push(format!(
+        "time taken to halt all threads: {:?}",
+        sent_stop.unwrap().elapsed()
+    ));
 
     let best_thread = select_best(thread_headers);
     let pv = best_thread.pv();
@@ -526,7 +532,7 @@ fn die_if_flagged(t: &mut ThreadData<'_>) {
         writeln!(info, "depth: {}", t.depth).unwrap();
         writeln!(info, "seldepth: {}", t.info.seldepth).unwrap();
         writeln!(info).unwrap();
-        for tm in &t.tm_stack {
+        for tm in &t.trace {
             writeln!(info, "{tm}").unwrap();
         }
 
@@ -537,7 +543,7 @@ fn die_if_flagged(t: &mut ThreadData<'_>) {
 
         panic!("flagged!");
     } else if let crate::timemgmt::SearchLimit::Dynamic { .. } = t.info.clock.limit() {
-        t.tm_stack.push(format!("{:?}", t.info.clock));
+        t.trace.push(format!("{:?}", t.info.clock));
     }
 }
 
@@ -742,6 +748,10 @@ pub fn quiescence<NT: NodeType>(
         let score = -quiescence::<NT::Next>(l_pv, t, -beta, -alpha);
 
         t.board.unmake_move(&mut t.nnue);
+
+        if t.info.stopped() {
+            return 0;
+        }
 
         if score > best_score {
             best_score = score;
@@ -1264,6 +1274,10 @@ pub fn alpha_beta<NT: NodeType>(
             }
 
             t.board.unmake_move(&mut t.nnue);
+
+            if t.info.stopped() {
+                return 0;
+            }
 
             if value >= pc_beta {
                 t.tt.store(
