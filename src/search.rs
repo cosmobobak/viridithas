@@ -36,6 +36,7 @@ use crate::{
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
     threadpool::{self, ScopeExt},
+    timemgmt::SearchLimit,
     transpositiontable::{Bound, TTHit},
     uci,
     util::{INFINITY, MAX_DEPTH, VALUE_NONE},
@@ -272,6 +273,7 @@ pub fn search_position(
         for (t, w) in rest.iter_mut().zip(rest_workers) {
             handles.push(s.spawn_into(
                 || {
+                    assert!(matches!(t.info.clock.limit(), SearchLimit::Infinite));
                     iterative_deepening::<HelperThread>(t);
                 },
                 w,
@@ -443,7 +445,8 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
 
             if let Some(margin) = t.info.clock.check_for_forced_move(t.depth) {
                 let saved_seldepth = t.info.seldepth;
-                let forced = is_forced(margin, t, best_move, score, (t.depth - 1) / 2);
+                let forced =
+                    is_forced(margin, t, best_move, score, i32::min(12, (t.depth - 1) / 2));
                 t.info.seldepth = saved_seldepth;
 
                 if forced {
