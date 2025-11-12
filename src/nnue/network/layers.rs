@@ -16,7 +16,7 @@ pub static NNZ_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::Atomic
 #[cfg(feature = "nnz-counts")]
 pub static NNZ_DENOM: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
-#[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
+// #[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
 mod generic {
     use super::{
         super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA},
@@ -54,7 +54,7 @@ mod generic {
         inputs: &Align64<[u8; L1_SIZE]>,
         weights: &Align64<[i8; L1_SIZE * L2_SIZE]>,
         biases: &Align64<[f32; L2_SIZE]>,
-        output: &mut Align64<[f32; L2_SIZE]>,
+        output: &mut Align64<[f32; L2_SIZE * 2]>,
     ) {
         // this is just autovec'd for the moment.
         let mut sums = [0; L2_SIZE];
@@ -79,12 +79,11 @@ mod generic {
             // SAFETY: `sums` is `L2_SIZE` long, and `output` is `L2_SIZE` long.
             // As such, the indices that we construct are valid.
             unsafe {
-                let clipped = f32::clamp(
-                    (*sums.get_unchecked(i) as f32).mul_add(L1_MUL, *biases.get_unchecked(i)),
-                    0.0,
-                    1.0,
-                );
+                let preact =
+                    (*sums.get_unchecked(i) as f32).mul_add(L1_MUL, *biases.get_unchecked(i));
+                let clipped = f32::clamp(preact, 0.0, 1.0);
                 *output.get_unchecked_mut(i) = clipped * clipped;
+                *output.get_unchecked_mut(i + L2_SIZE) = (preact * preact).min(1.0);
             }
         }
     }
@@ -94,7 +93,7 @@ mod generic {
         them: &Align64<[i16; L1_SIZE]>,
         weights: &Align64<[i8; L1_SIZE * L2_SIZE]>,
         biases: &Align64<[f32; L2_SIZE]>,
-        output: &mut Align64<[f32; L2_SIZE]>,
+        output: &mut Align64<[f32; L2_SIZE * 2]>,
     ) {
         let mut ft_outputs = Align64([0; L1_SIZE]);
         activate_ft(us, them, &mut ft_outputs);
@@ -103,16 +102,16 @@ mod generic {
 
     #[allow(clippy::needless_range_loop)]
     pub fn propagate_l2(
-        inputs: &Align64<[f32; L2_SIZE]>,
-        weights: &Align64<[f32; L2_SIZE * L3_SIZE]>,
+        inputs: &Align64<[f32; L2_SIZE * 2]>,
+        weights: &Align64<[f32; L2_SIZE * 2 * L3_SIZE]>,
         biases: &Align64<[f32; L3_SIZE]>,
-        output: &mut Align64<[f32; L3_SIZE]>,
+        output: &mut Align64<[f32; L3_SIZE * 2]>,
     ) {
         // this is just autovec'd for the moment.
         let mut sums = biases.clone();
 
         // affine transform for l2
-        for i in 0..L2_SIZE {
+        for i in 0..L2_SIZE * 2 {
             // SAFETY: `sums` is `L3_SIZE` long, `inputs` is `L2_SIZE` long,
             // and `weights` is `L2_SIZE * L3_SIZE` long. As such, the
             // indices that we construct are valid.
@@ -131,15 +130,17 @@ mod generic {
             // SAFETY: `sums` is `L3_SIZE` long, and `output` is `L3_SIZE` long.
             // As such, the indices that we construct are valid.
             unsafe {
-                let clipped = f32::clamp(*sums.get_unchecked(i), 0.0, 1.0);
+                let preact = *sums.get_unchecked(i);
+                let clipped = f32::clamp(preact, 0.0, 1.0);
                 *output.get_unchecked_mut(i) = clipped * clipped;
+                *output.get_unchecked_mut(i + L3_SIZE) = (preact * preact).min(1.0);
             }
         }
     }
 
     pub fn propagate_l3(
-        inputs: &Align64<[f32; L3_SIZE]>,
-        weights: &Align64<[f32; L3_SIZE]>,
+        inputs: &Align64<[f32; L3_SIZE * 2]>,
+        weights: &Align64<[f32; L3_SIZE * 2]>,
         bias: f32,
         output: &mut f32,
     ) {
@@ -170,7 +171,7 @@ mod generic {
     }
 }
 
-#[cfg(any(target_arch = "x86_64", target_feature = "neon"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "neon"))]
 mod simd {
     use crate::{
         nnue::{
@@ -549,10 +550,10 @@ mod simd {
     }
 }
 
-#[cfg(any(target_arch = "x86_64", target_feature = "neon"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "neon"))]
 pub use simd::*;
 
-#[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
+// #[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
 pub use generic::*;
 
 use super::{QA, QB};
