@@ -16,7 +16,7 @@ pub static NNZ_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::Atomic
 #[cfg(feature = "nnz-counts")]
 pub static NNZ_DENOM: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
-// #[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
+#[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
 mod generic {
     use super::{
         super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA},
@@ -173,7 +173,7 @@ mod generic {
     }
 }
 
-#[cfg(all(target_arch = "x86_64", target_feature = "neon"))]
+#[cfg(any(target_arch = "x86_64", target_feature = "neon"))]
 mod simd {
     use crate::{
         nnue::{
@@ -513,6 +513,8 @@ mod simd {
             for i in 0..L3_SIZE / F32_CHUNK {
                 let acc = simd::load_f32(sums.as_ptr().add(i * F32_CHUNK));
                 let clipped = simd::min_f32(simd::max_f32(acc, zero), one);
+                let acc = simd::mul_f32(clipped, clipped);
+                let clipped = simd::min_f32(simd::max_f32(acc, zero), one);
                 let squared = simd::mul_f32(clipped, clipped);
                 simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK), squared);
                 let squared = simd::mul_f32(acc, acc);
@@ -552,10 +554,10 @@ mod simd {
     }
 }
 
-#[cfg(all(target_arch = "x86_64", target_feature = "neon"))]
+#[cfg(any(target_arch = "x86_64", target_feature = "neon"))]
 pub use simd::*;
 
-// #[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
+#[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
 pub use generic::*;
 
 use super::{QA, QB};
