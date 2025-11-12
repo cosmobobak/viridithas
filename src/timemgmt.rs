@@ -238,12 +238,12 @@ impl TimeManager {
     pub fn check_up(&self, stopped: &AtomicBool, nodes_so_far: u64) -> bool {
         match self.limit {
             SearchLimit::Depth(_) | SearchLimit::Mate { .. } | SearchLimit::Infinite => {
-                stopped.load(Ordering::SeqCst)
+                stopped.load(Ordering::Relaxed)
             }
             SearchLimit::Nodes(nodes) => {
                 let past_limit = nodes_so_far >= nodes;
                 if past_limit {
-                    stopped.store(true, Ordering::SeqCst);
+                    stopped.store(true, Ordering::Relaxed);
                 }
                 past_limit
             }
@@ -254,14 +254,14 @@ impl TimeManager {
                 let elapsed_millis = elapsed.as_millis() as u64;
                 let past_limit = elapsed_millis >= millis;
                 if past_limit {
-                    stopped.store(true, Ordering::SeqCst);
+                    stopped.store(true, Ordering::Relaxed);
                 }
                 past_limit
             }
             SearchLimit::Dynamic { .. } => {
                 let past_limit = self.time_since_start() >= self.hard_time;
                 if past_limit {
-                    stopped.store(true, Ordering::SeqCst);
+                    stopped.store(true, Ordering::Relaxed);
                 }
                 past_limit
             }
@@ -270,7 +270,7 @@ impl TimeManager {
                 // this should never *really* return true, but we do this in case of search explosions.
                 let past_limit = nodes_so_far >= hard_limit;
                 if past_limit {
-                    stopped.store(true, Ordering::SeqCst);
+                    stopped.store(true, Ordering::Relaxed);
                 }
                 past_limit
             }

@@ -54,7 +54,7 @@ pub fn get_max_pieces_count() -> u8 {
     #![allow(clippy::cast_possible_truncation)]
     #[cfg(feature = "syzygy")]
     {
-        let user_limit = uci::SYZYGY_PROBE_LIMIT.load(std::sync::atomic::Ordering::SeqCst);
+        let user_limit = uci::SYZYGY_PROBE_LIMIT.load(std::sync::atomic::Ordering::Relaxed);
         // SAFETY: Not much.
         let hard_limit = unsafe { TB_LARGEST as u8 };
         std::cmp::min(user_limit, hard_limit)

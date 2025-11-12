@@ -16,7 +16,6 @@ use crate::chess::board::movegen::MAX_POSITION_MOVES;
 
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug)]
-#[repr(align(64))] // these get stuck in a vec and each thread accesses its own index
 pub struct SearchInfo<'a> {
     /// The number of nodes searched.
     pub nodes: BatchedAtomicCounter<'a>,
@@ -82,12 +81,12 @@ impl<'a> SearchInfo<'a> {
             #[cfg(feature = "stats")]
             qfailhigh_index: [0; MAX_POSITION_MOVES],
         };
-        assert!(!out.stopped.load(Ordering::SeqCst));
+        assert!(!out.stopped.load(Ordering::Relaxed));
         out
     }
 
     pub fn set_up_for_search(&mut self) {
-        self.stopped.store(false, Ordering::SeqCst);
+        self.stopped.store(false, Ordering::Relaxed);
         self.nodes.reset();
         self.tbhits.reset();
         self.seldepth = 0;

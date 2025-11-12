@@ -404,7 +404,7 @@ impl Board {
     }
 
     pub fn set_startpos(&mut self) {
-        let starting_fen = if CHESS960.load(Ordering::SeqCst) {
+        let starting_fen = if CHESS960.load(Ordering::Relaxed) {
             Self::STARTING_FEN_960
         } else {
             Self::STARTING_FEN
@@ -453,7 +453,7 @@ impl Board {
         match castling_part {
             None => bail!("FEN string is invalid, expected castling part."),
             Some(b"-") => self.state.castle_perm = CastlingRights::default(),
-            Some(castling) if !CHESS960.load(Ordering::SeqCst) => {
+            Some(castling) if !CHESS960.load(Ordering::Relaxed) => {
                 for &c in castling {
                     match c {
                         b'K' => self.state.castle_perm.set_kingside(Colour::White, File::H),

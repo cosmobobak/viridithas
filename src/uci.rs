@@ -231,7 +231,7 @@ fn parse_go(text: &str, stm: Colour) -> anyhow::Result<SearchLimit> {
             "mate" => {
                 let mate_distance: usize = part_parse("mate", parts.next())?;
                 let ply = mate_distance * 2; // gives padding when we're giving mate, but whatever
-                GO_MATE_MAX_DEPTH.store(ply, Ordering::SeqCst);
+                GO_MATE_MAX_DEPTH.store(ply, Ordering::Relaxed);
                 limit = SearchLimit::Mate { ply };
             }
             "nodes" => nodes = Some(part_parse("nodes", parts.next())?),
@@ -240,7 +240,7 @@ fn parse_go(text: &str, stm: Colour) -> anyhow::Result<SearchLimit> {
         }
     }
     if !matches!(limit, SearchLimit::Mate { .. }) {
-        GO_MATE_MAX_DEPTH.store(MAX_DEPTH, Ordering::SeqCst);
+        GO_MATE_MAX_DEPTH.store(MAX_DEPTH, Ordering::Relaxed);
     }
 
     if let Some(movetime) = movetime {
@@ -377,14 +377,14 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> anyhow::Result<SetOpti
         }
         "PrettyPrint" => {
             let value: bool = opt_value.parse()?;
-            PRETTY_PRINT.store(value, Ordering::SeqCst);
+            PRETTY_PRINT.store(value, Ordering::Relaxed);
         }
         "SyzygyPath" => {
             let path = opt_value.to_string();
             tablebases::probe::init(&path);
             if let Ok(mut lock) = SYZYGY_PATH.lock() {
                 *lock = path;
-                SYZYGY_ENABLED.store(true, Ordering::SeqCst);
+                SYZYGY_ENABLED.store(true, Ordering::Relaxed);
             } else {
                 bail!(UciError::InternalError(
                     "failed to take lock on SyzygyPath".into()
@@ -398,7 +398,7 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> anyhow::Result<SetOpti
                     "SyzygyProbeLimit value must be between 0 and 6".to_string()
                 ));
             }
-            SYZYGY_PROBE_LIMIT.store(value, Ordering::SeqCst);
+            SYZYGY_PROBE_LIMIT.store(value, Ordering::Relaxed);
         }
         "SyzygyProbeDepth" => {
             let value: i32 = opt_value.parse()?;
@@ -407,7 +407,7 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> anyhow::Result<SetOpti
                     "SyzygyProbeDepth value must be between 0 and 100".to_string()
                 ));
             }
-            SYZYGY_PROBE_DEPTH.store(value, Ordering::SeqCst);
+            SYZYGY_PROBE_DEPTH.store(value, Ordering::Relaxed);
         }
         "Contempt" => {
             let value: i32 = opt_value.parse()?;
@@ -416,11 +416,11 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> anyhow::Result<SetOpti
                     "Contempt value must be between -10000 and 10000".to_string()
                 ));
             }
-            CONTEMPT.store(value, Ordering::SeqCst);
+            CONTEMPT.store(value, Ordering::Relaxed);
         }
         "UCI_Chess960" => {
             let val = opt_value.parse()?;
-            CHESS960.store(val, Ordering::SeqCst);
+            CHESS960.store(val, Ordering::Relaxed);
         }
         _ => {
             eprintln!("info string ignoring option {opt_name}, type \"uci\" for a list of options");
@@ -449,7 +449,7 @@ fn stdin_reader_worker(sender: mpsc::Sender<String>) -> anyhow::Result<()> {
             sender
                 .send("quit".into())
                 .with_context(|| "couldn't send quit command to main thread")?;
-            QUIT.store(true, Ordering::SeqCst);
+            QUIT.store(true, Ordering::Relaxed);
             break;
         }
         let cmd = linebuf.trim();
@@ -460,7 +460,7 @@ fn stdin_reader_worker(sender: mpsc::Sender<String>) -> anyhow::Result<()> {
         if let Err(e) = sender.send(cmd.to_owned()) {
             bail!("info string error sending command to main thread: {e}");
         }
-        if !STDIN_READER_THREAD_KEEP_RUNNING.load(atomic::Ordering::SeqCst) {
+        if !STDIN_READER_THREAD_KEEP_RUNNING.load(atomic::Ordering::Relaxed) {
             break;
         }
         linebuf.clear();
@@ -655,19 +655,19 @@ pub fn main_loop() -> anyhow::Result<()> {
                 print_uci_response(&thread_data[0].info, true);
                 #[cfg(not(feature = "tuning"))]
                 print_uci_response(&thread_data[0].info, false);
-                PRETTY_PRINT.store(false, Ordering::SeqCst);
+                PRETTY_PRINT.store(false, Ordering::Relaxed);
                 Ok(())
             }
             "ucifull" => {
                 print_uci_response(&thread_data[0].info, true);
-                PRETTY_PRINT.store(false, Ordering::SeqCst);
+                PRETTY_PRINT.store(false, Ordering::Relaxed);
                 Ok(())
             }
             arg @ ("ucidump" | "ucidumpfull") => {
                 // dump the values of the current UCI options
                 println!("Hash: {}", tt.size() / MEGABYTE);
                 println!("Threads: {}", thread_data.len());
-                println!("PrettyPrint: {}", PRETTY_PRINT.load(Ordering::SeqCst));
+                println!("PrettyPrint: {}", PRETTY_PRINT.load(Ordering::Relaxed));
                 println!(
                     "SyzygyPath: {}",
                     SYZYGY_PATH
@@ -676,13 +676,13 @@ pub fn main_loop() -> anyhow::Result<()> {
                 );
                 println!(
                     "SyzygyProbeLimit: {}",
-                    SYZYGY_PROBE_LIMIT.load(Ordering::SeqCst)
+                    SYZYGY_PROBE_LIMIT.load(Ordering::Relaxed)
                 );
                 println!(
                     "SyzygyProbeDepth: {}",
-                    SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst)
+                    SYZYGY_PROBE_DEPTH.load(Ordering::Relaxed)
                 );
-                println!("Contempt: {}", CONTEMPT.load(Ordering::SeqCst));
+                println!("Contempt: {}", CONTEMPT.load(Ordering::Relaxed));
                 if arg == "ucidumpfull" {
                     for (id, default) in Config::default().ids_with_values() {
                         println!("{id}: {default}");
@@ -695,7 +695,7 @@ pub fn main_loop() -> anyhow::Result<()> {
                 Ok(())
             }
             "quit" => {
-                QUIT.store(true, Ordering::SeqCst);
+                QUIT.store(true, Ordering::Relaxed);
                 break;
             }
             "ucinewgame" => do_newgame(&tt, &mut thread_data, &worker_threads),
@@ -839,7 +839,7 @@ pub fn main_loop() -> anyhow::Result<()> {
                 thread_data[0].info.clock.start();
 
                 // if we're in pretty-printing mode, set the terminal properly:
-                if PRETTY_PRINT.load(Ordering::SeqCst) {
+                if PRETTY_PRINT.load(Ordering::Relaxed) {
                     SET_TERM.call_once(|| {
                         term::set_mode_uci();
                     });
@@ -869,12 +869,12 @@ pub fn main_loop() -> anyhow::Result<()> {
             eprintln!("info string {e}");
         }
 
-        if QUIT.load(Ordering::SeqCst) {
+        if QUIT.load(Ordering::Relaxed) {
             // quit can be set true in parse_go
             break;
         }
     }
-    STDIN_READER_THREAD_KEEP_RUNNING.store(false, atomic::Ordering::SeqCst);
+    STDIN_READER_THREAD_KEEP_RUNNING.store(false, atomic::Ordering::Relaxed);
     if stdin_reader_handle.is_finished() {
         stdin_reader_handle
             .join()

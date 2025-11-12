@@ -245,7 +245,7 @@ pub fn search_position(
 
     let global_stopped = thread_headers[0].info.stopped;
     assert!(
-        !global_stopped.load(Ordering::SeqCst),
+        !global_stopped.load(Ordering::Relaxed),
         "global_stopped must be false"
     );
 
@@ -266,7 +266,7 @@ pub fn search_position(
         handles.push(s.spawn_into(
             || {
                 iterative_deepening::<MainThread>(t1);
-                global_stopped.store(true, Ordering::SeqCst);
+                global_stopped.store(true, Ordering::Relaxed);
             },
             w1,
         ));
@@ -487,7 +487,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
                     && (t.info.clock.solved_breaker(pv.score)
                         || t.info.clock.mate_found_breaker(pv.score)))
             {
-                t.info.stopped.store(true, Ordering::SeqCst);
+                t.info.stopped.store(true, Ordering::Relaxed);
                 break 'deepening;
             }
         }
@@ -802,7 +802,7 @@ pub fn alpha_beta<NT: NodeType>(
         }
 
         // are we too deep?
-        let max_height = MAX_DEPTH.min(uci::GO_MATE_MAX_DEPTH.load(Ordering::SeqCst));
+        let max_height = MAX_DEPTH.min(uci::GO_MATE_MAX_DEPTH.load(Ordering::Relaxed));
         if height >= max_height {
             return if in_check {
                 0
@@ -880,8 +880,8 @@ pub fn alpha_beta<NT: NodeType>(
     if !NT::ROOT
         && excluded.is_none()
         && n_men <= cardinality
-        && uci::SYZYGY_ENABLED.load(Ordering::SeqCst)
-        && (depth >= uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst) || n_men < cardinality)
+        && uci::SYZYGY_ENABLED.load(Ordering::Relaxed)
+        && (depth >= uci::SYZYGY_PROBE_DEPTH.load(Ordering::Relaxed) || n_men < cardinality)
         && let Some(wdl) = tablebases::probe::get_wdl(&t.board)
     {
         t.info.tbhits.increment();
@@ -1936,7 +1936,7 @@ fn readout_info(
         ..
     } = t;
     let pv = t.pv();
-    let normal_uci_output = !uci::PRETTY_PRINT.load(Ordering::SeqCst);
+    let normal_uci_output = !uci::PRETTY_PRINT.load(Ordering::Relaxed);
     let nps = (nodes as f64 / info.clock.elapsed().as_secs_f64()) as u64;
     if board.turn() == Colour::Black {
         bound = bound.invert();

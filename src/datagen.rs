@@ -262,7 +262,7 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
     }
 
     ctrlc::set_handler(move || {
-        STOP_GENERATION.store(true, Ordering::SeqCst);
+        STOP_GENERATION.store(true, Ordering::Relaxed);
         println!("Stopping generation, please don't force quit.");
     })
     .with_context(|| "Failed to set Ctrl-C handler")?;
@@ -271,8 +271,8 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
 
     let options: DataGenOptions = cli_config.build();
 
-    CHESS960.store(options.generate_dfrc, Ordering::SeqCst);
-    FENS_GENERATED.store(0, Ordering::SeqCst);
+    CHESS960.store(options.generate_dfrc, Ordering::Relaxed);
+    FENS_GENERATED.store(0, Ordering::Relaxed);
 
     println!("Starting data generation with the following configuration:");
     println!("{options}");
@@ -291,7 +291,7 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
         } else {
             bail!("Failed to take lock on SYZYGY_PATH");
         }
-        SYZYGY_ENABLED.store(true, Ordering::SeqCst);
+        SYZYGY_ENABLED.store(true, Ordering::Relaxed);
         println!("Syzygy tablebases enabled.");
     }
 
@@ -593,7 +593,7 @@ fn generate_on_thread<'a>(
 
         // STEP 4: write the game to the output file
         // increment the counter
-        FENS_GENERATED.fetch_add(game.len() as u64, Ordering::SeqCst);
+        FENS_GENERATED.fetch_add(game.len() as u64, Ordering::Relaxed);
         // update with outcome
         game.set_outcome(outcome);
 
@@ -605,7 +605,7 @@ fn generate_on_thread<'a>(
         *counters.entry(outcome).or_default() += 1;
 
         // STEP 6: check if we should stop because the STOP_GENERATION signal was set.
-        if STOP_GENERATION.load(Ordering::SeqCst) {
+        if STOP_GENERATION.load(Ordering::Relaxed) {
             break 'generation_main_loop;
         }
     }

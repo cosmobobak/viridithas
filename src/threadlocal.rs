@@ -20,7 +20,7 @@ use crate::{
     util::MAX_DEPTH,
 };
 
-#[repr(align(64))]
+#[repr(align(128))]
 pub struct ThreadData<'a> {
     // stack array is right-padded by one because singular verification
     // will try to access the next ply in an edge case.
