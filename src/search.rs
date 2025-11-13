@@ -653,6 +653,10 @@ pub fn quiescence<NT: NodeType>(
         if !t.board.is_legal(m) {
             continue;
         }
+        // move found, we can start skipping quiets again:
+        if best_score > -MINIMUM_TB_WIN_SCORE {
+            move_picker.skip_quiets = true;
+        }
         let is_tactical = t.board.is_tactical(m);
         let is_recapture = Some(m.to()) == t.ss[height - 1].searching.map(Move::to);
         if best_score > -MINIMUM_TB_WIN_SCORE
@@ -676,10 +680,6 @@ pub fn quiescence<NT: NodeType>(
             to: m.history_to_square(),
         };
         t.board.make_move(m, &mut t.nnue);
-        // move found, we can start skipping quiets again:
-        if best_score > -MINIMUM_TB_WIN_SCORE {
-            move_picker.skip_quiets = true;
-        }
         t.info.nodes.increment();
         moves_made += 1;
 
@@ -1037,7 +1037,13 @@ pub fn alpha_beta<NT: NodeType>(
     let tt_capture = tt_move.filter(|m| t.board.is_tactical(*m));
 
     // whole-node techniques:
-    if !NT::ROOT && !NT::PV && !in_check && excluded.is_none() {
+    if !NT::ROOT
+        && !NT::PV
+        && !in_check
+        && excluded.is_none()
+        && !is_decisive(alpha)
+        && !is_decisive(beta)
+    {
         if t.ss[height - 1].reduction >= t.info.conf.hindsight_ext_depth
             && static_eval + t.ss[height - 1].static_eval < 0
         {
@@ -1075,6 +1081,7 @@ pub fn alpha_beta<NT: NodeType>(
             && static_eval - rfp_margin(&t.board, &t.info, depth, improving, correction) >= beta
             && (tt_move.is_none() || tt_capture.is_some())
             && beta > -MINIMUM_TB_WIN_SCORE
+            && eval < MINIMUM_TB_WIN_SCORE
         {
             return beta + (static_eval - beta) / 3;
         }
@@ -1092,6 +1099,7 @@ pub fn alpha_beta<NT: NodeType>(
             && !t.nmp_banned_for(t.board.turn())
             && t.board.zugzwang_unlikely()
             && !matches!(tt_hit, Some(TTHit { value: v, bound: Bound::Upper, .. }) if v < beta)
+            && beta > -MINIMUM_TB_WIN_SCORE
         {
             t.tt.prefetch(t.board.key_after_null_move());
             let r = 4
@@ -1216,7 +1224,9 @@ pub fn alpha_beta<NT: NodeType>(
                     t.ss[height].ttpv,
                 );
 
-                return value - (pc_beta - beta);
+                if !is_decisive(value) {
+                    return value - (pc_beta - beta);
+                }
             }
         }
 
@@ -1236,10 +1246,6 @@ pub fn alpha_beta<NT: NodeType>(
 
     let mut quiets_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
     let mut tacticals_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
-
-    let maybe_singular = depth >= 5
-        && excluded.is_none()
-        && tt_hit.is_some_and(|tte| tte.depth >= depth - 3 && tte.bound.is_lower());
 
     while let Some(m) = move_picker.next(t) {
         if excluded == Some(m) {
@@ -1336,8 +1342,15 @@ pub fn alpha_beta<NT: NodeType>(
         let extension;
         if NT::ROOT {
             extension = 0;
-        } else if maybe_singular && Some(m) == tt_move {
-            let tte = tt_hit.unwrap();
+        } else if Some(m) == tt_move
+            && excluded.is_none()
+            && depth >= 5
+            && let Some(tte) = tt_hit
+            && tte.value != VALUE_NONE
+            && !is_decisive(tte.value)
+            && tte.bound.is_lower()
+            && tte.depth >= depth - 3
+        {
             let r_beta = singularity_margin(tte.value, depth);
             let r_depth = (depth - 1) / 2;
 
@@ -1354,10 +1367,10 @@ pub fn alpha_beta<NT: NodeType>(
 
             if value == VALUE_NONE {
                 extension = 1; // extend if there's only one legal move.
-            } else if value >= r_beta && r_beta >= beta {
+            } else if value >= r_beta && r_beta >= beta && !is_decisive(value) {
                 // multi-cut: if a move other than the best one beats beta,
                 // then we can cut with relatively high confidence.
-                return singularity_margin(tte.value, depth);
+                return r_beta;
             } else if value < r_beta {
                 if !NT::PV
                     && t.ss[t.board.height()].dextensions <= 12
@@ -1476,7 +1489,7 @@ pub fn alpha_beta<NT: NodeType>(
                     t.update_continuation_history_single(hist_to, moved, c1, 1);
                     t.update_continuation_history_single(hist_to, moved, c2, 2);
                 }
-            } else if score > alpha && score < best_score + 16 {
+            } else if score > alpha && score < best_score + 16 && !is_decisive(score) {
                 new_depth -= 1;
             }
             // if we failed completely, then do full-window search
