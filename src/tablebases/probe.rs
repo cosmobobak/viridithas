@@ -23,7 +23,6 @@ use crate::{
     },
     uci,
 };
-use std::ptr;
 use std::{ffi::CString, sync::atomic::AtomicBool};
 
 pub static SYZYGY_ENABLED: AtomicBool = AtomicBool::new(false);
@@ -131,7 +130,7 @@ pub fn get_root_wdl_dtz(board: &Board) -> Option<WdlDtzResult> {
             u32::from(board.fifty_move_counter()),
             ep,
             board.turn() == Colour::White,
-            ptr::null_mut(),
+            std::ptr::null_mut(),
         );
 
         let wdl = (result & TB_RESULT_WDL_MASK) >> TB_RESULT_WDL_SHIFT;
@@ -292,7 +291,7 @@ mod tests {
             &nodes,
             &tbhits,
         ));
-        t.info.clock = TimeManager::default_with_limit(SearchLimit::Depth(10));
+        t.info.clock = TimeManager::default_with_limit(SearchLimit::Depth(16));
         let (value, mov) = search_position(&pool, std::array::from_mut(&mut t));
 
         assert!(matches!(t.board.san(mov.unwrap()).as_deref(), Some("Qxb5")));
