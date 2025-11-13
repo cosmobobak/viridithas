@@ -677,7 +677,9 @@ pub fn quiescence<NT: NodeType>(
         };
         t.board.make_move(m, &mut t.nnue);
         // move found, we can start skipping quiets again:
-        move_picker.skip_quiets = true;
+        if best_score > -MINIMUM_TB_WIN_SCORE {
+            move_picker.skip_quiets = true;
+        }
         t.info.nodes.increment();
         moves_made += 1;
 
