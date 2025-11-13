@@ -62,7 +62,6 @@ pub static PRETTY_PRINT: AtomicBool = AtomicBool::new(true);
 pub static SYZYGY_PROBE_LIMIT: AtomicU8 = AtomicU8::new(6);
 pub static SYZYGY_PROBE_DEPTH: AtomicI32 = AtomicI32::new(1);
 pub static SYZYGY_PATH: Mutex<String> = Mutex::new(String::new());
-pub static SYZYGY_ENABLED: AtomicBool = AtomicBool::new(false);
 pub static CONTEMPT: AtomicI32 = AtomicI32::new(0);
 
 #[derive(Debug, PartialEq, Eq)]
@@ -384,7 +383,6 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> anyhow::Result<SetOpti
             tablebases::probe::init(&path);
             if let Ok(mut lock) = SYZYGY_PATH.lock() {
                 *lock = path;
-                SYZYGY_ENABLED.store(true, Ordering::SeqCst);
             } else {
                 bail!(UciError::InternalError(
                     "failed to take lock on SyzygyPath".into()

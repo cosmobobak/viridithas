@@ -23,8 +23,10 @@ use crate::{
     },
     uci,
 };
-use std::ffi::CString;
 use std::ptr;
+use std::{ffi::CString, sync::atomic::AtomicBool};
+
+pub static SYZYGY_ENABLED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[allow(clippy::upper_case_acronyms)]
@@ -47,6 +49,7 @@ pub fn init(syzygy_path: &str) {
         let path = CString::new(syzygy_path).unwrap();
         let res = tb_init(path.as_ptr());
         assert!(res, "Failed to load Syzygy tablebases from {syzygy_path}");
+        SYZYGY_ENABLED.store(true, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
@@ -55,7 +58,7 @@ pub fn get_max_pieces_count() -> u8 {
     #![allow(clippy::cast_possible_truncation)]
     #[cfg(feature = "syzygy")]
     {
-        let user_limit = uci::SYZYGY_PROBE_LIMIT.load(std::sync::atomic::Ordering::SeqCst);
+        let user_limit = uci::SYZYGY_PROBE_LIMIT.load(std::sync::atomic::Ordering::Relaxed);
         // SAFETY: Not much.
         let hard_limit = unsafe { TB_LARGEST as u8 };
         std::cmp::min(user_limit, hard_limit)
@@ -92,12 +95,14 @@ pub fn get_wdl(board: &Board) -> Option<WDL> {
             board.turn() == Colour::White,
         );
 
-        match wdl {
+        let result = match wdl {
             TB_WIN => Some(WDL::Win),
             TB_LOSS => Some(WDL::Loss),
             TB_DRAW | TB_CURSED_WIN | TB_BLESSED_LOSS => Some(WDL::Draw),
             _ => None,
-        }
+        };
+
+        result
     }
     #[cfg(not(feature = "syzygy"))]
     None
@@ -204,5 +209,125 @@ pub fn get_wdl_white(board: &Board) -> Option<WDL> {
         WDL::Win => Some(if stm { WDL::Win } else { WDL::Loss }),
         WDL::Draw => Some(WDL::Draw),
         WDL::Loss => Some(if stm { WDL::Loss } else { WDL::Win }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{
+        LazyLock,
+        atomic::{AtomicBool, AtomicU64},
+    };
+
+    use crate::{
+        evaluation::MINIMUM_TB_WIN_SCORE,
+        nnue::network::NNUEParams,
+        search::search_position,
+        threadlocal::ThreadData,
+        threadpool,
+        timemgmt::{SearchLimit, TimeManager},
+        transpositiontable::TT,
+        util::MEGABYTE,
+    };
+
+    use super::*;
+
+    static INIT_SYZYGY: std::sync::LazyLock<()> = std::sync::LazyLock::new(|| {
+        init(
+            std::env::var("SYZYGY_PATH")
+                .unwrap_or_else(|_| "/syzygy".to_string())
+                .as_str(),
+        );
+    });
+
+    #[test]
+    fn test_syzygy_wdl() {
+        LazyLock::force(&INIT_SYZYGY);
+
+        let win_3man = "4Q3/8/8/8/8/8/7k/K7 w - - 0 1";
+        let draw_3man = "4N3/8/8/8/8/4K3/8/4k3 w - - 0 1";
+        let loss_3man = "8/8/7K/8/8/8/8/k6q w - - 0 1";
+
+        let win_7man = "3k4/4p3/8/1r6/6P1/5P2/4RK2/8 w - - 0 1";
+
+        if get_max_pieces_count() >= 3 {
+            let board = Board::from_fen(win_3man).unwrap();
+            assert_eq!(get_wdl(&board), Some(WDL::Win));
+
+            let board = Board::from_fen(draw_3man).unwrap();
+            assert_eq!(get_wdl(&board), Some(WDL::Draw));
+
+            let board = Board::from_fen(loss_3man).unwrap();
+            assert_eq!(get_wdl(&board), Some(WDL::Loss));
+        }
+
+        if get_max_pieces_count() >= 7 {
+            let board = Board::from_fen(win_7man).unwrap();
+            assert_eq!(get_wdl(&board), Some(WDL::Win));
+        }
+    }
+
+    #[test]
+    fn solve_7man() {
+        LazyLock::force(&INIT_SYZYGY);
+
+        if get_max_pieces_count() < 7 {
+            return;
+        }
+
+        let position = Board::from_fen("3k4/4p3/1r6/Qq6/6P1/5P2/4RK2/8 w - - 0 1").unwrap();
+        let stopped = AtomicBool::new(false);
+        let nodes = AtomicU64::new(0);
+        let tbhits = AtomicU64::new(0);
+        let pool = threadpool::make_worker_threads(1);
+        let mut tt = TT::new();
+        tt.resize(MEGABYTE, &pool);
+        let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
+        let mut t = Box::new(ThreadData::new(
+            0,
+            position,
+            tt.view(),
+            nnue_params,
+            &stopped,
+            &nodes,
+            &tbhits,
+        ));
+        t.info.clock = TimeManager::default_with_limit(SearchLimit::Depth(10));
+        let (value, mov) = search_position(&pool, std::array::from_mut(&mut t));
+
+        assert!(matches!(t.board.san(mov.unwrap()).as_deref(), Some("Qxb5")));
+        assert!(value >= MINIMUM_TB_WIN_SCORE);
+    }
+
+    #[test]
+    fn solve_5man() {
+        LazyLock::force(&INIT_SYZYGY);
+
+        if get_max_pieces_count() < 5 {
+            return;
+        }
+
+        let position = Board::from_fen("8/Q7/8/5N2/1p6/q7/8/2NK3k w - - 0 1").unwrap();
+        let stopped = AtomicBool::new(false);
+        let nodes = AtomicU64::new(0);
+        let tbhits = AtomicU64::new(0);
+        let pool = threadpool::make_worker_threads(1);
+        let mut tt = TT::new();
+        tt.resize(MEGABYTE, &pool);
+        let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
+        let mut t = Box::new(ThreadData::new(
+            0,
+            position,
+            tt.view(),
+            nnue_params,
+            &stopped,
+            &nodes,
+            &tbhits,
+        ));
+        t.info.clock = TimeManager::default_with_limit(SearchLimit::Depth(10));
+        let (value, mov) = search_position(&pool, std::array::from_mut(&mut t));
+
+        assert!(matches!(t.board.san(mov.unwrap()).as_deref(), Some("Qxa3")));
+        assert!(value >= MINIMUM_TB_WIN_SCORE);
     }
 }

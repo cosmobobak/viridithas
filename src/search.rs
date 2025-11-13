@@ -21,8 +21,8 @@ use crate::{
         types::{ContHistIndex, Square},
     },
     evaluation::{
-        MATE_SCORE, MINIMUM_TB_WIN_SCORE, evaluate, is_decisive, is_mate_score, mate_in, mated_in,
-        see_value, tb_loss_in, tb_win_in,
+        MATE_SCORE, MINIMUM_TB_WIN_SCORE, evaluate, is_decisive, mate_in, mated_in, see_value,
+        tb_loss_in, tb_win_in,
     },
     history::caphist_piece_type,
     historytable::{
@@ -579,24 +579,27 @@ pub fn quiescence<NT: NodeType>(
         // could be being mated!
         raw_eval = VALUE_NONE;
         stand_pat = -INFINITY;
-    } else if let Some(TTHit { eval: tt_eval, .. }) = &tt_hit {
+    } else if let Some(TTHit {
+        eval: tt_eval,
+        bound: tt_flag,
+        value: tt_value,
+        ..
+    }) = tt_hit
+    {
         // if we have a TT hit, check the cached TT eval.
-        let v = *tt_eval;
-        if v == VALUE_NONE {
+        if tt_eval == VALUE_NONE {
             // regenerate the static eval if it's VALUE_NONE.
             raw_eval = evaluate(t, t.info.nodes.get_local());
         } else {
             // if the TT eval is not VALUE_NONE, use it.
-            raw_eval = v;
+            raw_eval = tt_eval;
         }
         let adj_eval = adj_shuffle(t, raw_eval, clock) + t.correction();
 
         // try correcting via search score from TT.
         // notably, this doesn't work for main search for ~reasons.
-        let (tt_flag, tt_value) = tt_hit
-            .as_ref()
-            .map_or((Bound::None, VALUE_NONE), |tte| (tte.bound, tte.value));
-        if !is_decisive(tt_value)
+        if tt_value != VALUE_NONE
+            && !is_decisive(tt_value)
             && (tt_flag == Bound::Exact
                 || tt_flag == Bound::Upper && tt_value < adj_eval
                 || tt_flag == Bound::Lower && tt_value > adj_eval)
@@ -835,9 +838,7 @@ pub fn alpha_beta<NT: NodeType>(
                 update_quiet_history_single::<false>(t, from, to, moved, threats, depth, true);
             }
 
-            if !is_mate_score(hit.value) {
-                return hit.value;
-            }
+            return hit.value;
         }
 
         if illegal { None } else { Some(hit) }
@@ -857,8 +858,8 @@ pub fn alpha_beta<NT: NodeType>(
     if !NT::ROOT
         && excluded.is_none()
         && n_men <= cardinality
-        && uci::SYZYGY_ENABLED.load(Ordering::SeqCst)
-        && (depth >= uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst) || n_men < cardinality)
+        && tablebases::probe::SYZYGY_ENABLED.load(Ordering::Relaxed)
+        && (depth >= uci::SYZYGY_PROBE_DEPTH.load(Ordering::Relaxed) || n_men < cardinality)
         && let Some(wdl) = tablebases::probe::get_wdl(&t.board)
     {
         t.info.tbhits.increment();
