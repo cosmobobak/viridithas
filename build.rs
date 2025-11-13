@@ -33,10 +33,7 @@ fn build_fathom() {
     cc.include("./deps/pyrrhic/");
     cc.define("_CRT_SECURE_NO_WARNINGS", None);
 
-    // MSVC doesn't support stdatomic.h, so use clang on Windows
-    if env::consts::OS == "windows" {
-        cc.compiler("clang");
-    }
+    cc.compiler("clang");
 
     cc.compile("fathom");
 }
