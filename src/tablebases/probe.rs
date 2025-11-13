@@ -14,8 +14,9 @@ use crate::{
     },
     evaluation::TB_WIN_SCORE,
     tablebases::bindings::{
-        TB_BLESSED_LOSS, TB_CURSED_WIN, TB_DRAW, TB_LARGEST, TB_LOSS, TB_PROMOTES_BISHOP,
-        TB_PROMOTES_KNIGHT, TB_PROMOTES_QUEEN, TB_PROMOTES_ROOK, TB_RESULT_DTZ_MASK,
+        PYRRHIC_FLAG_BPROMO as TB_PROMOTES_BISHOP, PYRRHIC_FLAG_NPROMO as TB_PROMOTES_KNIGHT,
+        PYRRHIC_FLAG_QPROMO as TB_PROMOTES_QUEEN, PYRRHIC_FLAG_RPROMO as TB_PROMOTES_ROOK,
+        TB_BLESSED_LOSS, TB_CURSED_WIN, TB_DRAW, TB_LARGEST, TB_LOSS, TB_RESULT_DTZ_MASK,
         TB_RESULT_DTZ_SHIFT, TB_RESULT_FAILED, TB_RESULT_FROM_MASK, TB_RESULT_FROM_SHIFT,
         TB_RESULT_PROMOTES_MASK, TB_RESULT_PROMOTES_SHIFT, TB_RESULT_TO_MASK, TB_RESULT_TO_SHIFT,
         TB_RESULT_WDL_MASK, TB_RESULT_WDL_SHIFT, TB_WIN, tb_init, tb_probe_root, tb_probe_wdl,
@@ -77,6 +78,7 @@ pub fn get_wdl(board: &Board) -> Option<WDL> {
     #[cfg(feature = "syzygy")]
     unsafe {
         let b = &board.state.bbs;
+        let ep = board.ep_sq().map_or(0, |sq| sq.index() as u32);
         let wdl = tb_probe_wdl(
             b.colours[Colour::White].inner(),
             b.colours[Colour::Black].inner(),
@@ -86,9 +88,7 @@ pub fn get_wdl(board: &Board) -> Option<WDL> {
             b.pieces[PieceType::Bishop].inner(),
             b.pieces[PieceType::Knight].inner(),
             b.pieces[PieceType::Pawn].inner(),
-            0,
-            0,
-            0,
+            ep,
             board.turn() == Colour::White,
         );
 
@@ -113,6 +113,7 @@ pub fn get_root_wdl_dtz(board: &Board) -> Option<WdlDtzResult> {
     #[cfg(feature = "syzygy")]
     unsafe {
         let b = &board.state.bbs;
+        let ep = board.ep_sq().map_or(0, |sq| sq.index() as u32);
         let result = tb_probe_root(
             b.colours[Colour::White].inner(),
             b.colours[Colour::Black].inner(),
@@ -123,8 +124,7 @@ pub fn get_root_wdl_dtz(board: &Board) -> Option<WdlDtzResult> {
             b.pieces[PieceType::Knight].inner(),
             b.pieces[PieceType::Pawn].inner(),
             u32::from(board.fifty_move_counter()),
-            0,
-            0,
+            ep,
             board.turn() == Colour::White,
             ptr::null_mut(),
         );
