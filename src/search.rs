@@ -1428,7 +1428,7 @@ pub fn alpha_beta<NT: NodeType>(
                 // reduce less if the move gives check
                 r -= i32::from(t.board.in_check()) * t.info.conf.lmr_check_mul;
                 // reduce less when the static eval is way off-base
-                r -= correction.pow(2) * 256 / 16384 - 200;
+                r -= correction.abs() * 256 / 16384 - 200;
 
                 t.ss[height].reduction = r;
                 r / 1024
