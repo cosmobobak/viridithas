@@ -1335,7 +1335,7 @@ pub fn alpha_beta<NT: NodeType>(
             extension = 0;
         } else if maybe_singular && Some(m) == tt_move {
             let tte = tt_hit.unwrap();
-            let r_beta = singularity_margin(tte.value, depth);
+            let r_beta = singularity_margin(tte.value, depth, t.ss[height].ttpv, NT::PV);
             let r_depth = (depth - 1) / 2;
 
             t.ss[t.board.height()].excluded = Some(m);
@@ -1354,7 +1354,7 @@ pub fn alpha_beta<NT: NodeType>(
             } else if value >= r_beta && r_beta >= beta {
                 // multi-cut: if a move other than the best one beats beta,
                 // then we can cut with relatively high confidence.
-                return singularity_margin(tte.value, depth);
+                return r_beta;
             } else if value < r_beta {
                 if !NT::PV
                     && t.ss[t.board.height()].dextensions <= 12
@@ -1675,8 +1675,8 @@ fn update_tactical_history(
 }
 
 /// The reduced beta margin for Singular Extension.
-fn singularity_margin(tt_value: i32, depth: i32) -> i32 {
-    (tt_value - (depth * 3 / 4)).max(-MINIMUM_TB_WIN_SCORE + 1)
+fn singularity_margin(tt_value: i32, depth: i32, ttpv: bool, pv: bool) -> i32 {
+    (tt_value - (depth * 3 / 4) + i32::from(ttpv && !pv)).max(-MINIMUM_TB_WIN_SCORE + 1)
 }
 
 /// Test if a move is *forced* - that is, if it is a move that is
