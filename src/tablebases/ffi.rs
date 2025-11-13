@@ -20,8 +20,8 @@ pub extern "C" fn viridithas_lsb(bb: u64) -> u32 {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn viridithas_poplsb(bb: *mut u64) -> u64 {
-    // SAFETY: We assume the C code passes a valid pointer
+pub unsafe extern "C" fn viridithas_poplsb(bb: *mut u64) -> u64 {
+    // SAFETY: Relies on being passed valid pointer.
     unsafe {
         let value = *bb;
         let lsb = value.trailing_zeros();
@@ -40,10 +40,8 @@ pub extern "C" fn viridithas_pawn_attacks(sq: u32, colour: bool) -> u64 {
     let bb = SquareSet::from_square(square);
 
     let attacks = if colour {
-        // White pawns attack northeast and northwest
         bb.north_east_one() | bb.north_west_one()
     } else {
-        // Black pawns attack southeast and southwest
         bb.south_east_one() | bb.south_west_one()
     };
 
