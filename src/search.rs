@@ -1265,13 +1265,16 @@ pub fn alpha_beta<NT: NodeType>(
         if is_quiet {
             stat_score += i32::from(t.main_hist[from_threat][to_threat][moved][hist_to]);
             if height >= 1 {
-                stat_score += i32::from(t.cont_hist[t.ss[height - 1].ch_idx][moved][hist_to]);
+                stat_score +=
+                    i32::from(t.cont_hist[t.ss[height - 1].ch_idx][moved][hist_to]) * 5 / 6;
             }
             if height >= 2 {
-                stat_score += i32::from(t.cont_hist[t.ss[height - 2].ch_idx][moved][hist_to]);
+                stat_score +=
+                    i32::from(t.cont_hist[t.ss[height - 2].ch_idx][moved][hist_to]) * 5 / 6;
             }
             if height >= 4 {
-                stat_score += i32::from(t.cont_hist[t.ss[height - 4].ch_idx][moved][hist_to]);
+                stat_score +=
+                    i32::from(t.cont_hist[t.ss[height - 4].ch_idx][moved][hist_to]) * 2 / 6;
             }
         } else {
             let capture = caphist_piece_type(&t.board, m);
