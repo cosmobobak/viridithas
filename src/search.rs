@@ -70,7 +70,7 @@ const FUTILITY_COEFF_0: i32 = 110;
 const FUTILITY_COEFF_1: i32 = 61;
 const RAZORING_COEFF_0: i32 = 63;
 const RAZORING_COEFF_1: i32 = 270;
-const PROBCUT_MARGIN: i32 = 184;
+const PROBCUT_MARGIN: i32 = 220;
 const PROBCUT_IMPROVING_MARGIN: i32 = 69;
 const DOUBLE_EXTENSION_MARGIN: i32 = 12;
 const TRIPLE_EXTENSION_MARGIN: i32 = 166;
@@ -1178,7 +1178,7 @@ pub fn alpha_beta<NT: NodeType>(
         let see_threshold = (pc_beta - static_eval) * t.info.conf.probcut_see_scale / 256;
         let mut move_picker = MovePicker::new(tt_capture, None, see_threshold);
         move_picker.skip_quiets = true;
-        let pc_depth = i32::clamp(depth - 5 - (static_eval - beta) / 300, 0, depth);
+        let pc_depth = i32::clamp(depth - 4 - (static_eval - beta) / 300, 0, depth);
         while let Some(m) = move_picker.next(t) {
             t.tt.prefetch(t.board.key_after(m));
             if !t.board.is_legal(m) {
