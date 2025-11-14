@@ -1178,7 +1178,7 @@ pub fn alpha_beta<NT: NodeType>(
         let see_threshold = (pc_beta - static_eval) * t.info.conf.probcut_see_scale / 256;
         let mut move_picker = MovePicker::new(tt_capture, None, see_threshold);
         move_picker.skip_quiets = true;
-        let pc_depth = i32::clamp(depth - 3 - (static_eval - beta) / 300, 0, depth);
+        let pc_depth = i32::clamp(depth - 5 - (static_eval - beta) / 300, 0, depth);
         while let Some(m) = move_picker.next(t) {
             t.tt.prefetch(t.board.key_after(m));
             if !t.board.is_legal(m) {
