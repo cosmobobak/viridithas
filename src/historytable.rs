@@ -62,6 +62,7 @@ pub fn cont_history_bonus(conf: &Config, depth: i32, index: usize) -> i32 {
     match index {
         0 => cont1_history_bonus(conf, depth),
         1 => cont2_history_bonus(conf, depth),
+        3 => cont2_history_bonus(conf, depth),
         _ => unreachable!(),
     }
 }
@@ -69,6 +70,7 @@ pub fn cont_history_malus(conf: &Config, depth: i32, index: usize) -> i32 {
     match index {
         0 => cont1_history_malus(conf, depth),
         1 => cont2_history_malus(conf, depth),
+        3 => cont2_history_malus(conf, depth),
         _ => unreachable!(),
     }
 }
