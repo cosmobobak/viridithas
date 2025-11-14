@@ -1215,7 +1215,9 @@ pub fn alpha_beta<NT: NodeType>(
                     t.ss[height].ttpv,
                 );
 
-                return value - (pc_beta - beta);
+                if !is_decisive(value) {
+                    return value - (pc_beta - beta);
+                }
             }
         }
 
