@@ -72,6 +72,7 @@ const RAZORING_COEFF_0: i32 = 63;
 const RAZORING_COEFF_1: i32 = 270;
 const PROBCUT_MARGIN: i32 = 184;
 const PROBCUT_IMPROVING_MARGIN: i32 = 69;
+const PROBCUT_EVAL_DIV: i32 = 300;
 const DOUBLE_EXTENSION_MARGIN: i32 = 12;
 const TRIPLE_EXTENSION_MARGIN: i32 = 166;
 const LMR_BASE: f64 = 95.0;
@@ -93,6 +94,8 @@ const LMR_CUT_NODE_MUL: i32 = 1412;
 const LMR_NON_IMPROVING_MUL: i32 = 456;
 const LMR_TT_CAPTURE_MUL: i32 = 1301;
 const LMR_CHECK_MUL: i32 = 1217;
+const LMR_CORR_MUL: i32 = 256;
+const LMR_BASE_OFFSET: i32 = 200;
 
 const MAIN_HISTORY_BONUS_MUL: i32 = 341;
 const MAIN_HISTORY_BONUS_OFFSET: i32 = 178;
@@ -112,12 +115,24 @@ const CONT2_HISTORY_BONUS_MAX: i32 = 1473;
 const CONT2_HISTORY_MALUS_MUL: i32 = 218;
 const CONT2_HISTORY_MALUS_OFFSET: i32 = 66;
 const CONT2_HISTORY_MALUS_MAX: i32 = 1248;
+const CONT4_HISTORY_BONUS_MUL: i32 = 177;
+const CONT4_HISTORY_BONUS_OFFSET: i32 = 139;
+const CONT4_HISTORY_BONUS_MAX: i32 = 1473;
+const CONT4_HISTORY_MALUS_MUL: i32 = 218;
+const CONT4_HISTORY_MALUS_OFFSET: i32 = 66;
+const CONT4_HISTORY_MALUS_MAX: i32 = 1248;
 const TACTICAL_HISTORY_BONUS_MUL: i32 = 136;
 const TACTICAL_HISTORY_BONUS_OFFSET: i32 = 458;
 const TACTICAL_HISTORY_BONUS_MAX: i32 = 2007;
 const TACTICAL_HISTORY_MALUS_MUL: i32 = 49;
 const TACTICAL_HISTORY_MALUS_OFFSET: i32 = 401;
 const TACTICAL_HISTORY_MALUS_MAX: i32 = 1464;
+
+const MAIN_STAT_SCORE_MUL: i32 = 32;
+const CONT1_STAT_SCORE_MUL: i32 = 26;
+const CONT2_STAT_SCORE_MUL: i32 = 26;
+const CONT4_STAT_SCORE_MUL: i32 = 10;
+const TACT_STAT_SCORE_MUL: i32 = 32;
 
 const PAWN_CORRHIST_WEIGHT: i32 = 1583;
 const MAJOR_CORRHIST_WEIGHT: i32 = 1495;
@@ -1178,7 +1193,11 @@ pub fn alpha_beta<NT: NodeType>(
         let see_threshold = (pc_beta - static_eval) * t.info.conf.probcut_see_scale / 256;
         let mut move_picker = MovePicker::new(tt_capture, None, see_threshold);
         move_picker.skip_quiets = true;
-        let pc_depth = i32::clamp(depth - 3 - (static_eval - beta) / 300, 0, depth);
+        let pc_depth = i32::clamp(
+            depth - 3 - (static_eval - beta) / t.info.conf.probcut_eval_div,
+            0,
+            depth,
+        );
         while let Some(m) = move_picker.next(t) {
             t.tt.prefetch(t.board.key_after(m));
             if !t.board.is_legal(m) {
@@ -1263,23 +1282,26 @@ pub fn alpha_beta<NT: NodeType>(
         let from_threat = usize::from(threats.contains_square(from));
         let to_threat = usize::from(threats.contains_square(hist_to));
         if is_quiet {
-            stat_score += i32::from(t.main_hist[from_threat][to_threat][moved][hist_to]);
+            stat_score += i32::from(t.main_hist[from_threat][to_threat][moved][hist_to])
+                * t.info.conf.main_stat_score_mul;
             if height >= 1 {
-                stat_score +=
-                    i32::from(t.cont_hist[t.ss[height - 1].ch_idx][moved][hist_to]) * 5 / 6;
+                stat_score += i32::from(t.cont_hist[t.ss[height - 1].ch_idx][moved][hist_to])
+                    * t.info.conf.cont1_stat_score_mul;
             }
             if height >= 2 {
-                stat_score +=
-                    i32::from(t.cont_hist[t.ss[height - 2].ch_idx][moved][hist_to]) * 5 / 6;
+                stat_score += i32::from(t.cont_hist[t.ss[height - 2].ch_idx][moved][hist_to])
+                    * t.info.conf.cont2_stat_score_mul;
             }
             if height >= 4 {
-                stat_score +=
-                    i32::from(t.cont_hist[t.ss[height - 4].ch_idx][moved][hist_to]) * 2 / 6;
+                stat_score += i32::from(t.cont_hist[t.ss[height - 4].ch_idx][moved][hist_to])
+                    * t.info.conf.cont4_stat_score_mul;
             }
         } else {
             let capture = caphist_piece_type(&t.board, m);
-            stat_score += i32::from(t.tactical_hist[to_threat][capture][moved][hist_to]);
+            stat_score += i32::from(t.tactical_hist[to_threat][capture][moved][hist_to])
+                * t.info.conf.tactical_stat_score_mul;
         }
+        stat_score /= 32;
 
         // lmp & fp.
         if !NT::ROOT && !NT::PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
@@ -1418,6 +1440,8 @@ pub fn alpha_beta<NT: NodeType>(
             // calculation of LMR stuff
             let r = if depth > 2 && moves_made > (1 + usize::from(NT::ROOT)) {
                 let mut r = t.info.lm_table.lm_reduction(depth, moves_made);
+                // tunable base offset
+                r += t.info.conf.lmr_base_offset;
                 // reduce more on non-PV nodes
                 r += i32::from(!NT::PV) * t.info.conf.lmr_non_pv_mul;
                 r -= i32::from(t.ss[height].ttpv) * t.info.conf.lmr_ttpv_mul;
@@ -1434,7 +1458,7 @@ pub fn alpha_beta<NT: NodeType>(
                 // reduce less if the move gives check
                 r -= i32::from(t.board.in_check()) * t.info.conf.lmr_check_mul;
                 // reduce less when the static eval is way off-base
-                r -= correction.pow(2) * 256 / 16384 - 200;
+                r -= correction.abs() * t.info.conf.lmr_corr_mul / 16384;
 
                 t.ss[height].reduction = r;
                 r / 1024
