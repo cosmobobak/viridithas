@@ -1187,8 +1187,8 @@ pub fn alpha_beta<NT: NodeType>(
         && excluded.is_none()
         && depth >= 3
         && !is_decisive(beta)
-        // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
-        && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
+        // don't probcut if we have a tthit with value < pcbeta
+        && tt_hit.is_none_or(|tte| tte.value >= pc_beta)
     {
         let see_threshold = (pc_beta - static_eval) * t.info.conf.probcut_see_scale / 256;
         let mut move_picker = MovePicker::new(tt_capture, None, see_threshold);
@@ -1196,7 +1196,7 @@ pub fn alpha_beta<NT: NodeType>(
         let pc_depth = i32::clamp(
             depth - 3 - (static_eval - beta) / t.info.conf.probcut_eval_div,
             0,
-            depth,
+            depth - 1,
         );
         while let Some(m) = move_picker.next(t) {
             t.tt.prefetch(t.board.key_after(m));
@@ -1234,7 +1234,9 @@ pub fn alpha_beta<NT: NodeType>(
                     t.ss[height].ttpv,
                 );
 
-                return value - (pc_beta - beta);
+                if !is_decisive(value) {
+                    return value - (pc_beta - beta);
+                }
             }
         }
 
