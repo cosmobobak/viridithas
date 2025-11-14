@@ -1384,7 +1384,7 @@ pub fn alpha_beta<NT: NodeType>(
             } else if value >= r_beta && r_beta >= beta {
                 // multi-cut: if a move other than the best one beats beta,
                 // then we can cut with relatively high confidence.
-                return singularity_margin(tte.value, depth);
+                return r_beta;
             } else if value < r_beta {
                 if !NT::PV
                     && t.ss[t.board.height()].dextensions <= 12
