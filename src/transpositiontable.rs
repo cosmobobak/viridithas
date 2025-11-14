@@ -7,7 +7,7 @@ use crate::{
     chess::chessmove::Move,
     evaluation::{MATE_SCORE, MINIMUM_MATE_SCORE, MINIMUM_TB_WIN_SCORE},
     threadpool::{self, ScopeExt},
-    util::{MEGABYTE, VALUE_NONE, depth::CompactDepthStorage},
+    util::{MEGABYTE, VALUE_NONE},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -130,12 +130,12 @@ impl PackedInfo {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
 pub struct TTEntry {
-    pub key: u16,                   // 2 bytes
-    pub m: Option<Move>,            // 2 bytes
-    pub score: i16,                 // 2 bytes
-    pub depth: CompactDepthStorage, // 1 byte, wrapper around a u8
-    pub info: PackedInfo,           // 1 byte (5 + 1 + 2 bits), wrapper around a u8
-    pub evaluation: i16,            // 2 bytes
+    pub key: u16,         // 2 bytes
+    pub m: Option<Move>,  // 2 bytes
+    pub score: i16,       // 2 bytes
+    pub depth: u8,        // 1 byte
+    pub info: PackedInfo, // 1 byte (5 + 1 + 2 bits), wrapper around a u8
+    pub evaluation: i16,  // 2 bytes
 }
 
 #[repr(C)]
@@ -345,9 +345,9 @@ impl TTView<'_> {
                     break;
                 }
 
-                if i32::from(tte.depth.inner())
+                if i32::from(tte.depth)
                     - ((MAX_AGE + tt_age - i32::from(tte.info.age())) & AGE_MASK) * 4
-                    > i32::from(entry.depth.inner())
+                    > i32::from(entry.depth)
                         - ((MAX_AGE + tt_age - i32::from(entry.info.age())) & AGE_MASK) * 4
                 {
                     tte = entry;
@@ -399,6 +399,12 @@ impl TTView<'_> {
             cluster.entries[idx] = write;
             self.table[cluster_index].store(cluster);
         }
+        // else if cluster.entries[idx].depth >= 5
+        //     && cluster.entries[idx].info.flag() != Bound::Exact
+        // {
+        //     cluster.entries[idx].depth -= 1;
+        //     self.table[cluster_index].store(cluster);
+        // }
     }
 
     pub fn probe(&self, key: u64, ply: usize, clock: u8) -> Option<TTHit> {
