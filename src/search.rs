@@ -1265,10 +1265,16 @@ pub fn alpha_beta<NT: NodeType>(
         if is_quiet {
             stat_score += i32::from(t.main_hist[from_threat][to_threat][moved][hist_to]);
             if height >= 1 {
-                stat_score += i32::from(t.cont_hist[t.ss[height - 1].ch_idx][moved][hist_to]);
+                stat_score +=
+                    i32::from(t.cont_hist[t.ss[height - 1].ch_idx][moved][hist_to]) * 5 / 6;
             }
             if height >= 2 {
-                stat_score += i32::from(t.cont_hist[t.ss[height - 2].ch_idx][moved][hist_to]);
+                stat_score +=
+                    i32::from(t.cont_hist[t.ss[height - 2].ch_idx][moved][hist_to]) * 5 / 6;
+            }
+            if height >= 4 {
+                stat_score +=
+                    i32::from(t.cont_hist[t.ss[height - 4].ch_idx][moved][hist_to]) * 2 / 6;
             }
         } else {
             let capture = caphist_piece_type(&t.board, m);
@@ -1474,6 +1480,7 @@ pub fn alpha_beta<NT: NodeType>(
                     };
                     t.update_continuation_history_single(hist_to, moved, c1, 1);
                     t.update_continuation_history_single(hist_to, moved, c2, 2);
+                    t.update_continuation_history_single(hist_to, moved, c2, 4);
                 }
             } else if score > alpha && score < best_score + 16 {
                 new_depth -= 1;
@@ -1633,7 +1640,7 @@ fn update_quiet_history(t: &mut ThreadData, moves_to_adjust: &[Move], best_move:
     t.update_history(moves_to_adjust, best_move, depth);
     t.update_continuation_history(moves_to_adjust, best_move, depth, 0);
     t.update_continuation_history(moves_to_adjust, best_move, depth, 1);
-    // t.update_continuation_history(moves_to_adjust, best_move, depth, 3);
+    t.update_continuation_history(moves_to_adjust, best_move, depth, 3);
 }
 
 /// Update the main and continuation history tables for a single move.
@@ -1663,7 +1670,7 @@ fn update_quiet_history_single<const MADE: bool>(
     t.update_history_single(from, to, moved, threats, main);
     t.update_continuation_history_single(to, moved, cont1, 0 + usize::from(MADE));
     t.update_continuation_history_single(to, moved, cont2, 1 + usize::from(MADE));
-    // t.update_continuation_history_single(to, moved, delta, 3 + usize::from(MADE));
+    t.update_continuation_history_single(to, moved, cont2, 3 + usize::from(MADE));
 }
 
 /// Update the tactical history table.
