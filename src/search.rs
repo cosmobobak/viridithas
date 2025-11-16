@@ -1373,10 +1373,10 @@ pub fn alpha_beta<NT: NodeType>(
 
             if value == VALUE_NONE {
                 extension = 1; // extend if there's only one legal move.
-            } else if value >= r_beta && r_beta >= beta {
+            } else if value >= beta {
                 // multi-cut: if a move other than the best one beats beta,
                 // then we can cut with relatively high confidence.
-                return r_beta;
+                return value;
             } else if value < r_beta {
                 if !NT::PV
                     && t.ss[t.board.height()].dextensions <= 12
