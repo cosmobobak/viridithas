@@ -1373,7 +1373,7 @@ pub fn alpha_beta<NT: NodeType>(
 
             if value == VALUE_NONE {
                 extension = 1; // extend if there's only one legal move.
-            } else if value >= beta {
+            } else if value >= beta && !is_decisive(value) {
                 // multi-cut: if a move other than the best one beats beta,
                 // then we can cut with relatively high confidence.
                 return value;
