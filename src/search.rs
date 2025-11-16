@@ -1373,10 +1373,6 @@ pub fn alpha_beta<NT: NodeType>(
 
             if value == VALUE_NONE {
                 extension = 1; // extend if there's only one legal move.
-            } else if value >= beta && !is_decisive(value) {
-                // multi-cut: if a move other than the best one beats beta,
-                // then we can cut with relatively high confidence.
-                return value;
             } else if value < r_beta {
                 if !NT::PV
                     && t.ss[t.board.height()].dextensions <= 12
@@ -1388,6 +1384,10 @@ pub fn alpha_beta<NT: NodeType>(
                     // normal singular extension
                     extension = 1;
                 }
+            } else if value >= beta && !is_decisive(value) {
+                // multi-cut: if a move other than the best one beats beta,
+                // then we can cut with relatively high confidence.
+                return value;
             } else if cut_node {
                 // produce a strong negative extension if we didn't fail low on a cut-node.
                 extension = -2;
