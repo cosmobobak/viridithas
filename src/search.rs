@@ -27,7 +27,7 @@ use crate::{
     history::caphist_piece_type,
     historytable::{
         cont1_history_bonus, cont1_history_malus, cont2_history_bonus, cont2_history_malus,
-        main_history_bonus, main_history_malus,
+        cont4_history_bonus, cont4_history_malus, main_history_bonus, main_history_malus,
     },
     lookups::HM_CLOCK_KEYS,
     movepicker::{MovePicker, Stage},
@@ -1483,20 +1483,19 @@ pub fn alpha_beta<NT: NodeType>(
                 }
 
                 if is_quiet && (score <= alpha || score >= beta) {
-                    let (c1, c2) = if score <= alpha {
-                        (
-                            -cont1_history_malus(&t.info.conf, new_depth),
-                            -cont2_history_malus(&t.info.conf, new_depth),
-                        )
+                    let (c1, c2, c4);
+                    if score <= alpha {
+                        c1 = -cont1_history_malus(&t.info.conf, new_depth);
+                        c2 = -cont2_history_malus(&t.info.conf, new_depth);
+                        c4 = -cont4_history_malus(&t.info.conf, new_depth);
                     } else {
-                        (
-                            cont1_history_bonus(&t.info.conf, new_depth),
-                            cont2_history_bonus(&t.info.conf, new_depth),
-                        )
-                    };
+                        c1 = cont1_history_bonus(&t.info.conf, new_depth);
+                        c2 = cont2_history_bonus(&t.info.conf, new_depth);
+                        c4 = cont4_history_bonus(&t.info.conf, new_depth);
+                    }
                     t.update_continuation_history_single(hist_to, moved, c1, 1);
                     t.update_continuation_history_single(hist_to, moved, c2, 2);
-                    t.update_continuation_history_single(hist_to, moved, c2, 4);
+                    t.update_continuation_history_single(hist_to, moved, c4, 4);
                 }
             } else if score > alpha && score < best_score + 16 {
                 new_depth -= 1;
@@ -1670,23 +1669,22 @@ fn update_quiet_history_single<const MADE: bool>(
     depth: i32,
     good: bool,
 ) {
-    let (main, cont1, cont2) = if good {
-        (
-            main_history_bonus(&t.info.conf, depth),
-            cont1_history_bonus(&t.info.conf, depth),
-            cont2_history_bonus(&t.info.conf, depth),
-        )
+    let (main, cont1, cont2, cont4);
+    if good {
+        main = main_history_bonus(&t.info.conf, depth);
+        cont1 = cont1_history_bonus(&t.info.conf, depth);
+        cont2 = cont2_history_bonus(&t.info.conf, depth);
+        cont4 = cont4_history_bonus(&t.info.conf, depth);
     } else {
-        (
-            -main_history_malus(&t.info.conf, depth),
-            -cont1_history_malus(&t.info.conf, depth),
-            -cont2_history_malus(&t.info.conf, depth),
-        )
-    };
+        main = -main_history_malus(&t.info.conf, depth);
+        cont1 = -cont1_history_malus(&t.info.conf, depth);
+        cont2 = -cont2_history_malus(&t.info.conf, depth);
+        cont4 = -cont4_history_malus(&t.info.conf, depth);
+    }
     t.update_history_single(from, to, moved, threats, main);
     t.update_continuation_history_single(to, moved, cont1, 0 + usize::from(MADE));
     t.update_continuation_history_single(to, moved, cont2, 1 + usize::from(MADE));
-    t.update_continuation_history_single(to, moved, cont2, 3 + usize::from(MADE));
+    t.update_continuation_history_single(to, moved, cont4, 3 + usize::from(MADE));
 }
 
 /// Update the tactical history table.
