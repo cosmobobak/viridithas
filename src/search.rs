@@ -1395,13 +1395,6 @@ pub fn alpha_beta<NT: NodeType>(
                 // the tt_value >= beta condition is a sort of "light multi-cut"
                 // the tt_value <= alpha condition is from Weiss (https://github.com/TerjeKir/weiss/compare/2a7b4ed0...effa8349/).
                 extension = -1;
-            } else if depth < 8
-                && !in_check
-                && static_eval < alpha - 25
-                && tte.bound == Bound::Lower
-            {
-                // low-depth singular extension.
-                extension = 1;
             } else {
                 // no extension.
                 extension = 0;
