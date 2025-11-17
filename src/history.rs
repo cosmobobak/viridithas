@@ -7,8 +7,8 @@ use crate::{
     },
     historytable::{
         CORRECTION_HISTORY_MAX, cont_history_bonus, cont_history_malus, main_history_bonus,
-        main_history_malus, tactical_history_bonus, tactical_history_malus, update_correction,
-        update_history,
+        main_history_malus, tactical_history_bonus, tactical_history_malus, update_cont_history,
+        update_correction, update_history,
     },
     threadlocal::ThreadData,
     util::MAX_DEPTH,
@@ -86,25 +86,40 @@ impl ThreadData<'_> {
         moves_to_adjust: &[Move],
         best_move: Move,
         depth: i32,
-        index: usize,
     ) {
         let height = self.board.height();
 
-        if height <= index {
-            return;
-        }
+        let list = [
+            (1, self.info.conf.cont1_stat_score_mul),
+            (2, self.info.conf.cont2_stat_score_mul),
+            (4, self.info.conf.cont4_stat_score_mul),
+        ];
 
-        let cmh_block = &mut self.cont_hist[self.ss[height - index - 1].ch_idx];
         for &m in moves_to_adjust {
             let to = m.history_to_square();
             let piece = self.board.state.mailbox[m.from()].unwrap();
 
-            let delta = if m == best_move {
-                cont_history_bonus(&self.info.conf, depth, index)
-            } else {
-                -cont_history_malus(&self.info.conf, depth, index)
-            };
-            update_history(cmh_block.get_mut(piece, to), delta);
+            let mut sum = 0;
+            for (index, mul) in list {
+                if height < index {
+                    break;
+                }
+                sum += mul * i32::from(self.cont_hist[self.ss[height - index].ch_idx][piece][to]);
+            }
+            sum /= 32;
+
+            for (index, _) in list {
+                if height < index {
+                    break;
+                }
+                let delta = if m == best_move {
+                    cont_history_bonus(&self.info.conf, depth, index)
+                } else {
+                    -cont_history_malus(&self.info.conf, depth, index)
+                };
+                let val = &mut self.cont_hist[self.ss[height - index].ch_idx][piece][to];
+                update_cont_history(val, sum, delta);
+            }
         }
     }
 
@@ -114,6 +129,7 @@ impl ThreadData<'_> {
         to: Square,
         moved: Piece,
         delta: i32,
+        sum: i32,
         index: usize,
     ) {
         let height = self.board.height();
@@ -123,7 +139,7 @@ impl ThreadData<'_> {
         }
 
         let cmh_block = &mut self.cont_hist[self.ss[height - index - 1].ch_idx];
-        update_history(cmh_block.get_mut(moved, to), delta);
+        update_cont_history(cmh_block.get_mut(moved, to), sum, delta);
     }
 
     /// Add a killer move.
@@ -161,22 +177,8 @@ impl ThreadData<'_> {
         let minor = self.minor_corrhist.get_mut(us, keys.minor);
         let major = self.major_corrhist.get_mut(us, keys.major);
 
-        let mut sum = 0;
-        sum += i32::from(*pawn);
-        sum += i32::from(*nonpawn_white);
-        sum += i32::from(*nonpawn_black);
-        sum += i32::from(*minor);
-        sum += i32::from(*major);
-        if height > 2 {
-            let ch1 = self.ss[height - 1].ch_idx;
-            let ch2 = self.ss[height - 2].ch_idx;
-            let pt1 = ch1.piece.piece_type();
-            let pt2 = ch2.piece.piece_type();
-            sum += i32::from(self.continuation_corrhist[ch1.to][pt1][ch2.to][pt2][us]);
-        }
-
         let update = move |entry: &mut i16| {
-            update_correction(entry, sum, bonus);
+            update_correction(entry, bonus);
         };
 
         update(pawn);

@@ -72,17 +72,17 @@ pub fn tactical_history_malus(conf: &Config, depth: i32) -> i32 {
 
 pub fn cont_history_bonus(conf: &Config, depth: i32, index: usize) -> i32 {
     match index {
-        0 => cont1_history_bonus(conf, depth),
-        1 => cont2_history_bonus(conf, depth),
-        3 => cont4_history_bonus(conf, depth),
+        1 => cont1_history_bonus(conf, depth),
+        2 => cont2_history_bonus(conf, depth),
+        4 => cont4_history_bonus(conf, depth),
         _ => unreachable!(),
     }
 }
 pub fn cont_history_malus(conf: &Config, depth: i32, index: usize) -> i32 {
     match index {
-        0 => cont1_history_malus(conf, depth),
-        1 => cont2_history_malus(conf, depth),
-        3 => cont4_history_malus(conf, depth),
+        1 => cont1_history_malus(conf, depth),
+        2 => cont2_history_malus(conf, depth),
+        4 => cont4_history_malus(conf, depth),
         _ => unreachable!(),
     }
 }
@@ -97,21 +97,25 @@ pub fn update_history(val: &mut i16, delta: i32) {
 }
 
 #[inline]
-pub fn update_correction(val: &mut i16, sum: i32, delta: i32) {
-    let curr = i32::midpoint(i32::from(*val), sum);
-    gravity_update_with_current::<CORRECTION_HISTORY_MAX>(val, curr, delta);
+pub fn update_cont_history(val: &mut i16, sum: i32, delta: i32) {
+    gravity_update_with_modulator::<MAX_HISTORY>(val, i32::midpoint(i32::from(*val), sum), delta);
+}
+
+#[inline]
+pub fn update_correction(val: &mut i16, delta: i32) {
+    gravity_update::<CORRECTION_HISTORY_MAX>(val, delta);
 }
 
 #[inline]
 fn gravity_update<const MAX: i32>(val: &mut i16, delta: i32) {
-    gravity_update_with_current::<MAX>(val, i32::from(*val), delta);
+    gravity_update_with_modulator::<MAX>(val, i32::from(*val), delta);
 }
 
 #[inline]
-fn gravity_update_with_current<const MAX: i32>(val: &mut i16, curr: i32, delta: i32) {
+fn gravity_update_with_modulator<const MAX: i32>(val: &mut i16, modulator: i32, delta: i32) {
     #![allow(clippy::cast_possible_truncation)]
     const { assert!(MAX < i16::MAX as i32 * 3 / 4) }
-    let new = i32::from(*val) + delta - (curr * delta.abs() / MAX);
+    let new = i32::from(*val) + delta - (modulator * delta.abs() / MAX);
     *val = i32::clamp(new, -MAX, MAX) as i16;
 }
 
