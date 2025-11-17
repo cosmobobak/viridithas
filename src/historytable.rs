@@ -98,6 +98,7 @@ pub fn update_history(val: &mut i16, delta: i32) {
 
 #[inline]
 pub fn update_cont_history(val: &mut i16, sum: i32, delta: i32) {
+    // gravity_update::<MAX_HISTORY>(val, delta);
     gravity_update_with_modulator::<MAX_HISTORY>(val, sum, delta);
 }
 
@@ -115,7 +116,7 @@ fn gravity_update<const MAX: i32>(val: &mut i16, delta: i32) {
 fn gravity_update_with_modulator<const MAX: i32>(val: &mut i16, modulator: i32, delta: i32) {
     #![allow(clippy::cast_possible_truncation)]
     const { assert!(MAX < i16::MAX as i32 * 3 / 4) }
-    let new = i32::from(*val) + delta - (modulator * delta.abs() / MAX);
+    let new = i32::from(*val) + delta - modulator * delta.abs() / MAX;
     *val = i32::clamp(new, -MAX, MAX) as i16;
 }
 
@@ -137,10 +138,6 @@ impl HistoryTable {
         } else {
             self.table.iter_mut().flatten().for_each(|x| *x = 0);
         }
-    }
-
-    pub fn get_mut(&mut self, piece: Piece, sq: Square) -> &mut i16 {
-        &mut self[piece][sq]
     }
 }
 

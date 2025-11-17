@@ -25,10 +25,7 @@ use crate::{
         tb_loss_in, tb_win_in,
     },
     history::caphist_piece_type,
-    historytable::{
-        cont1_history_bonus, cont1_history_malus, cont2_history_bonus, cont2_history_malus,
-        cont4_history_bonus, cont4_history_malus, main_history_bonus, main_history_malus,
-    },
+    historytable::{main_history_bonus, main_history_malus},
     lookups::HM_CLOCK_KEYS,
     movepicker::{MovePicker, Stage},
     search::pv::PVariation,
@@ -1459,20 +1456,7 @@ pub fn alpha_beta<NT: NodeType>(
                 }
 
                 if is_quiet && (score <= alpha || score >= beta) {
-                    let (c1, c2, c4);
-                    if score <= alpha {
-                        c1 = -cont1_history_malus(&t.info.conf, new_depth);
-                        c2 = -cont2_history_malus(&t.info.conf, new_depth);
-                        c4 = -cont4_history_malus(&t.info.conf, new_depth);
-                    } else {
-                        c1 = cont1_history_bonus(&t.info.conf, new_depth);
-                        c2 = cont2_history_bonus(&t.info.conf, new_depth);
-                        c4 = cont4_history_bonus(&t.info.conf, new_depth);
-                    }
-                    let sum = get_cont_history(t, height, hist_to, moved) / 32;
-                    t.update_continuation_history_single(hist_to, moved, c1, sum, 1);
-                    t.update_continuation_history_single(hist_to, moved, c2, sum, 2);
-                    t.update_continuation_history_single(hist_to, moved, c4, sum, 4);
+                    t.update_cont_hist_single(hist_to, moved, new_depth, height, score > alpha);
                 }
             } else if score > alpha && score < best_score + 16 {
                 new_depth -= 1;
@@ -1674,7 +1658,7 @@ fn rfp_margin(pos: &Board, info: &SearchInfo, depth: i32, improving: bool, corre
 /// Update the main and continuation history tables for a batch of moves.
 fn update_quiet_history(t: &mut ThreadData, moves_to_adjust: &[Move], best_move: Move, depth: i32) {
     t.update_history(moves_to_adjust, best_move, depth);
-    t.update_continuation_history(moves_to_adjust, best_move, depth);
+    t.update_cont_hist(moves_to_adjust, best_move, depth);
 }
 
 /// Update the main and continuation history tables for a single move.
@@ -1689,23 +1673,13 @@ fn update_quiet_history_single<const MADE: bool>(
     height: usize,
     good: bool,
 ) {
-    let (main, cont1, cont2, cont4);
-    if good {
-        main = main_history_bonus(&t.info.conf, depth);
-        cont1 = cont1_history_bonus(&t.info.conf, depth);
-        cont2 = cont2_history_bonus(&t.info.conf, depth);
-        cont4 = cont4_history_bonus(&t.info.conf, depth);
+    let main = if good {
+        main_history_bonus(&t.info.conf, depth)
     } else {
-        main = -main_history_malus(&t.info.conf, depth);
-        cont1 = -cont1_history_malus(&t.info.conf, depth);
-        cont2 = -cont2_history_malus(&t.info.conf, depth);
-        cont4 = -cont4_history_malus(&t.info.conf, depth);
-    }
+        -main_history_malus(&t.info.conf, depth)
+    };
     t.update_history_single(from, to, moved, threats, main);
-    let sum = get_cont_history(t, height, to, moved);
-    t.update_continuation_history_single(to, moved, cont1, sum, 0 + usize::from(MADE));
-    t.update_continuation_history_single(to, moved, cont2, sum, 1 + usize::from(MADE));
-    t.update_continuation_history_single(to, moved, cont4, sum, 3 + usize::from(MADE));
+    t.update_cont_hist_single(to, moved, depth, height, good);
 }
 
 /// Update the tactical history table.
