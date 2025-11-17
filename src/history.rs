@@ -176,7 +176,7 @@ impl ThreadData<'_> {
         }
 
         let update = move |entry: &mut i16| {
-            update_correction(entry, sum / 5, bonus);
+            update_correction(entry, sum, bonus);
         };
 
         update(pawn);

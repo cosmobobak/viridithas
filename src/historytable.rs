@@ -91,18 +91,28 @@ pub const MAX_HISTORY: i32 = i16::MAX as i32 / 2;
 pub const CORRECTION_HISTORY_SIZE: usize = 16_384;
 pub const CORRECTION_HISTORY_MAX: i32 = 1024;
 
+#[inline]
 pub fn update_history(val: &mut i16, delta: i32) {
-    gravity_update::<MAX_HISTORY>(val, i32::from(*val), delta);
+    gravity_update::<MAX_HISTORY>(val, delta);
 }
 
+#[inline]
 pub fn update_correction(val: &mut i16, sum: i32, delta: i32) {
     let curr = i32::midpoint(i32::from(*val), sum);
-    gravity_update::<CORRECTION_HISTORY_MAX>(val, curr, delta);
+    gravity_update_with_current::<CORRECTION_HISTORY_MAX>(val, curr, delta);
 }
 
-fn gravity_update<const MAX: i32>(val: &mut i16, curr: i32, delta: i32) {
+#[inline]
+fn gravity_update<const MAX: i32>(val: &mut i16, delta: i32) {
+    gravity_update_with_current::<MAX>(val, i32::from(*val), delta);
+}
+
+#[inline]
+fn gravity_update_with_current<const MAX: i32>(val: &mut i16, curr: i32, delta: i32) {
     #![allow(clippy::cast_possible_truncation)]
-    *val += delta as i16 - (curr * delta.abs() / MAX) as i16;
+    const { assert!(MAX < i16::MAX as i32 * 3 / 4) }
+    let new = i32::from(*val) + delta - (curr * delta.abs() / MAX);
+    *val = i32::clamp(new, -MAX, MAX) as i16;
 }
 
 #[repr(transparent)]
