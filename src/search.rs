@@ -21,8 +21,8 @@ use crate::{
         types::{ContHistIndex, Square},
     },
     evaluation::{
-        MATE_SCORE, MINIMUM_TB_WIN_SCORE, evaluate, is_decisive, is_mate_score, mate_in, mated_in,
-        see_value, tb_loss_in, tb_win_in,
+        MATE_SCORE, MINIMUM_TB_WIN_SCORE, evaluate, is_decisive, mate_in, mated_in, see_value,
+        tb_loss_in, tb_win_in,
     },
     history::caphist_piece_type,
     historytable::{
@@ -563,8 +563,13 @@ pub fn quiescence<NT: NodeType>(
 
     // probe the TT and see if we get a cutoff.
     let tt_hit = if let Some(hit) = t.tt.probe(key, height, clock) {
+        let illegal = hit
+            .mov
+            .is_some_and(|m| !t.board.is_pseudo_legal(m) || !t.board.is_legal(m));
+
         if !NT::PV
-            && clock < 80
+            && !illegal
+            && clock < 90
             && hit.value != VALUE_NONE
             && (hit.bound == Bound::Exact
                 || (hit.bound == Bound::Lower && hit.value >= beta)
@@ -573,7 +578,7 @@ pub fn quiescence<NT: NodeType>(
             return hit.value;
         }
 
-        Some(hit)
+        if illegal { None } else { Some(hit) }
     } else {
         None
     };
@@ -587,29 +592,25 @@ pub fn quiescence<NT: NodeType>(
         // could be being mated!
         raw_eval = VALUE_NONE;
         stand_pat = -INFINITY;
-    } else if let Some(TTHit { eval: tt_eval, .. }) = &tt_hit {
+    } else if let Some(tte) = tt_hit {
         // if we have a TT hit, check the cached TT eval.
-        let v = *tt_eval;
-        if v == VALUE_NONE {
+        if tte.eval == VALUE_NONE {
             // regenerate the static eval if it's VALUE_NONE.
             raw_eval = evaluate(t, t.info.nodes.get_local());
         } else {
             // if the TT eval is not VALUE_NONE, use it.
-            raw_eval = v;
+            raw_eval = tte.eval;
         }
         let adj_eval = adj_shuffle(t, raw_eval, clock) + t.correction();
 
         // try correcting via search score from TT.
         // notably, this doesn't work for main search for ~reasons.
-        let (tt_flag, tt_value) = tt_hit
-            .as_ref()
-            .map_or((Bound::None, VALUE_NONE), |tte| (tte.bound, tte.value));
-        if !is_decisive(tt_value)
-            && (tt_flag == Bound::Exact
-                || tt_flag == Bound::Upper && tt_value < adj_eval
-                || tt_flag == Bound::Lower && tt_value > adj_eval)
+        if !is_decisive(tte.value)
+            && (tte.bound == Bound::Exact
+                || tte.bound == Bound::Upper && tte.value < adj_eval
+                || tte.bound == Bound::Lower && tte.value > adj_eval)
         {
-            stand_pat = tt_value;
+            stand_pat = tte.value;
         } else {
             stand_pat = adj_eval;
         }
@@ -828,7 +829,7 @@ pub fn alpha_beta<NT: NodeType>(
             && !illegal
             && hit.value != VALUE_NONE
             && hit.depth >= depth + i32::from(hit.value >= beta)
-            && clock < 80
+            && clock < 90
             && (hit.bound == Bound::Exact
                 || (hit.bound == Bound::Lower && hit.value >= beta)
                 || (hit.bound == Bound::Upper && hit.value <= alpha))
@@ -845,9 +846,7 @@ pub fn alpha_beta<NT: NodeType>(
                 update_quiet_history_single::<false>(t, from, to, moved, threats, depth, true);
             }
 
-            if !is_mate_score(hit.value) {
-                return hit.value;
-            }
+            return hit.value;
         }
 
         if illegal { None } else { Some(hit) }
