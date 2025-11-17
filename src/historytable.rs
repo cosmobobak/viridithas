@@ -98,7 +98,7 @@ pub fn update_history(val: &mut i16, delta: i32) {
 
 #[inline]
 pub fn update_cont_history(val: &mut i16, sum: i32, delta: i32) {
-    gravity_update_with_modulator::<MAX_HISTORY>(val, i32::midpoint(i32::from(*val), sum), delta);
+    gravity_update_with_modulator::<MAX_HISTORY>(val, sum, delta);
 }
 
 #[inline]
