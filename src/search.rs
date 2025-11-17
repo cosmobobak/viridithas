@@ -1383,7 +1383,7 @@ pub fn alpha_beta<NT: NodeType>(
                     // normal singular extension
                     extension = 1;
                 }
-            } else if value >= beta && !is_decisive(value) {
+            } else if !NT::PV && value >= beta && !is_decisive(value) {
                 // multi-cut: if a move other than the best one beats beta,
                 // then we can cut with relatively high confidence.
                 return value;
