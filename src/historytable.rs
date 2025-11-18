@@ -72,17 +72,17 @@ pub fn tactical_history_malus(conf: &Config, depth: i32) -> i32 {
 
 pub fn cont_history_bonus(conf: &Config, depth: i32, index: usize) -> i32 {
     match index {
-        0 => cont1_history_bonus(conf, depth),
-        1 => cont2_history_bonus(conf, depth),
-        3 => cont4_history_bonus(conf, depth),
+        1 => cont1_history_bonus(conf, depth),
+        2 => cont2_history_bonus(conf, depth),
+        4 => cont4_history_bonus(conf, depth),
         _ => unreachable!(),
     }
 }
 pub fn cont_history_malus(conf: &Config, depth: i32, index: usize) -> i32 {
     match index {
-        0 => cont1_history_malus(conf, depth),
-        1 => cont2_history_malus(conf, depth),
-        3 => cont4_history_malus(conf, depth),
+        1 => cont1_history_malus(conf, depth),
+        2 => cont2_history_malus(conf, depth),
+        4 => cont4_history_malus(conf, depth),
         _ => unreachable!(),
     }
 }
@@ -91,18 +91,32 @@ pub const MAX_HISTORY: i32 = i16::MAX as i32 / 2;
 pub const CORRECTION_HISTORY_SIZE: usize = 16_384;
 pub const CORRECTION_HISTORY_MAX: i32 = 1024;
 
+#[inline]
 pub fn update_history(val: &mut i16, delta: i32) {
     gravity_update::<MAX_HISTORY>(val, delta);
 }
 
+#[inline]
+pub fn update_cont_history(val: &mut i16, sum: i32, delta: i32) {
+    gravity_update_with_modulator::<MAX_HISTORY>(val, sum, delta);
+}
+
+#[inline]
 pub fn update_correction(val: &mut i16, delta: i32) {
     gravity_update::<CORRECTION_HISTORY_MAX>(val, delta);
 }
 
+#[inline]
 fn gravity_update<const MAX: i32>(val: &mut i16, delta: i32) {
+    gravity_update_with_modulator::<MAX>(val, i32::from(*val), delta);
+}
+
+#[inline]
+fn gravity_update_with_modulator<const MAX: i32>(val: &mut i16, modulator: i32, delta: i32) {
     #![allow(clippy::cast_possible_truncation)]
-    let curr = i32::from(*val);
-    *val += delta as i16 - (curr * delta.abs() / MAX) as i16;
+    const { assert!(MAX < i16::MAX as i32 * 3 / 4) }
+    let new = i32::from(*val) + delta - modulator * delta.abs() / MAX;
+    *val = i32::clamp(new, -MAX, MAX) as i16;
 }
 
 #[repr(transparent)]
@@ -123,10 +137,6 @@ impl HistoryTable {
         } else {
             self.table.iter_mut().flatten().for_each(|x| *x = 0);
         }
-    }
-
-    pub fn get_mut(&mut self, piece: Piece, sq: Square) -> &mut i16 {
-        &mut self[piece][sq]
     }
 }
 

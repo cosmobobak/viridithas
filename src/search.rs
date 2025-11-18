@@ -25,10 +25,7 @@ use crate::{
         tb_loss_in, tb_win_in,
     },
     history::caphist_piece_type,
-    historytable::{
-        cont1_history_bonus, cont1_history_malus, cont2_history_bonus, cont2_history_malus,
-        cont4_history_bonus, cont4_history_malus, main_history_bonus, main_history_malus,
-    },
+    historytable::{main_history_bonus, main_history_malus},
     lookups::HM_CLOCK_KEYS,
     movepicker::{MovePicker, Stage},
     search::pv::PVariation,
@@ -843,7 +840,9 @@ pub fn alpha_beta<NT: NodeType>(
                 let to = m.history_to_square();
                 let moved = t.board.state.mailbox[from].unwrap();
                 let threats = t.board.state.threats.all;
-                update_quiet_history_single::<false>(t, from, to, moved, threats, depth, true);
+                update_quiet_history_single::<false>(
+                    t, from, to, moved, threats, depth, height, true,
+                );
             }
 
             return hit.value;
@@ -1264,35 +1263,17 @@ pub fn alpha_beta<NT: NodeType>(
         let lmr_depth = std::cmp::max(depth - lmr_reduction / 1024, 0);
         let is_quiet = !t.board.is_tactical(m);
 
-        let mut stat_score = 0;
-
         let from = m.from();
         let hist_to = m.history_to_square();
         let moved = t.board.state.mailbox[from].unwrap();
         let threats = t.board.state.threats.all;
         let from_threat = usize::from(threats.contains_square(from));
         let to_threat = usize::from(threats.contains_square(hist_to));
-        if is_quiet {
-            stat_score += i32::from(t.main_hist[from_threat][to_threat][moved][hist_to])
-                * t.info.conf.main_stat_score_mul;
-            if height >= 1 {
-                stat_score += i32::from(t.cont_hist[t.ss[height - 1].ch_idx][moved][hist_to])
-                    * t.info.conf.cont1_stat_score_mul;
-            }
-            if height >= 2 {
-                stat_score += i32::from(t.cont_hist[t.ss[height - 2].ch_idx][moved][hist_to])
-                    * t.info.conf.cont2_stat_score_mul;
-            }
-            if height >= 4 {
-                stat_score += i32::from(t.cont_hist[t.ss[height - 4].ch_idx][moved][hist_to])
-                    * t.info.conf.cont4_stat_score_mul;
-            }
+        let stat_score = if is_quiet {
+            get_quiet_history(t, height, hist_to, moved, from_threat, to_threat) / 32
         } else {
-            let capture = caphist_piece_type(&t.board, m);
-            stat_score += i32::from(t.tactical_hist[to_threat][capture][moved][hist_to])
-                * t.info.conf.tactical_stat_score_mul;
-        }
-        stat_score /= 32;
+            get_tactical_history(t, hist_to, moved, to_threat, m) / 32
+        };
 
         // lmp & fp.
         if !NT::ROOT && !NT::PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
@@ -1475,19 +1456,7 @@ pub fn alpha_beta<NT: NodeType>(
                 }
 
                 if is_quiet && (score <= alpha || score >= beta) {
-                    let (c1, c2, c4);
-                    if score <= alpha {
-                        c1 = -cont1_history_malus(&t.info.conf, new_depth);
-                        c2 = -cont2_history_malus(&t.info.conf, new_depth);
-                        c4 = -cont4_history_malus(&t.info.conf, new_depth);
-                    } else {
-                        c1 = cont1_history_bonus(&t.info.conf, new_depth);
-                        c2 = cont2_history_bonus(&t.info.conf, new_depth);
-                        c4 = cont4_history_bonus(&t.info.conf, new_depth);
-                    }
-                    t.update_continuation_history_single(hist_to, moved, c1, 1);
-                    t.update_continuation_history_single(hist_to, moved, c2, 2);
-                    t.update_continuation_history_single(hist_to, moved, c4, 4);
+                    t.update_cont_hist_single(hist_to, moved, new_depth, height, score > alpha);
                 }
             } else if score > alpha && score < best_score + 16 {
                 new_depth -= 1;
@@ -1635,6 +1604,50 @@ pub fn alpha_beta<NT: NodeType>(
     best_score
 }
 
+fn get_tactical_history(
+    t: &ThreadData<'_>,
+    hist_to: Square,
+    moved: Piece,
+    to_threat: usize,
+    m: Move,
+) -> i32 {
+    let capture = caphist_piece_type(&t.board, m);
+    i32::from(t.tactical_hist[to_threat][capture][moved][hist_to])
+        * t.info.conf.tactical_stat_score_mul
+}
+
+fn get_quiet_history(
+    t: &ThreadData<'_>,
+    height: usize,
+    hist_to: Square,
+    moved: Piece,
+    from_threat: usize,
+    to_threat: usize,
+) -> i32 {
+    let mut stat_score = 0;
+    stat_score += i32::from(t.main_hist[from_threat][to_threat][moved][hist_to])
+        * t.info.conf.main_stat_score_mul;
+    stat_score += get_cont_history(t, height, hist_to, moved);
+    stat_score
+}
+
+fn get_cont_history(t: &ThreadData<'_>, height: usize, hist_to: Square, moved: Piece) -> i32 {
+    let mut stat_score = 0;
+    if height >= 1 {
+        stat_score += i32::from(t.cont_hist[t.ss[height - 1].ch_idx][moved][hist_to])
+            * t.info.conf.cont1_stat_score_mul;
+    }
+    if height >= 2 {
+        stat_score += i32::from(t.cont_hist[t.ss[height - 2].ch_idx][moved][hist_to])
+            * t.info.conf.cont2_stat_score_mul;
+    }
+    if height >= 4 {
+        stat_score += i32::from(t.cont_hist[t.ss[height - 4].ch_idx][moved][hist_to])
+            * t.info.conf.cont4_stat_score_mul;
+    }
+    stat_score
+}
+
 /// The margin for Reverse Futility Pruning.
 fn rfp_margin(pos: &Board, info: &SearchInfo, depth: i32, improving: bool, correction: i32) -> i32 {
     info.conf.rfp_margin * depth
@@ -1645,9 +1658,7 @@ fn rfp_margin(pos: &Board, info: &SearchInfo, depth: i32, improving: bool, corre
 /// Update the main and continuation history tables for a batch of moves.
 fn update_quiet_history(t: &mut ThreadData, moves_to_adjust: &[Move], best_move: Move, depth: i32) {
     t.update_history(moves_to_adjust, best_move, depth);
-    t.update_continuation_history(moves_to_adjust, best_move, depth, 0);
-    t.update_continuation_history(moves_to_adjust, best_move, depth, 1);
-    t.update_continuation_history(moves_to_adjust, best_move, depth, 3);
+    t.update_cont_hist(moves_to_adjust, best_move, depth);
 }
 
 /// Update the main and continuation history tables for a single move.
@@ -1659,24 +1670,16 @@ fn update_quiet_history_single<const MADE: bool>(
     moved: Piece,
     threats: SquareSet,
     depth: i32,
+    height: usize,
     good: bool,
 ) {
-    let (main, cont1, cont2, cont4);
-    if good {
-        main = main_history_bonus(&t.info.conf, depth);
-        cont1 = cont1_history_bonus(&t.info.conf, depth);
-        cont2 = cont2_history_bonus(&t.info.conf, depth);
-        cont4 = cont4_history_bonus(&t.info.conf, depth);
+    let main = if good {
+        main_history_bonus(&t.info.conf, depth)
     } else {
-        main = -main_history_malus(&t.info.conf, depth);
-        cont1 = -cont1_history_malus(&t.info.conf, depth);
-        cont2 = -cont2_history_malus(&t.info.conf, depth);
-        cont4 = -cont4_history_malus(&t.info.conf, depth);
-    }
+        -main_history_malus(&t.info.conf, depth)
+    };
     t.update_history_single(from, to, moved, threats, main);
-    t.update_continuation_history_single(to, moved, cont1, 0 + usize::from(MADE));
-    t.update_continuation_history_single(to, moved, cont2, 1 + usize::from(MADE));
-    t.update_continuation_history_single(to, moved, cont4, 3 + usize::from(MADE));
+    t.update_cont_hist_single(to, moved, depth, height, good);
 }
 
 /// Update the tactical history table.
