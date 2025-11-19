@@ -1245,10 +1245,6 @@ pub fn alpha_beta<NT: NodeType>(
     let mut quiets_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
     let mut tacticals_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
 
-    let maybe_singular = depth >= 5
-        && excluded.is_none()
-        && tt_hit.is_some_and(|tte| tte.depth >= depth - 3 && tte.bound.is_lower());
-
     while let Some(m) = move_picker.next(t) {
         if excluded == Some(m) {
             continue;
@@ -1335,8 +1331,14 @@ pub fn alpha_beta<NT: NodeType>(
         let extension;
         if NT::ROOT {
             extension = 0;
-        } else if maybe_singular && Some(m) == tt_move {
-            let tte = tt_hit.unwrap();
+        } else if Some(m) == tt_move
+            && excluded.is_none()
+            && depth >= 6 + i32::from(t.ss[height].ttpv)
+            && let Some(tte) = tt_hit
+            && tte.value != VALUE_NONE
+            && tte.bound.is_lower()
+            && tte.depth >= depth - 3
+        {
             let r_beta = singularity_margin(tte.value, depth);
             let r_depth = (depth - 1) / 2;
 
