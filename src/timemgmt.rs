@@ -12,14 +12,14 @@ use crate::{
 
 const MOVE_OVERHEAD: u64 = 30;
 
-pub const STRONG_FORCED_TM_FRAC: u32 = 276;
+pub const STRONG_FORCED_TM_FRAC: u32 = 354;
 pub const WEAK_FORCED_TM_FRAC: u32 = 650;
 pub const DEFAULT_MOVES_TO_GO: u32 = 27;
-pub const HARD_WINDOW_FRAC: u32 = 57;
-pub const OPTIMAL_WINDOW_FRAC: u32 = 72;
-pub const INCREMENT_FRAC: u32 = 75;
-pub const NODE_TM_SUBTREE_MULTIPLIER: u32 = 153;
-pub const FAIL_LOW_TM_BONUS: u32 = 339;
+pub const HARD_WINDOW_FRAC: u32 = 53;
+pub const OPTIMAL_WINDOW_FRAC: u32 = 78;
+pub const INCREMENT_FRAC: u32 = 74;
+pub const NODE_TM_SUBTREE_MULTIPLIER: u32 = 148;
+pub const FAIL_LOW_TM_BONUS: u32 = 306;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum ForcedMoveType {
@@ -40,8 +40,9 @@ impl ForcedMoveType {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Default)]
 pub enum SearchLimit {
+    #[default]
     Infinite,
     Depth(usize),
     Time(u64),
@@ -64,12 +65,6 @@ pub enum SearchLimit {
     Pondering {
         saved_limit: Box<SearchLimit>,
     },
-}
-
-impl Default for SearchLimit {
-    fn default() -> Self {
-        Self::Infinite
-    }
 }
 
 impl SearchLimit {
@@ -101,33 +96,33 @@ impl SearchLimit {
         our_inc: u64,
         conf: &Config,
     ) -> (u64, u64, u64) {
-        // The absolute maximum time we could spend without losing on the clock:
-        let absolute_maximum = our_clock.saturating_sub(MOVE_OVERHEAD);
+        // The very highest amount of time we are
+        // willing to search in a position, ever.
+        let max_time = (our_clock * 95 / 100).saturating_sub(MOVE_OVERHEAD);
 
         // The maximum time we can spend searching before forcibly stopping:
-        let hard_time_window =
-            (our_clock * u64::from(conf.hard_window_frac) / 100).min(absolute_maximum);
+        let hard_time_window = (our_clock * u64::from(conf.hard_window_frac) / 100).min(max_time);
 
         // If we have a moves to go, we can use that to compute a time window.
         if let Some(moves_to_go) = moves_to_go {
             // Use more time if we have fewer moves to go, but not more than default_moves_to_go.
             let divisor = moves_to_go.clamp(2, u64::from(conf.default_moves_to_go));
             let computed_time_window = our_clock / divisor;
-            let optimal_time_window = computed_time_window.min(absolute_maximum)
-                * u64::from(conf.optimal_window_frac)
-                / 100;
-            return (optimal_time_window, hard_time_window, absolute_maximum);
+            let optimal_time_window =
+                computed_time_window.min(max_time) * u64::from(conf.optimal_window_frac) / 100;
+            return (optimal_time_window, hard_time_window, max_time);
         }
 
         // Otherwise, we use default_moves_to_go.
         let computed_time_window = our_clock / u64::from(conf.default_moves_to_go)
             + our_inc * u64::from(conf.increment_frac) / 100
             - MOVE_OVERHEAD;
-        let optimal_time_window = (computed_time_window.min(absolute_maximum)
-            * u64::from(conf.optimal_window_frac)
-            / 100)
-            .min(hard_time_window);
-        (optimal_time_window, hard_time_window, absolute_maximum)
+
+        let optimal_time_window =
+            (computed_time_window.min(max_time) * u64::from(conf.optimal_window_frac) / 100)
+                .min(hard_time_window);
+
+        (optimal_time_window, hard_time_window, max_time)
     }
 
     #[cfg(test)]

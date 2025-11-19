@@ -20,6 +20,8 @@ use crate::chess::board::movegen::MAX_POSITION_MOVES;
 pub struct SearchInfo<'a> {
     /// The number of nodes searched.
     pub nodes: BatchedAtomicCounter<'a>,
+    /// The number of tablebase hits.
+    pub tbhits: BatchedAtomicCounter<'a>,
     /// A table storing the number of nodes under the root move(s).
     pub root_move_nodes: [[u64; 64]; 64], // [from][to]
     /// Signal to stop the search.
@@ -56,9 +58,10 @@ pub struct SearchInfo<'a> {
 }
 
 impl<'a> SearchInfo<'a> {
-    pub fn new(stopped: &'a AtomicBool, nodes: &'a AtomicU64) -> Self {
+    pub fn new(stopped: &'a AtomicBool, nodes: &'a AtomicU64, tbhits: &'a AtomicU64) -> Self {
         let out = Self {
             nodes: BatchedAtomicCounter::new(nodes),
+            tbhits: BatchedAtomicCounter::new(tbhits),
             #[allow(clippy::large_stack_arrays)]
             root_move_nodes: [[0; 64]; 64],
             stopped,
@@ -86,6 +89,7 @@ impl<'a> SearchInfo<'a> {
     pub fn set_up_for_search(&mut self) {
         self.stopped.store(false, Ordering::SeqCst);
         self.nodes.reset();
+        self.tbhits.reset();
         for rmnc in self.root_move_nodes.iter_mut().flatten() {
             *rmnc = 0;
         }
@@ -219,6 +223,7 @@ mod tests {
             Board::from_fen("r1b2bkr/ppp3pp/2n5/3qp3/2B5/8/PPPP1PPP/RNB1K2R w KQ - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
+        let tbhits = AtomicU64::new(0);
         let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
         tt.resize(MEGABYTE, &pool);
@@ -230,6 +235,7 @@ mod tests {
             nnue_params,
             &stopped,
             &nodes,
+            &tbhits,
         ));
         t.info.clock = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let (value, mov) = search_position(&pool, array::from_mut(&mut t));
@@ -251,6 +257,7 @@ mod tests {
             Board::from_fen("r1bq1bkr/ppp3pp/2n5/3Qp3/2B5/8/PPPP1PPP/RNB1K2R b KQ - 0 8").unwrap();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
+        let tbhits = AtomicU64::new(0);
         let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
         tt.resize(MEGABYTE, &pool);
@@ -262,6 +269,7 @@ mod tests {
             nnue_params,
             &stopped,
             &nodes,
+            &tbhits,
         ));
         t.info.clock = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let (value, mov) = search_position(&pool, array::from_mut(&mut t));
@@ -280,6 +288,7 @@ mod tests {
             Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3qP3/P1N5/1PP3PP/R1BQ1BKR w kq - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
+        let tbhits = AtomicU64::new(0);
         let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
         tt.resize(MEGABYTE, &pool);
@@ -291,6 +300,7 @@ mod tests {
             nnue_params,
             &stopped,
             &nodes,
+            &tbhits,
         ));
         t.info.clock = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let (value, mov) = search_position(&pool, array::from_mut(&mut t));
@@ -309,6 +319,7 @@ mod tests {
             Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3QP3/P1N5/1PP3PP/R1B2BKR b kq - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
+        let tbhits = AtomicU64::new(0);
         let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
         tt.resize(MEGABYTE, &pool);
@@ -320,6 +331,7 @@ mod tests {
             nnue_params,
             &stopped,
             &nodes,
+            &tbhits,
         ));
         t.info.clock = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let (value, mov) = search_position(&pool, array::from_mut(&mut t));
