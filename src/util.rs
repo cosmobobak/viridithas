@@ -61,6 +61,12 @@ impl<'a> BatchedAtomicCounter<'a> {
     pub const fn just_ticked_over(&self) -> bool {
         self.buffer == 0
     }
+
+    pub fn flush(&mut self) {
+        self.global.fetch_add(self.buffer, Ordering::Relaxed);
+        self.local += self.buffer;
+        self.buffer = 0;
+    }
 }
 
 /// Polyfill for backwards compatibility with old rust compilers.

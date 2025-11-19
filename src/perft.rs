@@ -228,6 +228,7 @@ mod tests {
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
+        let tbhits = AtomicU64::new(0);
         let mut t = ThreadData::new(
             0,
             Board::default(),
@@ -235,6 +236,7 @@ mod tests {
             nnue_params,
             &stopped,
             &nodes,
+            &tbhits,
         );
         assert_eq!(nnue_perft(&mut t, 1), 20, "got {}", {
             t.board
@@ -260,7 +262,8 @@ mod tests {
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
-        let mut t = ThreadData::new(0, pos, tt.view(), nnue_params, &stopped, &nodes);
+        let tbhits = AtomicU64::new(0);
+        let mut t = ThreadData::new(0, pos, tt.view(), nnue_params, &stopped, &nodes, &tbhits);
         assert_eq!(movepicker_perft(&mut t, 1), 20, "got {}", {
             t.board
                 .legal_moves()
@@ -288,7 +291,8 @@ mod tests {
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
-        let mut t = ThreadData::new(0, pos, tt.view(), nnue_params, &stopped, &nodes);
+        let tbhits = AtomicU64::new(0);
+        let mut t = ThreadData::new(0, pos, tt.view(), nnue_params, &stopped, &nodes, &tbhits);
         assert_eq!(movepicker_perft(&mut t, 1), 48, "got {}", {
             t.board
                 .legal_moves()
@@ -315,7 +319,8 @@ mod tests {
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
-        let mut t = ThreadData::new(0, pos, tt.view(), nnue_params, &stopped, &nodes);
+        let tbhits = AtomicU64::new(0);
+        let mut t = ThreadData::new(0, pos, tt.view(), nnue_params, &stopped, &nodes, &tbhits);
         assert_eq!(movepicker_perft(&mut t, 1), 4, "got {}", {
             t.board
                 .legal_moves()
@@ -341,7 +346,8 @@ mod tests {
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
-        let mut t = ThreadData::new(0, pos, tt.view(), nnue_params, &stopped, &nodes);
+        let tbhits = AtomicU64::new(0);
+        let mut t = ThreadData::new(0, pos, tt.view(), nnue_params, &stopped, &nodes, &tbhits);
         assert_eq!(movepicker_perft(&mut t, 1), 8, "got {}", {
             t.board
                 .legal_moves()

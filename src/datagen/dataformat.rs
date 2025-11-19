@@ -6,7 +6,6 @@ use crate::{
         chessmove::Move,
         piece::{Colour, PieceType},
     },
-    evaluation::MINIMUM_TB_WIN_SCORE,
     tablebases::probe::WDL,
 };
 
@@ -44,7 +43,7 @@ impl Default for Filter {
         Self {
             min_ply: 16,
             min_pieces: 4,
-            max_eval: MINIMUM_TB_WIN_SCORE.try_into().unwrap(),
+            max_eval: 20_000,
             max_opening_eval: u32::MAX,
             filter_tactical: true,
             filter_check: true,
@@ -156,6 +155,14 @@ impl Game {
 
     pub fn moves(&self) -> impl Iterator<Item = Move> + '_ {
         self.moves.iter().map(|(mv, _)| *mv)
+    }
+
+    pub fn buffer(&self) -> &[(Move, marlinformat::util::I16Le)] {
+        &self.moves
+    }
+
+    pub fn buffer_mut(&mut self) -> &mut [(Move, marlinformat::util::I16Le)] {
+        &mut self.moves
     }
 
     pub fn set_outcome(&mut self, outcome: GameOutcome) {

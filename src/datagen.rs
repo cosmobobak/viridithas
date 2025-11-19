@@ -10,7 +10,7 @@ use std::{
     fmt::{Display, Formatter},
     fs::{self, File},
     hash::Hash,
-    io::{BufReader, BufWriter, Seek, Write},
+    io::{BufRead, BufReader, BufWriter, Seek, Write},
     ops::ControlFlow,
     path::{Path, PathBuf},
     sync::{
@@ -23,7 +23,7 @@ use std::{
 use anyhow::{Context, anyhow, bail};
 use bulletformat::ChessBoard;
 use dataformat::Filter;
-use rand::{rngs::ThreadRng, seq::IndexedRandom};
+use rand::{Rng, rngs::ThreadRng, seq::IndexedRandom};
 
 use crate::{
     chess::{
@@ -195,7 +195,7 @@ impl StartposGenerator for ClassicalStartposGenerator {
     fn generate(&mut self, board: &mut Board, conf: &Config) -> ControlFlow<(), ()> {
         board.set_startpos();
 
-        for _ in 0..RANDOM_MOVES_ROOT {
+        for _ in 0..RANDOM_MOVES_ROOT + usize::from(self.rng.random_bool(0.5)) {
             let res = make_random_move(&mut self.rng, board, conf, RANDOM_SEE_THRESHOLD);
             if res.is_none() {
                 return ControlFlow::Break(());
@@ -213,7 +213,7 @@ impl StartposGenerator for DFRCStartposGenerator {
     fn generate(&mut self, board: &mut Board, conf: &Config) -> ControlFlow<(), ()> {
         board.set_dfrc_idx(rand::Rng::random_range(&mut self.rng, 0..960 * 960));
 
-        for _ in 0..RANDOM_MOVES_ROOT {
+        for _ in 0..RANDOM_MOVES_ROOT + usize::from(self.rng.random_bool(0.5)) {
             let res = make_random_move(&mut self.rng, board, conf, RANDOM_SEE_THRESHOLD);
             if res.is_none() {
                 return ControlFlow::Break(());
@@ -434,6 +434,7 @@ fn generate_on_thread<'a>(
     tts[Colour::Black].resize(4 * MEGABYTE, from_ref(&worker_thread));
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
+    let tbhits = AtomicU64::new(0);
     let mut thread_data = std::array::from_fn::<_, 2, _>(|colour| {
         make_thread_data(
             &Board::default(),
@@ -441,6 +442,7 @@ fn generate_on_thread<'a>(
             nnue_params,
             &stopped,
             &nodes,
+            &tbhits,
             from_ref(&worker_thread),
         )
         .unwrap()
@@ -970,6 +972,73 @@ pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) -> anyhow::R
     Ok(())
 }
 
+/// Take a binpack, and write a new binpack with identical data but rescaled evaluations.
+pub fn run_rescale(input: &Path, output: &Path, scale: f64) -> anyhow::Result<()> {
+    // check that the input file exists
+    if !input.try_exists()? {
+        bail!("Input file does not exist.");
+    }
+    // check that the output does not exist
+    if output.try_exists()? {
+        bail!("Output file already exists.");
+    }
+
+    // open the input file
+    let input_file = File::open(input)
+        .with_context(|| format!("Failed to create input file: {}", input.display()))?;
+    let input_buffer = BufReader::new(input_file);
+
+    // open the output file
+    let output_file = File::create(output)
+        .with_context(|| format!("Failed to create output file: {}", output.display()))?;
+    let output_buffer = BufWriter::new(output_file);
+
+    println!("Rescaling evaluations by a factor of {scale}...");
+    rescale_binpacks(scale, input_buffer, output_buffer)?;
+
+    Ok(())
+}
+
+#[allow(clippy::cast_possible_truncation)]
+fn rescale_binpacks(
+    scale: f64,
+    mut input_buffer: impl BufRead,
+    mut output_buffer: impl Write,
+) -> Result<(), anyhow::Error> {
+    let mut move_buffer = Vec::new();
+    while let Ok(mut game) =
+        dataformat::Game::deserialise_from(&mut input_buffer, std::mem::take(&mut move_buffer))
+    {
+        for (_, slot) in game.buffer_mut() {
+            let value = i32::from(slot.get());
+            let new_value = if is_decisive(value * 2) {
+                value
+            } else {
+                (f64::from(value) * scale).round() as i32
+            };
+            if is_decisive(new_value) && !is_decisive(value) {
+                eprintln!("[!] a network evaluation became decisive ({value} -> {new_value})");
+            }
+            let new_value: i16 = new_value.try_into().with_context(|| {
+                format!("Failed to convert rescaled evaluation into i16: {new_value}.")
+            })?;
+
+            slot.set(new_value);
+        }
+
+        game.serialise_into(&mut output_buffer)
+            .context("Failed to serialise game into output buffer.")?;
+
+        move_buffer = game.into_move_buffer();
+    }
+
+    output_buffer
+        .flush()
+        .with_context(|| "Failed to flush output buffer to file.")?;
+
+    Ok(())
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 struct MaterialConfiguration {
     counts: [u8; 10],
@@ -1038,17 +1107,28 @@ impl From<&Board> for MaterialConfiguration {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 struct DataSetStats {
+    /// The total number of games in the dataset.
     games: usize,
+    /// A histogram of opening evaluations (the evaluation of the first position in each game).
     opening_eval_counts: HashMap<i32, usize>,
+    /// A histogram of game lengths (in ply).
     length_counts: HashMap<usize, usize>,
+    /// A histogram of all evaluations in the dataset.
     eval_counts: HashMap<i32, usize>,
+    /// A histogram of the number of pieces on the board across all positions in the dataset.
     piece_counts: HashMap<u8, usize>,
+    /// A histogram of material configurations across all positions in the dataset.
     material_counts: HashMap<MaterialConfiguration, usize>,
+    /// A histogram of the positions of the point-of-view king across all positions in the dataset.
     pov_king_positions: HashMap<Square, usize>,
 }
 
 /// Scans a variable-length game format file and prints statistics about it.
-#[allow(clippy::too_many_lines)]
+#[allow(
+    clippy::too_many_lines,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation
+)]
 pub fn dataset_stats(dataset_path: &Path) -> anyhow::Result<()> {
     let mut move_buffer = Vec::new();
     let mut stats = DataSetStats::default();
@@ -1136,16 +1216,16 @@ pub fn dataset_stats(dataset_path: &Path) -> anyhow::Result<()> {
     eval_counts.sort_unstable_by_key(|(eval, _)| *eval);
     let mut eval_counts_file = BufWriter::new(File::create("eval_counts.csv")?);
     writeln!(eval_counts_file, "eval,count")?;
-    for (eval, count) in eval_counts {
+    for &(eval, count) in &eval_counts {
         writeln!(eval_counts_file, "{eval},{count}")?;
     }
     eval_counts_file.flush()?;
     println!("Writing opening eval counts to opening_eval_counts.csv");
-    let mut eval_counts = stats.opening_eval_counts.into_iter().collect::<Vec<_>>();
-    eval_counts.sort_unstable_by_key(|(eval, _)| *eval);
+    let mut opening_eval_counts = stats.opening_eval_counts.into_iter().collect::<Vec<_>>();
+    opening_eval_counts.sort_unstable_by_key(|(eval, _)| *eval);
     let mut eval_counts_file = BufWriter::new(File::create("opening_eval_counts.csv")?);
     writeln!(eval_counts_file, "eval,count")?;
-    for (eval, count) in eval_counts {
+    for (eval, count) in opening_eval_counts {
         writeln!(eval_counts_file, "{eval},{count}")?;
     }
     eval_counts_file.flush()?;
@@ -1184,6 +1264,40 @@ pub fn dataset_stats(dataset_path: &Path) -> anyhow::Result<()> {
     let mean_game_len = ((total_position_count * 1000) / stats.games as u128) as f64 / 1000.0;
     println!("Mean game length: {mean_game_len}");
     println!("Total position count: {total_position_count}");
+
+    let usable_evals = eval_counts
+        .into_iter()
+        .filter(|(eval, _)| !is_decisive(*eval * 2))
+        .collect::<Vec<_>>();
+
+    let total = usable_evals.iter().map(|(_, c)| *c as u128).sum::<u128>() as f64;
+    let mean_eval = usable_evals
+        .iter()
+        .map(|(eval, c)| i128::from(*eval) * (*c as i128))
+        .sum::<i128>() as f64
+        / total;
+
+    println!("Mean eval: {mean_eval:.2}");
+
+    let mean_abs_eval = usable_evals
+        .iter()
+        .map(|(eval, c)| u128::from(eval.unsigned_abs()) * (*c as u128))
+        .sum::<u128>() as f64
+        / total;
+
+    println!("Mean absolute eval: {mean_abs_eval:.2}");
+
+    let variance = usable_evals
+        .iter()
+        .map(|(eval, c)| {
+            let diff = i128::from(*eval) - mean_eval as i128;
+            diff * diff * (*c as i128)
+        })
+        .sum::<i128>() as f64
+        / total;
+
+    let stddev = variance.sqrt();
+    println!("Eval standard deviation: {stddev:.2}");
 
     Ok(())
 }
@@ -1287,4 +1401,54 @@ pub fn dataset_count(path: &Path) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{chess::CHESS960, datagen::dataformat, evaluation::is_decisive};
+
+    #[test]
+    fn test_scaling() {
+        CHESS960.store(true, std::sync::atomic::Ordering::Relaxed);
+
+        let input_binpacks = include_bytes!("../embeds/test-vf.bin");
+        let mut input_cursor = std::io::Cursor::new(input_binpacks);
+        let mut output_cursor = std::io::Cursor::new(Vec::new());
+        super::rescale_binpacks(0.5, &mut input_cursor, &mut output_cursor).unwrap();
+
+        // deserialise the output and check that the evaluations are halved
+        input_cursor.set_position(0);
+        output_cursor.set_position(0);
+        let mut input_move_buffer = Vec::new();
+        let mut output_move_buffer = Vec::new();
+        while let Ok(input_game) = dataformat::Game::deserialise_from(
+            &mut input_cursor,
+            std::mem::take(&mut input_move_buffer),
+        ) {
+            let output_game = dataformat::Game::deserialise_from(
+                &mut output_cursor,
+                std::mem::take(&mut output_move_buffer),
+            )
+            .unwrap();
+            let input_slots = input_game.buffer();
+            let output_slots = output_game.buffer();
+            assert_eq!(input_slots.len(), output_slots.len());
+            for ((m1, input_slot), (m2, output_slot)) in input_slots.iter().zip(output_slots.iter())
+            {
+                assert_eq!(m1, m2);
+                let input_eval = i32::from(input_slot.get());
+                let output_eval = i32::from(output_slot.get());
+                #[allow(clippy::cast_possible_truncation)]
+                let expected_output_eval = if is_decisive(input_eval) {
+                    input_eval
+                } else {
+                    (f64::from(input_eval) * 0.5).round() as i32
+                };
+                assert_eq!(
+                    output_eval, expected_output_eval,
+                    "Input eval: {input_eval}, Output eval: {output_eval}, Expected output eval: {expected_output_eval}"
+                );
+            }
+        }
+    }
 }
