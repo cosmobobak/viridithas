@@ -6,7 +6,7 @@ use std::{
 use crate::{
     chess::chessmove::Move,
     evaluation::{MATE_SCORE, MINIMUM_MATE_SCORE, MINIMUM_TB_WIN_SCORE},
-    threadpool::{self, ScopeExt},
+    threadpool,
     util::{MEGABYTE, VALUE_NONE, depth::CompactDepthStorage},
 };
 
@@ -61,7 +61,7 @@ unsafe fn threaded_memset_zero(
     threads: &[threadpool::WorkerThread],
 ) {
     #[allow(clippy::collection_is_never_read)]
-    std::thread::scope(|s| {
+    threadpool::scope(|s| {
         let thread_count = threads.len();
         let chunk_size = len / thread_count + 64;
         let mut handles = Vec::with_capacity(thread_count);
@@ -258,7 +258,7 @@ impl TT {
 
     pub fn clear(&self, threads: &[threadpool::WorkerThread]) {
         #[allow(clippy::collection_is_never_read)]
-        std::thread::scope(|s| {
+        threadpool::scope(|s| {
             let mut handles = Vec::with_capacity(threads.len());
             for (chunk, worker) in
                 divide_into_chunks(&self.table, threads.len()).zip(threads.iter().cycle())

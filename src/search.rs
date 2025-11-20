@@ -3,7 +3,7 @@
 pub mod parameters;
 pub mod pv;
 
-use std::{sync::atomic::Ordering, thread};
+use std::sync::atomic::Ordering;
 
 use arrayvec::ArrayVec;
 
@@ -32,7 +32,7 @@ use crate::{
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
-    threadpool::{self, ScopeExt},
+    threadpool,
     timemgmt::SearchLimit,
     transpositiontable::{Bound, TTHit},
     uci,
@@ -257,7 +257,7 @@ pub fn search_position(
     // start search threads:
     let (t1, rest) = thread_headers.split_first_mut().unwrap();
     let (w1, rest_workers) = pool.split_first().unwrap();
-    thread::scope(|s| {
+    threadpool::scope(|s| {
         let mut handles = Vec::with_capacity(pool.len());
         handles.push(s.spawn_into(
             || {

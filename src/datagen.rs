@@ -445,7 +445,6 @@ fn generate_on_thread<'a>(
             &tbhits,
             from_ref(&worker_thread),
         )
-        .unwrap()
         .into_iter()
         .next()
         .unwrap()

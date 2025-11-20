@@ -15,7 +15,7 @@ use crate::{
     search::pv::PVariation,
     searchinfo::SearchInfo,
     stack::StackEntry,
-    threadpool::{self, ScopeExt},
+    threadpool,
     transpositiontable::TTView,
     util::MAX_DEPTH,
 };
@@ -184,8 +184,10 @@ pub fn make_thread_data<'a>(
     nodes: &'a AtomicU64,
     tbhits: &'a AtomicU64,
     worker_threads: &[threadpool::WorkerThread],
-) -> anyhow::Result<Vec<Box<ThreadData<'a>>>> {
-    std::thread::scope(|s| -> anyhow::Result<Vec<Box<ThreadData>>> {
+) -> Vec<Box<ThreadData<'a>>> {
+    let mut thread_data: Vec<Box<ThreadData>> = Vec::with_capacity(worker_threads.len());
+
+    threadpool::scope(|s| {
         let handles = worker_threads
             .iter()
             .enumerate()
@@ -211,15 +213,14 @@ pub fn make_thread_data<'a>(
             })
             .collect::<Vec<_>>();
 
-        let mut thread_data: Vec<Box<ThreadData>> = Vec::with_capacity(handles.len());
         for (rx, handle) in handles {
             let td = rx
                 .recv()
-                .with_context(|| "Failed to receive thread data from worker thread")?;
+                .expect("Failed to receive thread data from worker thread");
             thread_data.push(td);
             handle.join();
         }
+    });
 
-        Ok(thread_data)
-    })
+    thread_data
 }

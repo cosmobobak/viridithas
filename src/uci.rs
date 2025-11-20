@@ -632,7 +632,7 @@ pub fn main_loop() -> anyhow::Result<()> {
         &nodes,
         &tbhits,
         &worker_threads,
-    )?;
+    );
     thread_data[0].info.set_stdin(&stdin);
 
     loop {
@@ -782,7 +782,7 @@ pub fn main_loop() -> anyhow::Result<()> {
                             &nodes,
                             &tbhits,
                             &worker_threads,
-                        )?;
+                        );
 
                         for t in &mut thread_data {
                             t.info.conf = conf.search_config.clone();
@@ -906,7 +906,7 @@ pub fn bench(
         &nodes,
         &tbhits,
         &pool,
-    )?;
+    );
     thread_data[0].info.conf = search_params.clone();
     thread_data[0].info.print_to_stdout = false;
     let mut node_sum = 0u64;
@@ -1010,7 +1010,7 @@ pub fn go_benchmark(nnue_params: &'static NNUEParams) -> anyhow::Result<()> {
         &nodes,
         &tbhits,
         &pool,
-    )?;
+    );
     thread_data[0].info.print_to_stdout = false;
     let start = std::time::Instant::now();
     for _ in 0..COUNT {

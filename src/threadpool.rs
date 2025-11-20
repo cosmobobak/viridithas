@@ -1,3 +1,4 @@
+use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::{Receiver, SyncSender};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::Scope;
@@ -60,27 +61,33 @@ impl Drop for ReceiverHandle<'_> {
     }
 }
 
-pub trait ScopeExt<'scope, 'env> {
-    fn spawn_into<F>(&'scope self, f: F, comms: &'scope WorkerThread) -> ReceiverHandle<'scope>
-    where
-        F: FnOnce() + Send + 'scope;
+#[derive(Clone, Copy)]
+pub struct ScopeExt<'a, 'scope, 'env> {
+    scope: &'a Scope<'scope, 'env>,
+    running: &'a Arc<AtomicUsize>,
 }
 
-impl<'scope, 'env> ScopeExt<'scope, 'env> for Scope<'scope, 'env> {
-    fn spawn_into<'comms, F>(
-        &'scope self,
-        f: F,
-        thread: &'scope WorkerThread,
-    ) -> ReceiverHandle<'scope>
+impl<'scope, 'env> ScopeExt<'_, 'scope, 'env> {
+    pub fn spawn_into<'comms, F>(self, f: F, thread: &'scope WorkerThread) -> ReceiverHandle<'scope>
     where
         F: FnOnce() + Send + 'scope,
     {
+        // increase the running thread count
+        let running = Arc::clone(self.running);
+
+        running.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
         // Safety: This file is structured such that threads never hold the data longer than is permissible.
         let f = unsafe {
             std::mem::transmute::<
                 Box<dyn FnOnce() + Send + 'scope>,
                 Box<dyn FnOnce() + Send + 'static>,
-            >(Box::new(f))
+            >(Box::new(move || {
+                // run the work
+                f();
+                // decrease the running thread count
+                running.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+            }))
         };
 
         // Reset the completion flag before sending the task
@@ -140,6 +147,24 @@ impl WorkerThread {
     }
 }
 
+pub fn scope<'env, F>(f: F)
+where
+    F: for<'scope> FnOnce(ScopeExt<'_, 'scope, 'env>),
+{
+    std::thread::scope(|scope| {
+        let running = Arc::new(AtomicUsize::new(0));
+        let ext = ScopeExt {
+            scope,
+            running: &running,
+        };
+        f(ext);
+        // wait for all threads to finish
+        while running.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+            std::thread::yield_now();
+        }
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -149,7 +174,7 @@ mod tests {
     fn test_work_sender_receiver() {
         let thread = make_worker_thread();
 
-        std::thread::scope(|s| {
+        scope(|s| {
             let _receiver_handle = s.spawn_into(
                 || {
                     println!("Work is being done in the worker thread.");
@@ -165,7 +190,7 @@ mod tests {
     fn test_work_sender_receiver_success() {
         let thread = make_worker_thread();
 
-        std::thread::scope(|s| {
+        scope(|s| {
             let receiver_handle = s.spawn_into(
                 || {
                     println!("Work is being done in the worker thread.");
@@ -176,5 +201,42 @@ mod tests {
         });
 
         thread.join();
+    }
+
+    #[test]
+    fn ub_example() {
+        let mut global = String::new();
+        let thread = make_worker_thread();
+        {
+            let local = String::from("test");
+            scope(|s| {
+                drop(s.spawn_into(
+                    || {
+                        std::thread::sleep(std::time::Duration::from_secs(1));
+                        global = local.clone();
+                    },
+                    &thread,
+                ));
+            });
+        }
+        thread.join();
+
+        assert_eq!(global, "test");
+    }
+
+    #[test]
+    fn stdlib() {
+        let mut global = String::new();
+        {
+            let local = String::from("test");
+            std::thread::scope(|s| {
+                std::mem::forget(s.spawn(|| {
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                    global = local.clone();
+                }));
+            });
+        }
+
+        assert_eq!(global, "test");
     }
 }
