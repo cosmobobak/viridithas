@@ -968,7 +968,7 @@ pub fn bench(
         "correlations.txt",
         format!(
             "{:?}",
-            network::layers::NNZ_COUNTS
+            nnue::network::layers::NNZ_COUNTS
                 .iter()
                 .map(|c| c
                     .iter()
