@@ -503,9 +503,9 @@ impl QuantisedNetwork {
                 .collect();
             let num_chunks = size_of::<PermChunk>() / size_of::<i16>();
 
-            // #[cfg(target_feature = "avx512f")]
-            // let num_regs = 8;
-            #[cfg(target_feature = "avx2")] //, not(target_feature = "avx512f")))]
+            #[cfg(target_feature = "avx512f")]
+            let num_regs = 8;
+            #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
             let num_regs = 4;
             #[cfg(all(
                 target_arch = "x86_64",
@@ -517,9 +517,9 @@ impl QuantisedNetwork {
             let num_regs = 2;
             #[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
             let num_regs = 1;
-            // #[cfg(target_feature = "avx512f")]
-            // let order = [0, 2, 4, 6, 1, 3, 5, 7];
-            #[cfg(target_feature = "avx2")] //, not(target_feature = "avx512f")))]
+            #[cfg(target_feature = "avx512f")]
+            let order = [0, 2, 4, 6, 1, 3, 5, 7];
+            #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
             let order = [0, 2, 1, 3];
             #[cfg(all(
                 target_arch = "x86_64",
