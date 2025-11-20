@@ -7,8 +7,8 @@ use crate::{
     },
     historytable::{
         CORRECTION_HISTORY_MAX, cont_history_bonus, cont_history_malus, main_history_bonus,
-        main_history_malus, tactical_history_bonus, tactical_history_malus, update_correction,
-        update_history,
+        main_history_malus, tactical_history_bonus, tactical_history_malus, update_cont_history,
+        update_correction, update_history,
     },
     threadlocal::ThreadData,
     util::MAX_DEPTH,
@@ -81,49 +81,52 @@ impl ThreadData<'_> {
     }
 
     /// Update the continuation history counters of a batch of moves.
-    pub fn update_continuation_history(
-        &mut self,
-        moves_to_adjust: &[Move],
-        best_move: Move,
-        depth: i32,
-        index: usize,
-    ) {
+    pub fn update_cont_hist(&mut self, moves_to_adjust: &[Move], best_move: Move, depth: i32) {
         let height = self.board.height();
 
-        if height <= index {
-            return;
-        }
-
-        let cmh_block = &mut self.cont_hist[self.ss[height - index - 1].ch_idx];
         for &m in moves_to_adjust {
+            let good = m == best_move;
             let to = m.history_to_square();
             let piece = self.board.state.mailbox[m.from()].unwrap();
+            self.update_cont_hist_single(to, piece, depth, height, good);
+        }
+    }
 
-            let delta = if m == best_move {
+    pub fn update_cont_hist_single(
+        &mut self,
+        to: Square,
+        piece: Piece,
+        depth: i32,
+        height: usize,
+        good: bool,
+    ) {
+        let list = [
+            (1, self.info.conf.cont1_stat_score_mul),
+            (2, self.info.conf.cont2_stat_score_mul),
+            (4, self.info.conf.cont4_stat_score_mul),
+        ];
+
+        let mut sum = 0;
+        for (index, mul) in list {
+            if height < index {
+                break;
+            }
+            sum += mul * i32::from(self.cont_hist[self.ss[height - index].ch_idx][piece][to]);
+        }
+        sum /= 32;
+
+        for (index, _) in list {
+            if height < index {
+                break;
+            }
+            let delta = if good {
                 cont_history_bonus(&self.info.conf, depth, index)
             } else {
                 -cont_history_malus(&self.info.conf, depth, index)
             };
-            update_history(cmh_block.get_mut(piece, to), delta);
+            let val = &mut self.cont_hist[self.ss[height - index].ch_idx][piece][to];
+            update_cont_history(val, sum, delta);
         }
-    }
-
-    /// Update the continuation history counter for a single move.
-    pub fn update_continuation_history_single(
-        &mut self,
-        to: Square,
-        moved: Piece,
-        delta: i32,
-        index: usize,
-    ) {
-        let height = self.board.height();
-
-        if height <= index {
-            return;
-        }
-
-        let cmh_block = &mut self.cont_hist[self.ss[height - index - 1].ch_idx];
-        update_history(cmh_block.get_mut(moved, to), delta);
     }
 
     /// Add a killer move.
@@ -152,10 +155,6 @@ impl ThreadData<'_> {
             CORRECTION_HISTORY_MAX / 4,
         );
 
-        let update = |entry: &mut i16| {
-            update_correction(entry, bonus);
-        };
-
         let keys = &self.board.state.keys;
 
         let pawn = self.pawn_corrhist.get_mut(us, keys.pawn);
@@ -164,6 +163,10 @@ impl ThreadData<'_> {
         let nonpawn_black = nonpawn_black.get_mut(us, keys.non_pawn[Black]);
         let minor = self.minor_corrhist.get_mut(us, keys.minor);
         let major = self.major_corrhist.get_mut(us, keys.major);
+
+        let update = move |entry: &mut i16| {
+            update_correction(entry, bonus);
+        };
 
         update(pawn);
         update(nonpawn_white);

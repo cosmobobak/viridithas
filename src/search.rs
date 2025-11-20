@@ -25,10 +25,7 @@ use crate::{
         tb_loss_in, tb_win_in,
     },
     history::caphist_piece_type,
-    historytable::{
-        cont1_history_bonus, cont1_history_malus, cont2_history_bonus, cont2_history_malus,
-        main_history_bonus, main_history_malus,
-    },
+    historytable::{main_history_bonus, main_history_malus},
     lookups::HM_CLOCK_KEYS,
     movepicker::{MovePicker, Stage},
     search::pv::PVariation,
@@ -55,88 +52,96 @@ use self::parameters::Config;
 // in alpha-beta, a call to alpha_beta(ALLNODE, alpha, beta) returns a score <= alpha.
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
-const ASPIRATION_EVAL_DIVISOR: i32 = 29614;
-const DELTA_INITIAL: i32 = 12;
-const DELTA_BASE_MUL: i32 = 40;
-const DELTA_REDUCTION_MUL: i32 = 15;
-const RFP_MARGIN: i32 = 84;
-const RFP_IMPROVING_MARGIN: i32 = 75;
-const NMP_IMPROVING_MARGIN: i32 = 106;
-const NMP_DEPTH_MUL: i32 = -8;
-const NMP_REDUCTION_EVAL_DIVISOR: i32 = 150;
-const SEE_QUIET_MARGIN: i32 = -70;
-const SEE_TACTICAL_MARGIN: i32 = -25;
-const FUTILITY_COEFF_0: i32 = 110;
-const FUTILITY_COEFF_1: i32 = 61;
-const RAZORING_COEFF_0: i32 = 63;
-const RAZORING_COEFF_1: i32 = 270;
-const PROBCUT_MARGIN: i32 = 184;
-const PROBCUT_IMPROVING_MARGIN: i32 = 69;
-const DOUBLE_EXTENSION_MARGIN: i32 = 12;
-const TRIPLE_EXTENSION_MARGIN: i32 = 166;
-const LMR_BASE: f64 = 95.0;
-const LMR_DIVISION: f64 = 260.0;
-const QS_SEE_BOUND: i32 = -50;
-const MAIN_SEE_BOUND: i32 = -86;
-const DO_DEEPER_BASE_MARGIN: i32 = 45;
-const DO_DEEPER_DEPTH_MARGIN: i32 = 14;
-const HISTORY_PRUNING_MARGIN: i32 = -4942;
-const QS_FUTILITY: i32 = 341;
-const SEE_STAT_SCORE_MUL: i32 = 20;
-const PROBCUT_SEE_SCALE: i32 = 256;
-
-const HISTORY_LMR_DIVISOR: i32 = 17205;
-const LMR_REFUTATION_MUL: i32 = 860;
-const LMR_NON_PV_MUL: i32 = 1148;
-const LMR_TTPV_MUL: i32 = 1432;
-const LMR_CUT_NODE_MUL: i32 = 1412;
-const LMR_NON_IMPROVING_MUL: i32 = 456;
-const LMR_TT_CAPTURE_MUL: i32 = 1301;
-const LMR_CHECK_MUL: i32 = 1217;
-
-const MAIN_HISTORY_BONUS_MUL: i32 = 341;
-const MAIN_HISTORY_BONUS_OFFSET: i32 = 178;
-const MAIN_HISTORY_BONUS_MAX: i32 = 2298;
-const MAIN_HISTORY_MALUS_MUL: i32 = 172;
-const MAIN_HISTORY_MALUS_OFFSET: i32 = 407;
-const MAIN_HISTORY_MALUS_MAX: i32 = 835;
-const CONT1_HISTORY_BONUS_MUL: i32 = 187;
-const CONT1_HISTORY_BONUS_OFFSET: i32 = 234;
-const CONT1_HISTORY_BONUS_MAX: i32 = 3217;
-const CONT1_HISTORY_MALUS_MUL: i32 = 323;
-const CONT1_HISTORY_MALUS_OFFSET: i32 = 436;
-const CONT1_HISTORY_MALUS_MAX: i32 = 1442;
-const CONT2_HISTORY_BONUS_MUL: i32 = 177;
-const CONT2_HISTORY_BONUS_OFFSET: i32 = 139;
-const CONT2_HISTORY_BONUS_MAX: i32 = 1473;
-const CONT2_HISTORY_MALUS_MUL: i32 = 218;
-const CONT2_HISTORY_MALUS_OFFSET: i32 = 66;
-const CONT2_HISTORY_MALUS_MAX: i32 = 1248;
-const TACTICAL_HISTORY_BONUS_MUL: i32 = 136;
-const TACTICAL_HISTORY_BONUS_OFFSET: i32 = 458;
-const TACTICAL_HISTORY_BONUS_MAX: i32 = 2007;
-const TACTICAL_HISTORY_MALUS_MUL: i32 = 49;
-const TACTICAL_HISTORY_MALUS_OFFSET: i32 = 401;
-const TACTICAL_HISTORY_MALUS_MAX: i32 = 1464;
-
-const PAWN_CORRHIST_WEIGHT: i32 = 1583;
-const MAJOR_CORRHIST_WEIGHT: i32 = 1495;
-const MINOR_CORRHIST_WEIGHT: i32 = 1304;
-const NONPAWN_CORRHIST_WEIGHT: i32 = 1813;
-const CONTINUATION_CORRHIST_WEIGHT: i32 = 1500;
-
-const EVAL_POLICY_IMPROVEMENT_SCALE: i32 = 214;
-const EVAL_POLICY_OFFSET: i32 = -4;
-const EVAL_POLICY_UPDATE_MAX: i32 = 95;
-
 const TIME_MANAGER_UPDATE_MIN_DEPTH: i32 = 4;
 
-const HINDSIGHT_EXT_DEPTH: i32 = 2097;
-const HINDSIGHT_RED_DEPTH: i32 = 2421;
-const HINDSIGHT_RED_EVAL: i32 = 141;
-
-const OPTIMISM_OFFSET: i32 = 189;
-const OPTIMISM_MATERIAL_BASE: i32 = 2320;
+const ASPIRATION_EVAL_DIVISOR: i32 = 31722;
+const DELTA_INITIAL: i32 = 12;
+const DELTA_BASE_MUL: i32 = 42;
+const DELTA_REDUCTION_MUL: i32 = 17;
+const RFP_MARGIN: i32 = 82;
+const RFP_IMPROVING_MARGIN: i32 = 87;
+const NMP_IMPROVING_MARGIN: i32 = 126;
+const NMP_DEPTH_MUL: i32 = -11;
+const NMP_REDUCTION_EVAL_DIVISOR: i32 = 132;
+const SEE_QUIET_MARGIN: i32 = -74;
+const SEE_TACTICAL_MARGIN: i32 = -26;
+const FUTILITY_COEFF_0: i32 = 86;
+const FUTILITY_COEFF_1: i32 = 93;
+const RAZORING_COEFF_0: i32 = 96;
+const RAZORING_COEFF_1: i32 = 305;
+const DOUBLE_EXTENSION_MARGIN: i32 = 14;
+const TRIPLE_EXTENSION_MARGIN: i32 = 171;
+const LMR_BASE: f64 = 83.0;
+const LMR_DIVISION: f64 = 268.0;
+const PROBCUT_MARGIN: i32 = 166;
+const PROBCUT_IMPROVING_MARGIN: i32 = 73;
+const PROBCUT_EVAL_DIV: i32 = 286;
+const HISTORY_LMR_DIVISOR: i32 = 17674;
+const QS_SEE_BOUND: i32 = -77;
+const MAIN_SEE_BOUND: i32 = -67;
+const DO_DEEPER_BASE_MARGIN: i32 = 78;
+const DO_DEEPER_DEPTH_MARGIN: i32 = 12;
+const HISTORY_PRUNING_MARGIN: i32 = -4941;
+const QS_FUTILITY: i32 = 357;
+const SEE_STAT_SCORE_MUL: i32 = 26;
+const LMR_REFUTATION_MUL: i32 = 869;
+const LMR_NON_PV_MUL: i32 = 1183;
+const LMR_TTPV_MUL: i32 = 1360;
+const LMR_CUT_NODE_MUL: i32 = 1609;
+const LMR_NON_IMPROVING_MUL: i32 = 562;
+const LMR_TT_CAPTURE_MUL: i32 = 1082;
+const LMR_CHECK_MUL: i32 = 1249;
+const LMR_CORR_MUL: i32 = 435;
+const LMR_BASE_OFFSET: i32 = 220;
+const MAIN_HISTORY_BONUS_MUL: i32 = 359;
+const MAIN_HISTORY_BONUS_OFFSET: i32 = 119;
+const MAIN_HISTORY_BONUS_MAX: i32 = 2247;
+const MAIN_HISTORY_MALUS_MUL: i32 = 142;
+const MAIN_HISTORY_MALUS_OFFSET: i32 = 452;
+const MAIN_HISTORY_MALUS_MAX: i32 = 768;
+const CONT1_HISTORY_BONUS_MUL: i32 = 231;
+const CONT1_HISTORY_BONUS_OFFSET: i32 = 178;
+const CONT1_HISTORY_BONUS_MAX: i32 = 3632;
+const CONT1_HISTORY_MALUS_MUL: i32 = 315;
+const CONT1_HISTORY_MALUS_OFFSET: i32 = 275;
+const CONT1_HISTORY_MALUS_MAX: i32 = 1381;
+const CONT2_HISTORY_BONUS_MUL: i32 = 125;
+const CONT2_HISTORY_BONUS_OFFSET: i32 = 291;
+const CONT2_HISTORY_BONUS_MAX: i32 = 1502;
+const CONT2_HISTORY_MALUS_MUL: i32 = 263;
+const CONT2_HISTORY_MALUS_OFFSET: i32 = 107;
+const CONT2_HISTORY_MALUS_MAX: i32 = 1062;
+const CONT4_HISTORY_BONUS_MUL: i32 = 191;
+const CONT4_HISTORY_BONUS_OFFSET: i32 = 107;
+const CONT4_HISTORY_BONUS_MAX: i32 = 1451;
+const CONT4_HISTORY_MALUS_MUL: i32 = 217;
+const CONT4_HISTORY_MALUS_OFFSET: i32 = -59;
+const CONT4_HISTORY_MALUS_MAX: i32 = 745;
+const TACTICAL_HISTORY_BONUS_MUL: i32 = 114;
+const TACTICAL_HISTORY_BONUS_OFFSET: i32 = 372;
+const TACTICAL_HISTORY_BONUS_MAX: i32 = 1174;
+const TACTICAL_HISTORY_MALUS_MUL: i32 = 41;
+const TACTICAL_HISTORY_MALUS_OFFSET: i32 = 399;
+const TACTICAL_HISTORY_MALUS_MAX: i32 = 1372;
+const MAIN_STAT_SCORE_MUL: i32 = 22;
+const CONT1_STAT_SCORE_MUL: i32 = 30;
+const CONT2_STAT_SCORE_MUL: i32 = 17;
+const CONT4_STAT_SCORE_MUL: i32 = 11;
+const TACT_STAT_SCORE_MUL: i32 = 43;
+const PAWN_CORRHIST_WEIGHT: i32 = 1710;
+const MAJOR_CORRHIST_WEIGHT: i32 = 1241;
+const MINOR_CORRHIST_WEIGHT: i32 = 1274;
+const NONPAWN_CORRHIST_WEIGHT: i32 = 1664;
+const CONTINUATION_CORRHIST_WEIGHT: i32 = 1863;
+const EVAL_POLICY_IMPROVEMENT_SCALE: i32 = 227;
+const EVAL_POLICY_OFFSET: i32 = 9;
+const HINDSIGHT_EXT_DEPTH: i32 = 1513;
+const HINDSIGHT_RED_DEPTH: i32 = 2339;
+const HINDSIGHT_RED_EVAL: i32 = 132;
+const OPTIMISM_OFFSET: i32 = 165;
+const OPTIMISM_MATERIAL_BASE: i32 = 2103;
+const EVAL_POLICY_UPDATE_MAX: i32 = 102;
+const PROBCUT_SEE_SCALE: i32 = 257;
 
 pub trait NodeType {
     /// Whether this node is on the principal variation.
@@ -555,8 +560,13 @@ pub fn quiescence<NT: NodeType>(
 
     // probe the TT and see if we get a cutoff.
     let tt_hit = if let Some(hit) = t.tt.probe(key, height, clock) {
+        let illegal = hit
+            .mov
+            .is_some_and(|m| !t.board.is_pseudo_legal(m) || !t.board.is_legal(m));
+
         if !NT::PV
-            && clock < 80
+            && !illegal
+            && clock < 90
             && hit.value != VALUE_NONE
             && (hit.bound == Bound::Exact
                 || (hit.bound == Bound::Lower && hit.value >= beta)
@@ -565,7 +575,7 @@ pub fn quiescence<NT: NodeType>(
             return hit.value;
         }
 
-        Some(hit)
+        if illegal { None } else { Some(hit) }
     } else {
         None
     };
@@ -579,32 +589,25 @@ pub fn quiescence<NT: NodeType>(
         // could be being mated!
         raw_eval = VALUE_NONE;
         stand_pat = -INFINITY;
-    } else if let Some(TTHit {
-        eval: tt_eval,
-        bound: tt_flag,
-        value: tt_value,
-        ..
-    }) = tt_hit
-    {
+    } else if let Some(tte) = tt_hit {
         // if we have a TT hit, check the cached TT eval.
-        if tt_eval == VALUE_NONE {
+        if tte.eval == VALUE_NONE {
             // regenerate the static eval if it's VALUE_NONE.
             raw_eval = evaluate(t, t.info.nodes.get_local());
         } else {
             // if the TT eval is not VALUE_NONE, use it.
-            raw_eval = tt_eval;
+            raw_eval = tte.eval;
         }
         let adj_eval = adj_shuffle(t, raw_eval, clock) + t.correction();
 
         // try correcting via search score from TT.
         // notably, this doesn't work for main search for ~reasons.
-        if tt_value != VALUE_NONE
-            && !is_decisive(tt_value)
-            && (tt_flag == Bound::Exact
-                || tt_flag == Bound::Upper && tt_value < adj_eval
-                || tt_flag == Bound::Lower && tt_value > adj_eval)
+        if !is_decisive(tte.value)
+            && (tte.bound == Bound::Exact
+                || tte.bound == Bound::Upper && tte.value < adj_eval
+                || tte.bound == Bound::Lower && tte.value > adj_eval)
         {
-            stand_pat = tt_value;
+            stand_pat = tte.value;
         } else {
             stand_pat = adj_eval;
         }
@@ -823,7 +826,7 @@ pub fn alpha_beta<NT: NodeType>(
             && !illegal
             && hit.value != VALUE_NONE
             && hit.depth >= depth + i32::from(hit.value >= beta)
-            && clock < 80
+            && clock < 90
             && (hit.bound == Bound::Exact
                 || (hit.bound == Bound::Lower && hit.value >= beta)
                 || (hit.bound == Bound::Upper && hit.value <= alpha))
@@ -837,7 +840,9 @@ pub fn alpha_beta<NT: NodeType>(
                 let to = m.history_to_square();
                 let moved = t.board.state.mailbox[from].unwrap();
                 let threats = t.board.state.threats.all;
-                update_quiet_history_single::<false>(t, from, to, moved, threats, depth, true);
+                update_quiet_history_single::<false>(
+                    t, from, to, moved, threats, depth, height, true,
+                );
             }
 
             return hit.value;
@@ -1173,13 +1178,14 @@ pub fn alpha_beta<NT: NodeType>(
         && excluded.is_none()
         && depth >= 3
         && !is_decisive(beta)
-        // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
-        && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
+        // don't probcut if we have a tthit with value < pcbeta
+        && tt_hit.is_none_or(|tte| tte.value >= pc_beta)
     {
         let see_threshold = (pc_beta - static_eval) * t.info.conf.probcut_see_scale / 256;
+        let pc_eval_reduction = (static_eval - beta) / t.info.conf.probcut_eval_div;
+        let pc_depth = i32::clamp(depth - 3 - pc_eval_reduction, 0, depth - 1);
         let mut move_picker = MovePicker::new(tt_capture, None, see_threshold);
         move_picker.skip_quiets = true;
-        let pc_depth = i32::clamp(depth - 3 - (static_eval - beta) / 300, 0, depth);
         while let Some(m) = move_picker.next(t) {
             t.tt.prefetch(t.board.key_after(m));
             if !t.board.is_legal(m) {
@@ -1216,7 +1222,9 @@ pub fn alpha_beta<NT: NodeType>(
                     t.ss[height].ttpv,
                 );
 
-                return value - (pc_beta - beta);
+                if !is_decisive(value) {
+                    return value - (pc_beta - beta);
+                }
             }
         }
 
@@ -1237,10 +1245,6 @@ pub fn alpha_beta<NT: NodeType>(
     let mut quiets_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
     let mut tacticals_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
 
-    let maybe_singular = depth >= 5
-        && excluded.is_none()
-        && tt_hit.is_some_and(|tte| tte.depth >= depth - 3 && tte.bound.is_lower());
-
     while let Some(m) = move_picker.next(t) {
         if excluded == Some(m) {
             continue;
@@ -1255,26 +1259,17 @@ pub fn alpha_beta<NT: NodeType>(
         let lmr_depth = std::cmp::max(depth - lmr_reduction / 1024, 0);
         let is_quiet = !t.board.is_tactical(m);
 
-        let mut stat_score = 0;
-
         let from = m.from();
         let hist_to = m.history_to_square();
         let moved = t.board.state.mailbox[from].unwrap();
         let threats = t.board.state.threats.all;
         let from_threat = usize::from(threats.contains_square(from));
         let to_threat = usize::from(threats.contains_square(hist_to));
-        if is_quiet {
-            stat_score += i32::from(t.main_hist[from_threat][to_threat][moved][hist_to]);
-            if height >= 1 {
-                stat_score += i32::from(t.cont_hist[t.ss[height - 1].ch_idx][moved][hist_to]);
-            }
-            if height >= 2 {
-                stat_score += i32::from(t.cont_hist[t.ss[height - 2].ch_idx][moved][hist_to]);
-            }
+        let stat_score = if is_quiet {
+            get_quiet_history(t, height, hist_to, moved, from_threat, to_threat) / 32
         } else {
-            let capture = caphist_piece_type(&t.board, m);
-            stat_score += i32::from(t.tactical_hist[to_threat][capture][moved][hist_to]);
-        }
+            get_tactical_history(t, hist_to, moved, to_threat, m) / 32
+        };
 
         // lmp & fp.
         if !NT::ROOT && !NT::PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
@@ -1336,8 +1331,14 @@ pub fn alpha_beta<NT: NodeType>(
         let extension;
         if NT::ROOT {
             extension = 0;
-        } else if maybe_singular && Some(m) == tt_move {
-            let tte = tt_hit.unwrap();
+        } else if Some(m) == tt_move
+            && excluded.is_none()
+            && depth >= 6 + i32::from(t.ss[height].ttpv)
+            && let Some(tte) = tt_hit
+            && tte.value != VALUE_NONE
+            && tte.bound.is_lower()
+            && tte.depth >= depth - 3
+        {
             let r_beta = singularity_margin(tte.value, depth);
             let r_depth = (depth - 1) / 2;
 
@@ -1354,10 +1355,6 @@ pub fn alpha_beta<NT: NodeType>(
 
             if value == VALUE_NONE {
                 extension = 1; // extend if there's only one legal move.
-            } else if value >= r_beta && r_beta >= beta {
-                // multi-cut: if a move other than the best one beats beta,
-                // then we can cut with relatively high confidence.
-                return singularity_margin(tte.value, depth);
             } else if value < r_beta {
                 if !NT::PV
                     && t.ss[t.board.height()].dextensions <= 12
@@ -1369,6 +1366,10 @@ pub fn alpha_beta<NT: NodeType>(
                     // normal singular extension
                     extension = 1;
                 }
+            } else if !NT::PV && value >= beta && !is_decisive(value) {
+                // multi-cut: if a move other than the best one beats beta,
+                // then we can cut with relatively high confidence.
+                return value;
             } else if cut_node {
                 // produce a strong negative extension if we didn't fail low on a cut-node.
                 extension = -2;
@@ -1376,13 +1377,6 @@ pub fn alpha_beta<NT: NodeType>(
                 // the tt_value >= beta condition is a sort of "light multi-cut"
                 // the tt_value <= alpha condition is from Weiss (https://github.com/TerjeKir/weiss/compare/2a7b4ed0...effa8349/).
                 extension = -1;
-            } else if depth < 8
-                && !in_check
-                && static_eval < alpha - 25
-                && tte.bound == Bound::Lower
-            {
-                // low-depth singular extension.
-                extension = 1;
             } else {
                 // no extension.
                 extension = 0;
@@ -1413,6 +1407,8 @@ pub fn alpha_beta<NT: NodeType>(
             // calculation of LMR stuff
             let r = if depth > 2 && moves_made > (1 + usize::from(NT::ROOT)) {
                 let mut r = t.info.lm_table.lm_reduction(depth, moves_made);
+                // tunable base offset
+                r += t.info.conf.lmr_base_offset;
                 // reduce more on non-PV nodes
                 r += i32::from(!NT::PV) * t.info.conf.lmr_non_pv_mul;
                 r -= i32::from(t.ss[height].ttpv) * t.info.conf.lmr_ttpv_mul;
@@ -1429,7 +1425,7 @@ pub fn alpha_beta<NT: NodeType>(
                 // reduce less if the move gives check
                 r -= i32::from(t.board.in_check()) * t.info.conf.lmr_check_mul;
                 // reduce less when the static eval is way off-base
-                r -= correction.pow(2) * 256 / 16384 - 200;
+                r -= correction.abs() * t.info.conf.lmr_corr_mul / 16384;
 
                 t.ss[height].reduction = r;
                 r / 1024
@@ -1462,19 +1458,7 @@ pub fn alpha_beta<NT: NodeType>(
                 }
 
                 if is_quiet && (score <= alpha || score >= beta) {
-                    let (c1, c2) = if score <= alpha {
-                        (
-                            -cont1_history_malus(&t.info.conf, new_depth),
-                            -cont2_history_malus(&t.info.conf, new_depth),
-                        )
-                    } else {
-                        (
-                            cont1_history_bonus(&t.info.conf, new_depth),
-                            cont2_history_bonus(&t.info.conf, new_depth),
-                        )
-                    };
-                    t.update_continuation_history_single(hist_to, moved, c1, 1);
-                    t.update_continuation_history_single(hist_to, moved, c2, 2);
+                    t.update_cont_hist_single(hist_to, moved, new_depth, height, score > alpha);
                 }
             } else if score > alpha && score < best_score + 16 {
                 new_depth -= 1;
@@ -1622,6 +1606,50 @@ pub fn alpha_beta<NT: NodeType>(
     best_score
 }
 
+fn get_tactical_history(
+    t: &ThreadData<'_>,
+    hist_to: Square,
+    moved: Piece,
+    to_threat: usize,
+    m: Move,
+) -> i32 {
+    let capture = caphist_piece_type(&t.board, m);
+    i32::from(t.tactical_hist[to_threat][capture][moved][hist_to])
+        * t.info.conf.tactical_stat_score_mul
+}
+
+fn get_quiet_history(
+    t: &ThreadData<'_>,
+    height: usize,
+    hist_to: Square,
+    moved: Piece,
+    from_threat: usize,
+    to_threat: usize,
+) -> i32 {
+    let mut stat_score = 0;
+    stat_score += i32::from(t.main_hist[from_threat][to_threat][moved][hist_to])
+        * t.info.conf.main_stat_score_mul;
+    stat_score += get_cont_history(t, height, hist_to, moved);
+    stat_score
+}
+
+fn get_cont_history(t: &ThreadData<'_>, height: usize, hist_to: Square, moved: Piece) -> i32 {
+    let mut stat_score = 0;
+    if height >= 1 {
+        stat_score += i32::from(t.cont_hist[t.ss[height - 1].ch_idx][moved][hist_to])
+            * t.info.conf.cont1_stat_score_mul;
+    }
+    if height >= 2 {
+        stat_score += i32::from(t.cont_hist[t.ss[height - 2].ch_idx][moved][hist_to])
+            * t.info.conf.cont2_stat_score_mul;
+    }
+    if height >= 4 {
+        stat_score += i32::from(t.cont_hist[t.ss[height - 4].ch_idx][moved][hist_to])
+            * t.info.conf.cont4_stat_score_mul;
+    }
+    stat_score
+}
+
 /// The margin for Reverse Futility Pruning.
 fn rfp_margin(pos: &Board, info: &SearchInfo, depth: i32, improving: bool, correction: i32) -> i32 {
     info.conf.rfp_margin * depth
@@ -1632,9 +1660,7 @@ fn rfp_margin(pos: &Board, info: &SearchInfo, depth: i32, improving: bool, corre
 /// Update the main and continuation history tables for a batch of moves.
 fn update_quiet_history(t: &mut ThreadData, moves_to_adjust: &[Move], best_move: Move, depth: i32) {
     t.update_history(moves_to_adjust, best_move, depth);
-    t.update_continuation_history(moves_to_adjust, best_move, depth, 0);
-    t.update_continuation_history(moves_to_adjust, best_move, depth, 1);
-    // t.update_continuation_history(moves_to_adjust, best_move, depth, 3);
+    t.update_cont_hist(moves_to_adjust, best_move, depth);
 }
 
 /// Update the main and continuation history tables for a single move.
@@ -1646,25 +1672,16 @@ fn update_quiet_history_single<const MADE: bool>(
     moved: Piece,
     threats: SquareSet,
     depth: i32,
+    height: usize,
     good: bool,
 ) {
-    let (main, cont1, cont2) = if good {
-        (
-            main_history_bonus(&t.info.conf, depth),
-            cont1_history_bonus(&t.info.conf, depth),
-            cont2_history_bonus(&t.info.conf, depth),
-        )
+    let main = if good {
+        main_history_bonus(&t.info.conf, depth)
     } else {
-        (
-            -main_history_malus(&t.info.conf, depth),
-            -cont1_history_malus(&t.info.conf, depth),
-            -cont2_history_malus(&t.info.conf, depth),
-        )
+        -main_history_malus(&t.info.conf, depth)
     };
     t.update_history_single(from, to, moved, threats, main);
-    t.update_continuation_history_single(to, moved, cont1, 0 + usize::from(MADE));
-    t.update_continuation_history_single(to, moved, cont2, 1 + usize::from(MADE));
-    // t.update_continuation_history_single(to, moved, delta, 3 + usize::from(MADE));
+    t.update_cont_hist_single(to, moved, depth, height, good);
 }
 
 /// Update the tactical history table.
