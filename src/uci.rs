@@ -860,7 +860,7 @@ pub fn main_loop() -> anyhow::Result<()> {
                 Ok(())
             }
             benchcmd @ ("bench" | "benchfull") => {
-                bench(benchcmd, &thread_data[0].info.conf, nnue_params, None)
+                bench(benchcmd, &thread_data[0].info.conf, nnue_params, None, None)
             }
             _ => Err(anyhow!(UciError::UnknownCommand(input.to_string()))),
         };
@@ -890,12 +890,13 @@ pub fn bench(
     search_params: &Config,
     nnue_params: &'static NNUEParams,
     depth: Option<usize>,
+    threads: Option<usize>,
 ) -> anyhow::Result<()> {
     let bench_string = format!("go depth {}\n", depth.unwrap_or(BENCH_DEPTH));
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
     let tbhits = AtomicU64::new(0);
-    let pool = threadpool::make_worker_threads(BENCH_THREADS);
+    let pool = threadpool::make_worker_threads(threads.unwrap_or(BENCH_THREADS));
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE, &pool);
     let mut thread_data = make_thread_data(

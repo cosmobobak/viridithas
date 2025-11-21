@@ -115,13 +115,13 @@ fn main() -> anyhow::Result<()> {
             nodes,
             dfrc,
         }),
-        Some(Bench { depth }) => {
+        Some(Bench { depth, threads }) => {
             let nnue_params = nnue::network::NNUEParams::decompress_and_alloc()?;
             let stopped = std::sync::atomic::AtomicBool::new(false);
             let nodes = std::sync::atomic::AtomicU64::new(0);
             let tbhits = std::sync::atomic::AtomicU64::new(0);
             let info = searchinfo::SearchInfo::new(&stopped, &nodes, &tbhits);
-            uci::bench("openbench", &info.conf, nnue_params, depth)?;
+            uci::bench("openbench", &info.conf, nnue_params, depth, threads)?;
             Ok(())
         }
         None => uci::main_loop(),
