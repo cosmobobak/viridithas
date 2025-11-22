@@ -119,6 +119,16 @@ fn gravity_update_with_modulator<const MAX: i32>(val: &mut i16, modulator: i32, 
     *val = i32::clamp(new, -MAX, MAX) as i16;
 }
 
+#[test]
+fn aaaa() {
+    let mut v = 0i16;
+    for _ in 0..1000 {
+        print!("{v} ");
+        update_history(&mut v, 256);
+    }
+    panic!();
+}
+
 #[repr(transparent)]
 pub struct HistoryTable {
     table: [[i16; BOARD_N_SQUARES]; 12],

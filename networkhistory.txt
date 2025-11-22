@@ -1271,3 +1271,333 @@ inquisition | same as legion/iridescent with standard  | fixed-nodes:
             |                                          | PENTA 18⁺² 364⁺¹ 894⁰ 534⁻¹ 21⁻²
             |                                          | vs. delenda 
 ------------|------------------------------------------|-----------------------------------------------
+      vixen | very much more of the same, fiddling.    | fixed-nodes:
+            |                                          | https://ob.expositor.dev/test/172/
+            |                                          |   LLR −2.95 (−2.94 LO +2.94 HI BOUNDS for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −7.40 ± 4.62 ELO = −12.02 LO −2.78 HI ELO
+            |                                          |  CONF 25 KNODE with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 9254 = 2647W 3763D 2844L = 28.6%W 40.7%D 30.7%L
+            |                                          | PENTA 195⁺² 1056⁺¹ 1964⁰ 1181⁻¹ 231⁻²
+            |                                          | vs. delenda
+            |                                          |
+            |                                          | LTC:
+            |                                          | https://ob.expositor.dev/test/173/
+            |                                          |   LLR −3.02 (−2.94 LO +2.94 HI BOUNDS for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −15.25 ± 5.48 ELO = −20.73 LO −9.79 HI ELO
+            |                                          |  CONF 40+²/₅ SEC with 1 THREAD 128 MB CACHE
+            |                                          | GAMES 3806 = 819W 2001D 986L = 21.5%W 52.6%D 25.9%L
+            |                                          | PENTA 6⁺² 369⁺¹ 982⁰ 544⁻¹ 2⁻²
+            |                                          | vs. delenda
+            |                                          |
+            |                                          | DFRC STC:
+            |                                          | https://ob.expositor.dev/test/174/
+            |                                          |   LLR −3.06 (−2.94 LO +2.94 HI BOUNDS for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −6.84 ± 4.05 ELO = −10.89 LO −2.79 HI ELO
+            |                                          |  CONF 8+¹/₁₂ SEC with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 9092 = 2137W 4639D 2316L = 23.5%W 51.0%D 25.5%L
+            |                                          | PENTA 77⁺² 1043⁺¹ 2151⁰ 1174⁻¹ 101⁻²
+            |                                          | vs. delenda
+            |                                          |
+            |                                          | DFRC LTC:
+            |                                          | https://ob.expositor.dev/test/175/
+            |                                          |   LLR −3.04 (−2.94 LO +2.94 HI BOUNDS for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −8.47 ± 4.20 ELO = −12.67 LO −4.27 HI ELO
+            |                                          |  CONF 40+²/₅ SEC with 1 THREAD 128 MB CACHE
+            |                                          | GAMES 6730 = 1397W 3772D 1561L = 20.8%W 56.0%D 23.2%L
+            |                                          | PENTA 22⁺² 692⁺¹ 1773⁰ 856⁻¹ 22⁻²
+------------|------------------------------------------|-----------------------------------------------
+  noösphere | binpacks scaled s.t. eval is normalised  | fixed-nodes:
+            | kaggle:                                  | https://ob.expositor.dev/test/177/
+            | cosmobobak/viridithas-binpacks-scaled    |   LLR −3.49 (−2.94 LO +2.94 HI BOUNDS for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −8.63 ± 4.53 ELO = −13.17 LO −4.10 HI ELO
+            |                                          |  CONF 25 KNODE with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 9458 = 2683W 3857D 2918L = 28.4%W 40.8%D 30.9%L
+            |                                          | PENTA 190⁺² 1058⁺¹ 2045⁰ 1199⁻¹ 237⁻²
+            |                                          | vs. delenda
+            |                                          |
+            |                                          | fixed-nodes with eval scale renorm:
+            |                                          | https://ob.expositor.dev/test/179/
+            |                                          |   LLR −3.09 (−2.94 LO +2.94 HI BOUNDS for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −7.18 ± 4.45 ELO = −11.63 LO −2.73 HI ELO
+            |                                          |  CONF 25 KNODE with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 9918 = 2820W 4073D 3025L = 28.4%W 41.1%D 30.5%L
+            |                                          | PENTA 214⁺² 1122⁺¹ 2102⁰ 1287⁻¹ 234⁻²
+            |                                          | vs. delenda
+            |                                          |
+            |                                          | LTC:
+            |                                          | https://ob.expositor.dev/test/178/
+            |                                          |   LLR −2.96 (−2.94 LO +2.94 HI BOUNDS for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −13.00 ± 5.16 ELO = −18.16 LO −7.84 HI ELO
+            |                                          |  CONF 40+²/₅ SEC with SEC 1 THREAD 128 MB CACHE
+            |                                          | GAMES 4360 = 956W 2285D 1119L = 21.9%W 52.4%D 25.7%L
+            |                                          | PENTA 10⁺² 430⁺¹ 1135⁰ 597⁻¹ 8⁻²
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+    sol-old | pair of networks trained from small      | new vs. old fixed-nodes:
+    sol-new | amounts of only-old or only-new data.    | https://ob.expositor.dev/test/180/
+            |                                          |  PERF +13.55 ± 2.27 ELO = +11.28 LO +15.82 HI ELO
+            | L0=256 for fast training, otherwise      |  CONF 25 KNODE with 1 THREAD 16 MB CACHE
+            | identical to delenda's architecture.     | GAMES 50066 = 18283W 15451D 16332L = 36.5%W 30.9%D 32.6%L
+            |                                          | PENTA 2454⁺² 5683⁺¹ 10150⁰ 4852⁻¹ 1894⁻²
+            |                                          |
+            |                                          | new vs. old STC:
+            |                                          | https://ob.expositor.dev/test/182/
+            |                                          |  PERF +20.83 ± 3.07 ELO = +17.77 LO +23.90 HI ELO
+            |                                          |  CONF 40+²/₅ SEC with 1 THREAD 128 MB CACHE
+            |                                          | GAMES 15012 = 4372W 7167D 3473L = 29.1%W 47.7%D 23.1%L
+            |                                          | PENTA 137⁺² 2277⁺¹ 3521⁰ 1490⁻¹ 81⁻²
+            |                                          |
+            |                                          | new vs. old LTC:
+            |                                          | https://ob.expositor.dev/test/184/
+            |                                          |  PERF +19.59 ± 2.89 ELO = +16.70 LO +22.47 HI ELO
+            |                                          |  CONF 120+1¹/₅ SEC with 1 THREAD 256 MB CACHE
+            |                                          | GAMES 15022 = 4202W 7464D 3356L = 28.0%W 49.7%D 22.3%L
+            |                                          | PENTA 74⁺² 2216⁺¹ 3747⁰ 1430⁻¹ 44⁻²
+            |                                          |
+            |                                          | new vs. delenda STC:
+            |                                          | https://ob.expositor.dev/test/185/
+            |                                          |  PERF −142.61 ± 2.77 ELO = −145.38 LO −139.85 HI ELO
+            |                                          |  CONF 20+¹/₅ SEC with 1 THREAD 64 MB CACHE
+            |                                          | GAMES 20146 = 1869W 8574D 9703L = 9.3%W 42.6%D 48.2%L
+            |                                          | PENTA 14⁺² 329⁺¹ 2708⁰ 5853⁻¹ 1169⁻²
+------------|------------------------------------------|-----------------------------------------------
+    stalker | sol arch on all data after 2025-01, and  | fixed-nodes:
+            | using viripacks instead of bulletformat. | https://ob.expositor.dev/test/187/
+            |                                          |   LLR +3.63 (−2.94 LO +2.94 HI BOUNDS for +0.00 LO +3.00 HI ELO)
+            | 4096mb shuffle buffer.                   |  PERF +46.70 ± 10.31 ELO = +36.47 LO +57.01 HI ELO
+            |                                          |  CONF 25 KNODE with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 2440 = 1013W 740D 687L = 41.5%W 30.3%D 28.2%L
+            |                                          | PENTA 155⁺² 335⁺¹ 469⁰ 203⁻¹ 58⁻²
+            |                                          | vs. sol-new
+            |                                          |
+            |                                          | STC:
+            |                                          | https://ob.expositor.dev/test/188/
+            |                                          |  PERF +36.74 ± 2.73 ELO = +34.02 LO +39.48 HI ELO
+            |                                          |  CONF 20+¹/₅ SEC with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 20026 = 6364W 9408D 4254L = 31.8%W 47.0%D 21.2%L
+            |                                          | PENTA 340⁺² 3327⁺¹ 4530⁰ 1735⁻¹ 81⁻²
+            |                                          | vs. sol-new
+------------|------------------------------------------|-----------------------------------------------
+       fizz | stalker with random skipping = 0.75      | STC:
+            |                                          | https://ob.expositor.dev/test/189/
+            |                                          |  PERF −14.31 ± 2.64 ELO = −16.95 LO −11.66 HI ELO
+            |                                          |  CONF 20+¹/₅ SEC with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 20022 = 4797W 9604D 5621L = 24.0%W 48.0%D 28.1%L
+            |                                          | PENTA 114⁺² 2094⁺¹ 4854⁰ 2752⁻¹ 197⁻²
+            |                                          | vs. stalker
+------------|------------------------------------------|-----------------------------------------------
+    crackle | stalker with 512 mb shuffle buffer.      | STC:
+            |                                          | https://ob.expositor.dev/test/190/
+            |                                          |  PERF −9.47 ± 2.66 ELO = −12.13 LO −6.80 HI ELO
+            |                                          |  CONF 20+¹/₅ SEC with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 20044 = 4884W 9730D 5430L = 24.4%W 48.5%D 27.1%L
+            |                                          | PENTA 115⁺² 2277⁺¹ 4764⁰ 2679⁻¹ 187⁻²
+            |                                          | vs. stalker
+------------|------------------------------------------|-----------------------------------------------
+        pop | stalker with 16384 mb shuffle buffer.    | STC:
+            |                                          | https://ob.expositor.dev/test/191/
+            |                                          |  PERF −7.44 ± 2.65 ELO = −10.09 LO −4.79 HI ELO
+            |                                          |  CONF 20+¹/₅ SEC with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 20048 = 4984W 9651D 5413L = 24.9%W 48.1%D 27.0%L
+            |                                          | PENTA 126⁺² 2284⁺¹ 4822⁰ 2619⁻¹ 173⁻²
+            |                                          | vs. stalker
+------------|------------------------------------------|-----------------------------------------------
+     dagger | stalker with 1600 batch warmup and with  | STC:
+            | random skipping = 5.0 / 6.0              | https://ob.expositor.dev/test/192/
+            |                                          |  PERF +3.12 ± 2.63 ELO = +0.49 LO +5.76 HI ELO
+            |                                          |  CONF 20+¹/₅ SEC with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 20016 = 5217W 9762D 5037L = 26.1%W 48.8%D 25.2%L
+            |                                          | PENTA 156⁺² 2482⁺¹ 4892⁰ 2342⁻¹ 136⁻²
+            |                                          | vs. stalker
+------------|------------------------------------------|-----------------------------------------------
+       vega | exactly dagger, but trained on fully     | STC:
+            | shuffled bulletformat records.           | https://ob.expositor.dev/test/195/
+            |                                          |  PERF +3.87 ± 2.63 ELO = +1.24 LO +6.49 HI ELO
+            | (so no random skipping)                  |  CONF 20+¹/₅ SEC with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 20030 = 5246W 9761D 5023L = 26.2%W 48.7%D 25.1%L
+            |                                          | PENTA 126⁺² 2567⁺¹ 4874⁰ 2300⁻¹ 148⁻²
+            | sad that there's at least some elo here. | vs. dagger
+------------|------------------------------------------|-----------------------------------------------
+   haruspex | dagger trained on all data.              | STC:
+            |                                          | https://ob.expositor.dev/test/197/
+            |                                          |  PERF +20.05 ± 2.68 ELO = +17.37 LO +22.73 HI ELO
+            |                                          |  CONF 20+¹/₅ SEC with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 20000 = 5818W 9517D 4665L = 29.1%W 47.6%D 23.3%L
+            |                                          | PENTA 201⁺² 3003⁺¹ 4655⁰ 2030⁻¹ 111⁻²
+            |                                          | vs. dagger
+------------|------------------------------------------|-----------------------------------------------
+     vestal | haruspex finetuned on post-2025-01 data  | STC:
+            | for 200sb from lr=0.0005 down to         | https://ob.expositor.dev/test/199/
+            | lr=0.0005 * 0.3^5, with wdl 1.0.         |  PERF −57.19 ± 2.69 ELO = −59.88 LO −54.50 HI ELO
+            |                                          |  CONF 20+¹/₅ SEC with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 20040 = 3450W 9871D 6719L = 17.2%W 49.3%D 33.5%L
+            |                                          | PENTA 47⁺² 1341⁺¹ 4312⁰ 3936⁻¹ 384⁻²
+            |                                          | vs. haruspex
+------------|------------------------------------------|-----------------------------------------------
+     aureus | vestal with wdl 0.4.                     | STC:
+            |                                          | https://ob.expositor.dev/test/200/
+            |                                          |  PERF −9.67 ± 2.60 ELO = −12.27 LO −7.06 HI ELO
+            |                                          |  CONF 20+¹/₅ SEC with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 20024 = 4723W 10021D 5280L = 23.6%W 50.0%D 26.4%L
+            |                                          | PENTA 116⁺² 2175⁺¹ 4895⁰ 2688⁻¹ 138⁻²
+            |                                          | vs. haruspex
+            |                                          |
+            |                                          | LTC:
+            |                                          | https://ob.expositor.dev/test/202/
+            |                                          |  PERF −6.36 ± 2.44 ELO = −8.80 LO −3.92 HI ELO
+            |                                          |  CONF 120+1¹/₅ SEC with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 20046 = 4672W 10335D 5039L = 23.3%W 51.6%D 25.1%L
+            |                                          | PENTA 21⁺² 2282⁺¹ 5088⁰ 2573⁻¹ 59⁻²
+            |                                          | vs. haruspex
+------------|------------------------------------------|-----------------------------------------------
+    radiant | aureus on bulletformat.                  | STC:
+            |                                          | https://ob.expositor.dev/test/201/
+            |                                          |  PERF −13.03 ± 2.62 ELO = −15.65 LO −10.41 HI ELO
+            |                                          |  CONF 20+¹/₅ SEC with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 20270 = 4782W 9946D 5542L = 23.6%W 49.1%D 27.3%L
+            |                                          | PENTA 116⁺² 2155⁺¹ 4896⁰ 2789⁻¹ 179⁻²
+            |                                          | vs. haruspex
+------------|------------------------------------------|-----------------------------------------------
+  hailstorm | haruspex with an LR schedule yoinked     | STC:
+            | from plentychess.                        | https://ob.expositor.dev/test/206/
+            |                                          |  PERF −7.27 ± 2.55 ELO = −9.82 LO −4.72 HI ELO
+            |                                          |  CONF 20+¹/₅ SEC with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 20028 = 4756W 10097D 5175L = 23.7%W 50.4%D 25.8%L
+            |                                          | PENTA 100⁺² 2200⁺¹ 5010⁰ 2589⁻¹ 115⁻²
+            |                                          | vs. haruspex
+------------|------------------------------------------|-----------------------------------------------
+   harmonic | haruspex with new clipping and higher    | STC:
+            | final lr (0.0001 * 0.3^3).               | https://ob.expositor.dev/test/210/
+            |                                          |  PERF −8.96 ± 2.61 ELO = −11.57 LO −6.35 HI ELO
+            |                                          |  CONF 20+¹/₅ SEC with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 20172 = 4860W 9932D 5380L = 24.1%W 49.2%D 26.7%L
+            |                                          | PENTA 116⁺² 2252⁺¹ 4848⁰ 2736⁻¹ 134⁻²
+            |                                          | vs. haruspex
+------------|------------------------------------------|-----------------------------------------------
+      locke | harmonic with linear lr decay to zero.   | STC:
+            |                                          | https://ob.expositor.dev/test/212/
+            |                                          |  PERF −45.23 ± 2.79 ELO = −48.02 LO −42.45 HI ELO
+            |                                          |  CONF 20+¹/₅ SEC with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 20100 = 4173W 9152D 6775L = 20.8%W 45.5%D 33.7%L
+            |                                          | PENTA 79⁺² 1576⁺¹ 4545⁰ 3364⁻¹ 486⁻²
+            |                                          | vs. haruspex
+------------|------------------------------------------|-----------------------------------------------
+   hadamard | haruspex with 3x the training time.      | STC:
+            |                                          | https://ob.expositor.dev/test/215/
+            |                                          |  PERF +1.90 ± 2.58 ELO = −0.68 LO +4.48 HI ELO
+            |                                          |  CONF 20+¹/₅ SEC with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 20114 = 5062W 10100D 4952L = 25.2%W 50.2%D 24.6%L
+            |                                          | PENTA 139⁺² 2434⁺¹ 4989⁰ 2388⁻¹ 107⁻²
+            |                                          | vs. haruspex
+------------|------------------------------------------|-----------------------------------------------
+    elessar | haruspex with the l1 factoriser removed. | STC:
+            |                                          | https://ob.expositor.dev/test/221/
+            |                                          |  PERF −0.31 ± 2.62 ELO = −2.93 LO +2.31 HI ELO
+            |                                          |  CONF 20+¹/₅ SEC with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 20022 = 5007W 9990D 5025L = 25.0%W 49.9%D 25.1%L
+            |                                          | PENTA 141⁺² 2394⁺¹ 4918⁰ 2422⁻¹ 136⁻²
+            |                                          | vs. haruspex
+------------|------------------------------------------|-----------------------------------------------
+    rubicon | elessar with an l1->l3 skip connexion.   | STC:
+            |                                          | https://ob.expositor.dev/test/222/
+            |                                          |  PERF −10.23 ± 2.61 ELO = −12.84 LO −7.62 HI ELO
+            |                                          |  CONF 20+¹/₅ SEC with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 20046 = 4775W 9906D 5365L = 23.8%W 49.4%D 26.8%L
+            |                                          | PENTA 113⁺² 2188⁺¹ 4860⁰ 2720⁻¹ 142⁻²
+            |                                          | vs. haruspex
+------------|------------------------------------------|-----------------------------------------------
+     muscle | elessar with l3=64.                      | fixed-nodes:
+            |                                          | https://ob.expositor.dev/test/234/
+            |                                          |  PERF −2.83 ± 2.38 ELO = −5.21 LO −0.45 HI ELO
+            |                                          |  CONF 25 KNODE with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 41140 = 13038W 14729D 13373L = 31.7%W 35.8%D 32.5%L
+            |                                          | PENTA 1329⁺² 4708⁺¹ 8339⁰ 4687⁻¹ 1507⁻²
+            |                                          | vs. elessar
+            |                                          |
+            |                                          | STC:
+            |                                          | https://ob.expositor.dev/test/235/
+            |                                          |  PERF −9.36 ± 1.86 ELO = −11.22 LO −7.50 HI ELO
+            |                                          |  CONF 20+¹/₅ SEC with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 40036 = 9509W 19940D 10587L = 23.8%W 49.8%D 26.4%L
+            |                                          | PENTA 260⁺² 4388⁺¹ 9672⁰ 5410⁻¹ 288⁻²
+            |                                          | vs. elessar
+------------|------------------------------------------|-----------------------------------------------
+      delta | accidentally-weird quartic relu net      | STC:
+            |                                          | https://ob.expositor.dev/test/260/
+            |                                          |  PERF −5.56 ± 2.59 ELO = −8.16 LO −2.97 HI ELO
+            |                                          |  CONF 20+¹/₅ SEC with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 20114 = 4822W 10148D 5144L = 24.0%W 50.5%D 25.6%L
+            |                                          | PENTA 105⁺² 2311⁺¹ 4949⁰ 2541⁻¹ 151⁻²
+            |                                          | vs. elessar
+------------|------------------------------------------|-----------------------------------------------
+   brackish | elessar with sf-style dualact on l2+3    | STC:
+            |                                          | https://ob.expositor.dev/test/261/
+            |                                          |  PERF −5.52 ± 2.61 ELO = −8.13 LO −2.91 HI ELO
+            |                                          |  CONF 20+¹/₅ SEC with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 20156 = 4970W 9896D 5290L = 24.7%W 49.1%D 26.2%L
+            |                                          | PENTA 99⁺² 2364⁺¹ 4896⁰ 2556⁻¹ 163⁻²
+            |                                          | vs. elessar
+------------|------------------------------------------|-----------------------------------------------
+      hapax | elessar scaled up to l0=2048.            | fixed-nodes:
+            |                                          | https://ob.expositor.dev/test/300/
+            |                                          |   LLR −3.35 (−2.94 LO +2.94 HI BOUNDS for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −2.31 ± 2.69 ELO = −5.01 LO +0.38 HI ELO
+            |                                          |  CONF 25 KNODE with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 26448 = 7770W 10732D 7946L = 29.4%W 40.6%D 30.0%L
+            |                                          | PENTA 579⁺² 3040⁺¹ 5836⁰ 3164⁻¹ 605⁻²
+            |                                          | vs. delenda
+            |                                          |
+            |                                          | DFRC fixed-nodes:
+            |                                          | https://ob.expositor.dev/test/301/
+            |                                          |   LLR +3.33 (−2.94 LO +2.94 HI BOUNDS for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF +21.84 ± 7.09 ELO = +14.76 LO +28.93 HI ELO
+            |                                          |  CONF 25 KNODE with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 4556 = 1538W 1766D 1252L = 33.8%W 38.8%D 27.5%L
+            |                                          | PENTA 176⁺² 635⁺¹ 877⁰ 479⁻¹ 111⁻²
+            |                                          | vs. delenda
+            |                                          |
+            |                                          | STC:
+            |                                          | https://ob.expositor.dev/test/311/
+            |                                          |   LLR −2.95 (−2.94 LO +2.94 HI BOUNDS for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −1.65 ± 2.24 ELO = −3.89 LO +0.60 HI ELO
+            |                                          |  CONF 8+¹/₁₂ SEC with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 25724 = 6343W 12916D 6465L = 24.7%W 50.2%D 25.1%L
+            |                                          | PENTA 122⁺² 3056⁺¹ 6369⁰ 3208⁻¹ 107⁻²
+            |                                          | vs. delenda
+            |                                          |
+            |                                          | LTC:
+            |                                          | https://ob.expositor.dev/test/312/
+            |                                          |   LLR −3.03 (−2.94 LO +2.94 HI BOUNDS for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −3.08 ± 2.69 ELO = −5.77 LO −0.39 HI ELO
+            |                                          |  CONF 40+²/₅ SEC with 1 THREAD 128 MB CACHE
+            |                                          | GAMES 15914 = 3760W 8253D 3901L = 23.6%W 51.9%D 24.5%L
+            |                                          | PENTA 33⁺² 1785⁺¹ 4170⁰ 1946⁻¹ 23⁻²
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+ hapax-1k.5 | hapax with 200sb of 0.5 wdl finetuning   | fixed-nodes:
+            |                                          | https://ob.expositor.dev/test/315/
+            |                                          |   LLR −3.06 (−2.94 LO +2.94 HI BOUNDS for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −6.73 ± 4.23 ELO = −10.96 LO −2.51 HI ELO
+            |                                          |  CONF 25 KNODE with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 9908 = 2758W 4200D 2950L = 27.8%W 42.4%D 29.8%L
+            |                                          | PENTA 145⁺² 1161⁺¹ 2203⁰ 1247⁻¹ 198⁻²
+            |                                          | vs. delenda
+            |                                          |
+            |                                          | STC:
+            |                                          | https://ob.expositor.dev/test/316/
+            |                                          |   LLR −3.16 (−2.94 LO +2.94 HI BOUNDS for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −5.46 ± 3.45 ELO = −8.91 LO −2.02 HI ELO
+            |                                          |  CONF 8+¹/₁₂ SEC with 1 THREAD 16 MB CACHE
+            |                                          | GAMES 10618 = 2560W 5331D 2727L = 24.1%W 50.2%D 25.7%L
+            |                                          | PENTA 44⁺² 1176⁺¹ 2710⁰ 1327⁻¹ 52⁻²
+            |                                          | vs. delenda
+            |                                          |
+            |                                          | LTC:
+            |                                          | https://ob.expositor.dev/test/317/
+            |                                          |   LLR −2.97 (−2.94 LO +2.94 HI BOUNDS for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −6.97 ± 3.87 ELO = −10.84 LO −3.11 HI ELO
+            |                                          |  CONF 40+²/₅ SEC with 1 THREAD 128 MB CACHE
+            |                                          | GAMES 7724 = 1737W 4095D 1892L = 22.5%W 53.0%D 24.5%L
+            |                                          | PENTA 12⁺² 839⁺¹ 2004⁰ 996⁻¹ 11⁻²
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
