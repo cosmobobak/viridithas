@@ -119,7 +119,8 @@ fn main() -> anyhow::Result<()> {
             let nnue_params = nnue::network::NNUEParams::decompress_and_alloc()?;
             let stopped = std::sync::atomic::AtomicBool::new(false);
             let nodes = std::sync::atomic::AtomicU64::new(0);
-            let info = searchinfo::SearchInfo::new(&stopped, &nodes);
+            let tbhits = std::sync::atomic::AtomicU64::new(0);
+            let info = searchinfo::SearchInfo::new(&stopped, &nodes, &tbhits);
             uci::bench("openbench", &info.conf, nnue_params, depth)?;
             Ok(())
         }
