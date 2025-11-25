@@ -61,7 +61,7 @@ impl Board {
     pub const STARTING_FEN_960: &'static str =
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w AHah - 0 1";
 
-    pub fn new() -> Self {
+    pub fn empty() -> Self {
         let mut out = Self {
             state: State::default(),
             side: Colour::White,
@@ -415,21 +415,21 @@ impl Board {
 
     #[cfg(test)]
     pub fn from_fen(fen: &str) -> anyhow::Result<Self> {
-        let mut out = Self::new();
+        let mut out = Self::empty();
         out.set_from_fen(fen)?;
         Ok(out)
     }
 
     #[cfg(test)]
     pub fn from_frc_idx(scharnagl: usize) -> Self {
-        let mut out = Self::new();
+        let mut out = Self::empty();
         out.set_frc_idx(scharnagl);
         out
     }
 
     #[cfg(test)]
     pub fn from_dfrc_idx(scharnagl: usize) -> Self {
-        let mut out = Self::new();
+        let mut out = Self::empty();
         out.set_dfrc_idx(scharnagl);
         out
     }
@@ -1677,7 +1677,7 @@ impl GameOutcome {
 
 impl Default for Board {
     fn default() -> Self {
-        let mut out = Self::new();
+        let mut out = Self::empty();
         out.set_startpos();
         out
     }
@@ -1769,7 +1769,7 @@ mod tests {
     fn read_fen_validity() {
         use super::Board;
 
-        let mut board_1 = Board::new();
+        let mut board_1 = Board::empty();
         board_1
             .set_from_fen(Board::STARTING_FEN)
             .expect("setfen failed.");
@@ -1833,7 +1833,7 @@ mod tests {
             .lines()
             .map(|l| l.unwrap().split_once(';').unwrap().0.trim().to_owned())
             .collect::<Vec<_>>();
-        let mut board = Board::new();
+        let mut board = Board::empty();
         for fen in fens {
             board.set_from_fen(&fen).expect("setfen failed.");
             let fen_2 = board.to_string();
