@@ -349,9 +349,8 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
     );
     let mut pv = PVariation::default();
     let max_depth = dyn_max_depth(t);
-    let starting_depth = 1 + t.thread_id % 10;
     let mut average_value = VALUE_NONE;
-    'deepening: for iteration in starting_depth..=max_depth {
+    'deepening: for iteration in 1..=max_depth {
         t.iteration = iteration;
         t.depth = i32::try_from(iteration).unwrap();
         t.optimism = [0; 2];
