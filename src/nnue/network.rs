@@ -46,7 +46,7 @@ pub const INPUT: usize = (12 - MERGE_KING_PLANES as usize) * 64;
 /// The amount to scale the output of the network by.
 /// This is to allow for the sigmoid activation to differentiate positions with
 /// a small difference in evaluation.
-const SCALE: i32 = 400;
+pub const SCALE: i32 = 400;
 /// The size of one-half of the hidden layer of the network.
 pub const L1_SIZE: usize = 2048;
 /// The size of the second layer of the network.
