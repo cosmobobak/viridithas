@@ -38,7 +38,9 @@ mod util;
 
 #[cfg(feature = "datagen")]
 use cli::Subcommands::{Analyse, CountPositions, Datagen, Rescale, Splat};
-use cli::Subcommands::{Bench, Merge, NNUEDryRun, Perft, Quantise, Spsa, Verbatim, VisNNUE};
+use cli::Subcommands::{
+    Bench, EvalStats, Merge, NNUEDryRun, Perft, Quantise, Spsa, Verbatim, VisNNUE,
+};
 
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";
@@ -54,12 +56,21 @@ fn main() -> anyhow::Result<()> {
     let cli = <cli::Cli as clap::Parser>::parse();
 
     match cli.subcommand {
+        Some(Bench { depth }) => {
+            let nnue_params = nnue::network::NNUEParams::decompress_and_alloc()?;
+            let stopped = std::sync::atomic::AtomicBool::new(false);
+            let nodes = std::sync::atomic::AtomicU64::new(0);
+            let tbhits = std::sync::atomic::AtomicU64::new(0);
+            let info = searchinfo::SearchInfo::new(&stopped, &nodes, &tbhits);
+            uci::bench("openbench", &info.conf, nnue_params, depth)?;
+            Ok(())
+        }
         Some(Perft) => perft::gamut(),
-        Some(VisNNUE) => nnue::network::visualise_nnue(),
-        Some(NNUEDryRun) => nnue::network::dry_run(),
         Some(Quantise { input, output }) => nnue::network::quantise(&input, &output),
         Some(Merge { input, output }) => nnue::network::merge(&input, &output),
         Some(Verbatim { output }) => nnue::network::dump_verbatim(&output),
+        Some(VisNNUE) => nnue::network::visualise_nnue(),
+        Some(NNUEDryRun) => nnue::network::dry_run(),
         Some(Spsa { json }) => {
             if json {
                 println!(
@@ -74,6 +85,7 @@ fn main() -> anyhow::Result<()> {
             }
             Ok(())
         }
+        Some(EvalStats { input }) => evaluation::eval_stats(&input),
         #[cfg(feature = "datagen")]
         Some(Analyse { input }) => datagen::dataset_stats(&input),
         #[cfg(feature = "datagen")]
@@ -115,15 +127,6 @@ fn main() -> anyhow::Result<()> {
             nodes,
             dfrc,
         }),
-        Some(Bench { depth }) => {
-            let nnue_params = nnue::network::NNUEParams::decompress_and_alloc()?;
-            let stopped = std::sync::atomic::AtomicBool::new(false);
-            let nodes = std::sync::atomic::AtomicU64::new(0);
-            let tbhits = std::sync::atomic::AtomicU64::new(0);
-            let info = searchinfo::SearchInfo::new(&stopped, &nodes, &tbhits);
-            uci::bench("openbench", &info.conf, nnue_params, depth)?;
-            Ok(())
-        }
         None => uci::main_loop(),
     }
 }
