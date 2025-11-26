@@ -131,6 +131,10 @@ impl ThreadData<'_> {
         nn_hash: u64,
         depth: i32,
     ) {
+        if nn_hash == 0 {
+            return;
+        }
+
         let eval_index = nn_hash % HASH_HISTORY_SIZE as u64;
 
         #[expect(clippy::cast_possible_truncation)]
@@ -158,6 +162,10 @@ impl ThreadData<'_> {
         depth: i32,
         good: bool,
     ) {
+        if nn_hash == 0 {
+            return;
+        }
+
         let eval_index = nn_hash % HASH_HISTORY_SIZE as u64;
 
         #[expect(clippy::cast_possible_truncation)]
