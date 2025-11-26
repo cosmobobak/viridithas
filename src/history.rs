@@ -134,7 +134,7 @@ impl ThreadData<'_> {
         let eval_index = nn_hash % HASH_HISTORY_SIZE as u64;
 
         #[expect(clippy::cast_possible_truncation)]
-        let table = &mut self.pawn_hist[eval_index as usize];
+        let table = &mut self.eval_hist[eval_index as usize];
 
         let good_delta = pawn_history_bonus(&self.info.conf, depth);
         let bad_delta = pawn_history_malus(&self.info.conf, depth);
@@ -161,7 +161,7 @@ impl ThreadData<'_> {
         let eval_index = nn_hash % HASH_HISTORY_SIZE as u64;
 
         #[expect(clippy::cast_possible_truncation)]
-        let table = &mut self.pawn_hist[eval_index as usize];
+        let table = &mut self.eval_hist[eval_index as usize];
 
         let delta = if good {
             pawn_history_bonus(&self.info.conf, depth)
