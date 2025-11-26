@@ -307,7 +307,7 @@ impl HashHistoryTable {
     pub fn boxed() -> Box<Self> {
         #![allow(clippy::cast_ptr_alignment)]
         // SAFETY: we're allocating a zeroed block of memory, and then casting it to a Box<Self>
-        // this is fine! because [[HistoryTable; BOARD_N_SQUARES]; 12] is just a bunch of i16s
+        // this is fine! because [HistoryTable; HASH_HISTORY_SIZE] is just a bunch of i16s
         // at base, which are fine to zero-out.
         unsafe {
             let layout = std::alloc::Layout::new::<Self>();
