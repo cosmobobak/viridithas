@@ -216,6 +216,7 @@ impl MovePicker {
         let threats = t.board.state.threats.all;
         #[expect(clippy::cast_possible_truncation)]
         let pawn_index = (t.board.state.keys.pawn % HASH_HISTORY_SIZE as u64) as usize;
+        #[expect(clippy::cast_possible_truncation)]
         let eval_index = (nn_hash % HASH_HISTORY_SIZE as u64) as usize;
         for m in ms {
             let from = m.mov.from();
