@@ -6,10 +6,10 @@ use crate::{
         types::Square,
     },
     historytable::{
-        CORRECTION_HISTORY_MAX, HASH_HISTORY_SIZE, cont_history_bonus, cont_history_malus,
-        main_history_bonus, main_history_malus, pawn_history_bonus, pawn_history_malus,
-        tactical_history_bonus, tactical_history_malus, update_cont_history, update_correction,
-        update_history,
+        CORRECTION_HISTORY_MAX, HASH_HISTORY_SIZE, HistoryTable, cont_history_bonus,
+        cont_history_malus, main_history_bonus, main_history_malus, pawn_history_bonus,
+        pawn_history_malus, tactical_history_bonus, tactical_history_malus, update_cont_history,
+        update_correction, update_history,
     },
     threadlocal::ThreadData,
     util::MAX_DEPTH,
@@ -64,33 +64,113 @@ impl ThreadData<'_> {
         update_history(val, delta);
     }
 
-    /// Update the pawn-structure history counters of a batch of moves.
-    pub fn update_pawn_history(&mut self, moves_to_adjust: &[Move], best_move: Move, depth: i32) {
-        let pawn_index = self.board.state.keys.pawn % HASH_HISTORY_SIZE as u64;
+    fn update_hash_hist(
+        table: &mut HistoryTable,
+        board: &Board,
+        moves_to_adjust: &[Move],
+        best_move: Move,
+        good_delta: i32,
+        bad_delta: i32,
+    ) {
         for &m in moves_to_adjust {
-            let piece_moved = self.board.state.mailbox[m.from()].unwrap();
+            let piece_moved = board.state.mailbox[m.from()].unwrap();
             let to = m.history_to_square();
-            #[expect(clippy::cast_possible_truncation)]
-            let val = &mut self.pawn_hist[pawn_index as usize][piece_moved][to];
+            let val = &mut table[piece_moved][to];
             let delta = if m == best_move {
-                pawn_history_bonus(&self.info.conf, depth)
+                good_delta
             } else {
-                -pawn_history_malus(&self.info.conf, depth)
+                -bad_delta
             };
             update_history(val, delta);
         }
     }
 
+    /// Update the pawn-structure history counters of a batch of moves.
+    pub fn update_pawn_hist(&mut self, moves_to_adjust: &[Move], best_move: Move, depth: i32) {
+        let pawn_index = self.board.state.keys.pawn % HASH_HISTORY_SIZE as u64;
+
+        #[expect(clippy::cast_possible_truncation)]
+        let table = &mut self.pawn_hist[pawn_index as usize];
+
+        let good_delta = pawn_history_bonus(&self.info.conf, depth);
+        let bad_delta = pawn_history_malus(&self.info.conf, depth);
+
+        Self::update_hash_hist(
+            table,
+            &self.board,
+            moves_to_adjust,
+            best_move,
+            good_delta,
+            bad_delta,
+        );
+    }
+
     /// Update the pawn-structure history counter for a single move.
-    pub fn update_pawn_history_single(&mut self, to: Square, moved: Piece, depth: i32, good: bool) {
+    pub fn update_pawn_hist_single(&mut self, to: Square, moved: Piece, depth: i32, good: bool) {
+        let pawn_index = self.board.state.keys.pawn % HASH_HISTORY_SIZE as u64;
+
+        #[expect(clippy::cast_possible_truncation)]
+        let table = &mut self.pawn_hist[pawn_index as usize];
+
         let delta = if good {
             pawn_history_bonus(&self.info.conf, depth)
         } else {
             -pawn_history_malus(&self.info.conf, depth)
         };
-        let pawn_index = self.board.state.keys.pawn % HASH_HISTORY_SIZE as u64;
+
+        let val = &mut table[moved][to];
+
+        update_history(val, delta);
+    }
+
+    /// Update the feature vector hash history counters of a batch of moves.
+    pub fn update_eval_hist(
+        &mut self,
+        moves_to_adjust: &[Move],
+        best_move: Move,
+        nn_hash: u64,
+        depth: i32,
+    ) {
+        let eval_index = nn_hash % HASH_HISTORY_SIZE as u64;
+
         #[expect(clippy::cast_possible_truncation)]
-        let val = &mut self.pawn_hist[pawn_index as usize][moved][to];
+        let table = &mut self.pawn_hist[eval_index as usize];
+
+        let good_delta = pawn_history_bonus(&self.info.conf, depth);
+        let bad_delta = pawn_history_malus(&self.info.conf, depth);
+
+        Self::update_hash_hist(
+            table,
+            &self.board,
+            moves_to_adjust,
+            best_move,
+            good_delta,
+            bad_delta,
+        );
+    }
+
+    /// Update the feature vector hash history counter for a single move.
+    pub fn update_eval_hist_single(
+        &mut self,
+        to: Square,
+        moved: Piece,
+        nn_hash: u64,
+        depth: i32,
+        good: bool,
+    ) {
+        let eval_index = nn_hash % HASH_HISTORY_SIZE as u64;
+
+        #[expect(clippy::cast_possible_truncation)]
+        let table = &mut self.pawn_hist[eval_index as usize];
+
+        let delta = if good {
+            pawn_history_bonus(&self.info.conf, depth)
+        } else {
+            -pawn_history_malus(&self.info.conf, depth)
+        };
+
+        let val = &mut table[moved][to];
+
         update_history(val, delta);
     }
 

@@ -505,7 +505,7 @@ fn default_move(t: &ThreadData) -> Move {
         t.tt.probe_move(t.board.state.keys.zobrist)
             .and_then(|e| e.0);
 
-    let mut mp = MovePicker::new(tt_move, t.killer_move_table[t.board.height()], 0);
+    let mut mp = MovePicker::new(tt_move, t.killer_move_table[t.board.height()], 0, 0);
 
     std::iter::from_fn(|| mp.next(t))
         .find(|&m| t.board.is_legal(m))
@@ -549,7 +549,7 @@ pub fn quiescence<NT: NodeType>(
         return if in_check {
             0
         } else {
-            evaluate(t, t.info.nodes.get_local())
+            evaluate(t, t.info.nodes.get_local()).0
         };
     }
 
@@ -589,19 +589,22 @@ pub fn quiescence<NT: NodeType>(
 
     let raw_eval;
     let stand_pat;
+    let nn_hash;
 
     if in_check {
         // could be being mated!
         raw_eval = VALUE_NONE;
         stand_pat = -INFINITY;
+        nn_hash = 0;
     } else if let Some(tte) = tt_hit {
         // if we have a TT hit, check the cached TT eval.
         if tte.eval == VALUE_NONE {
             // regenerate the static eval if it's VALUE_NONE.
-            raw_eval = evaluate(t, t.info.nodes.get_local());
+            (raw_eval, nn_hash) = evaluate(t, t.info.nodes.get_local());
         } else {
             // if the TT eval is not VALUE_NONE, use it.
             raw_eval = tte.eval;
+            nn_hash = 0;
         }
         let adj_eval = adj_shuffle(t, raw_eval, clock) + t.correction();
 
@@ -618,7 +621,7 @@ pub fn quiescence<NT: NodeType>(
         }
     } else {
         // otherwise, use the static evaluation.
-        raw_eval = evaluate(t, t.info.nodes.get_local());
+        (raw_eval, nn_hash) = evaluate(t, t.info.nodes.get_local());
 
         // store the eval into the TT. We know that we won't overwrite anything,
         // because this branch is one where there wasn't a TT-hit.
@@ -650,8 +653,12 @@ pub fn quiescence<NT: NodeType>(
     let mut best_score = stand_pat;
 
     let mut moves_made = 0;
-    let mut move_picker =
-        MovePicker::new(tt_hit.and_then(|e| e.mov), None, t.info.conf.qs_see_bound);
+    let mut move_picker = MovePicker::new(
+        tt_hit.and_then(|e| e.mov),
+        None,
+        nn_hash,
+        t.info.conf.qs_see_bound,
+    );
     move_picker.skip_quiets = !in_check;
 
     let futility = stand_pat + t.info.conf.qs_futility;
@@ -797,7 +804,7 @@ pub fn alpha_beta<NT: NodeType>(
             return if in_check {
                 0
             } else {
-                evaluate(t, t.info.nodes.get_local())
+                evaluate(t, t.info.nodes.get_local()).0
             };
         }
 
@@ -846,7 +853,7 @@ pub fn alpha_beta<NT: NodeType>(
                 let moved = t.board.state.mailbox[from].unwrap();
                 let threats = t.board.state.threats.all;
                 update_quiet_history_single::<false>(
-                    t, from, to, moved, threats, depth, height, true,
+                    t, from, to, moved, threats, 0, depth, height, true,
                 );
             }
 
@@ -922,6 +929,7 @@ pub fn alpha_beta<NT: NodeType>(
     let raw_eval;
     let static_eval;
     let eval;
+    let nn_hash;
     let correction = t.correction();
 
     if in_check {
@@ -929,21 +937,24 @@ pub fn alpha_beta<NT: NodeType>(
         raw_eval = VALUE_NONE;
         static_eval = VALUE_NONE;
         eval = VALUE_NONE;
+        nn_hash = 0;
     } else if excluded.is_some() {
         // if we're in a singular-verification search, we already have the static eval.
         // we can set raw_eval to whatever we like, because we're not going to be saving it.
         raw_eval = VALUE_NONE;
         static_eval = t.ss[height].static_eval;
         eval = t.ss[height].eval;
+        nn_hash = t.ss[height].nn_hash;
         t.nnue.hint_common_access(&t.board, t.nnue_params);
     } else if let Some(tte) = &tt_hit {
         let v = tte.eval; // if we have a TT hit, check the cached TT eval.
         if v == VALUE_NONE {
             // regenerate the static eval if it's VALUE_NONE.
-            raw_eval = evaluate(t, t.info.nodes.get_local());
+            (raw_eval, nn_hash) = evaluate(t, t.info.nodes.get_local());
         } else {
             // if the TT eval is not VALUE_NONE, use it.
             raw_eval = v;
+            nn_hash = 0;
             if NT::PV {
                 t.nnue.hint_common_access(&t.board, t.nnue_params);
             }
@@ -964,7 +975,7 @@ pub fn alpha_beta<NT: NodeType>(
         }
     } else {
         // otherwise, use the static evaluation.
-        raw_eval = evaluate(t, t.info.nodes.get_local());
+        (raw_eval, nn_hash) = evaluate(t, t.info.nodes.get_local());
 
         // store the eval into the TT. We know that we won't overwrite anything,
         // because this branch is one where there wasn't a TT-hit.
@@ -1195,7 +1206,7 @@ pub fn alpha_beta<NT: NodeType>(
         let see_threshold = (pc_beta - static_eval) * t.info.conf.probcut_see_scale / 256;
         let pc_eval_reduction = (static_eval - beta) / t.info.conf.probcut_eval_div;
         let pc_depth = i32::clamp(depth - 3 - pc_eval_reduction, 0, depth - 1);
-        let mut move_picker = MovePicker::new(tt_capture, None, see_threshold);
+        let mut move_picker = MovePicker::new(tt_capture, None, nn_hash, see_threshold);
         move_picker.skip_quiets = true;
         while let Some(m) = move_picker.next(t) {
             t.tt.prefetch(t.board.key_after(m));
@@ -1251,7 +1262,7 @@ pub fn alpha_beta<NT: NodeType>(
     let lmp_threshold = t.info.lm_table.lmp_movecount(depth, improving);
 
     let killer = t.killer_move_table[height].filter(|m| !t.board.is_tactical(*m));
-    let mut move_picker = MovePicker::new(tt_move, killer, t.info.conf.main_see_bound);
+    let mut move_picker = MovePicker::new(tt_move, killer, nn_hash, t.info.conf.main_see_bound);
 
     let mut quiets_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
     let mut tacticals_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
@@ -1559,7 +1570,7 @@ pub fn alpha_beta<NT: NodeType>(
             // boost history for nmp refutations
             let nmp = i32::from(!NT::ROOT && t.ss[height - 1].searching.is_none());
 
-            update_quiet_history(t, &quiets_tried, best_move, depth + low + nmp);
+            update_quiet_history(t, &quiets_tried, best_move, nn_hash, depth + low + nmp);
         }
 
         // we unconditionally update the tactical history table
@@ -1668,10 +1679,17 @@ fn rfp_margin(pos: &Board, info: &SearchInfo, depth: i32, improving: bool, corre
 }
 
 /// Update the main and continuation history tables for a batch of moves.
-fn update_quiet_history(t: &mut ThreadData, moves_to_adjust: &[Move], best_move: Move, depth: i32) {
+fn update_quiet_history(
+    t: &mut ThreadData,
+    moves_to_adjust: &[Move],
+    best_move: Move,
+    nn_hash: u64,
+    depth: i32,
+) {
     t.update_history(moves_to_adjust, best_move, depth);
     t.update_cont_hist(moves_to_adjust, best_move, depth);
-    t.update_pawn_history(moves_to_adjust, best_move, depth);
+    t.update_pawn_hist(moves_to_adjust, best_move, depth);
+    t.update_eval_hist(moves_to_adjust, best_move, nn_hash, depth);
 }
 
 /// Update the main and continuation history tables for a single move.
@@ -1682,13 +1700,15 @@ fn update_quiet_history_single<const MADE: bool>(
     to: Square,
     moved: Piece,
     threats: SquareSet,
+    nn_hash: u64,
     depth: i32,
     height: usize,
     good: bool,
 ) {
     t.update_history_single(from, to, moved, threats, depth, good);
     t.update_cont_hist_single(to, moved, depth, height, good);
-    t.update_pawn_history_single(to, moved, depth, good);
+    t.update_pawn_hist_single(to, moved, depth, good);
+    t.update_eval_hist_single(to, moved, nn_hash, depth, good);
 }
 
 /// Update the tactical history table.

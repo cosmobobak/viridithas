@@ -35,6 +35,7 @@ pub struct MovePicker {
     killer: Option<Move>,
     pub skip_quiets: bool,
     see_threshold: i32,
+    nn_hash: u64,
 }
 
 fn fast_select(entries: &[Cell<MoveListEntry>]) -> Option<&Cell<MoveListEntry>> {
@@ -56,7 +57,12 @@ fn fast_select(entries: &[Cell<MoveListEntry>]) -> Option<&Cell<MoveListEntry>> 
 }
 
 impl MovePicker {
-    pub fn new(tt_move: Option<Move>, killer: Option<Move>, see_threshold: i32) -> Self {
+    pub fn new(
+        tt_move: Option<Move>,
+        killer: Option<Move>,
+        nn_hash: u64,
+        see_threshold: i32,
+    ) -> Self {
         Self {
             movelist: MoveList::new(),
             index: 0,
@@ -65,6 +71,7 @@ impl MovePicker {
             killer,
             skip_quiets: false,
             see_threshold,
+            nn_hash,
         }
     }
 
@@ -130,7 +137,7 @@ impl MovePicker {
                 let start = self.movelist.len();
                 t.board.generate_quiets(&mut self.movelist);
                 let quiets = &mut self.movelist[start..];
-                Self::score_quiets(t, quiets);
+                Self::score_quiets(t, quiets, self.nn_hash);
             }
         }
         if self.stage == Stage::YieldRemaining {
@@ -194,7 +201,7 @@ impl MovePicker {
         None
     }
 
-    pub fn score_quiets(t: &ThreadData, ms: &mut [MoveListEntry]) {
+    pub fn score_quiets(t: &ThreadData, ms: &mut [MoveListEntry], nn_hash: u64) {
         let height = t.board.height();
 
         let mut cont_block_0 = None;
@@ -209,6 +216,7 @@ impl MovePicker {
         let threats = t.board.state.threats.all;
         #[expect(clippy::cast_possible_truncation)]
         let pawn_index = (t.board.state.keys.pawn % HASH_HISTORY_SIZE as u64) as usize;
+        let eval_index = (nn_hash % HASH_HISTORY_SIZE as u64) as usize;
         for m in ms {
             let from = m.mov.from();
             let piece = t.board.state.mailbox[from].unwrap();
@@ -226,6 +234,7 @@ impl MovePicker {
                 score += i32::from(cmh_block[piece][to]);
             }
             score += i32::from(t.pawn_hist[pawn_index][piece][to]);
+            score += i32::from(t.eval_hist[eval_index][piece][to]);
 
             match piece.piece_type() {
                 PieceType::Pawn => {

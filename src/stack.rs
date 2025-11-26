@@ -5,6 +5,7 @@ use crate::chess::{chessmove::Move, types::ContHistIndex};
 pub struct StackEntry {
     pub static_eval: i32,
     pub eval: i32,
+    pub nn_hash: u64,
     pub excluded: Option<Move>,
     pub best_move: Option<Move>,
     pub searching: Option<Move>,

@@ -706,7 +706,7 @@ pub fn main_loop() -> anyhow::Result<()> {
                 let eval = if t.board.in_check() {
                     0
                 } else {
-                    let eval = evaluate(t, 0);
+                    let eval = evaluate(t, 0).0;
                     adj_shuffle(t, eval, t.board.fifty_move_counter())
                 };
                 println!("{eval}");
@@ -719,7 +719,7 @@ pub fn main_loop() -> anyhow::Result<()> {
                 let eval = if t.board.in_check() {
                     0
                 } else {
-                    t.nnue.evaluate(t.nnue_params, &t.board)
+                    t.nnue.evaluate(t.nnue_params, &t.board).0
                 };
                 println!("{eval}");
                 Ok(())

@@ -87,7 +87,7 @@ pub fn movepicker_perft(t: &mut ThreadData, depth: usize) -> u64 {
         return 1;
     }
 
-    let mut ml = MovePicker::new(None, None, 0);
+    let mut ml = MovePicker::new(None, None, 0, 0);
 
     let mut count = 0;
     while let Some(m) = ml.next(t) {

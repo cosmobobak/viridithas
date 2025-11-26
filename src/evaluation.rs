@@ -107,27 +107,31 @@ impl Board {
     }
 }
 
-pub fn evaluate_nnue(t: &ThreadData) -> i32 {
+pub fn evaluate_nnue(t: &ThreadData) -> (i32, u64) {
     // get the raw network output
-    let v = t.nnue.evaluate(t.nnue_params, &t.board);
+    let (v, nn_hash) = t.nnue.evaluate(t.nnue_params, &t.board);
 
     // clamp the value into the valid range.
     // this basically never comes up, but the network will
     // occasionally output OOB values in crazy positions with
     // massive material imbalances.
-    v.clamp(-MINIMUM_TB_WIN_SCORE + 1024, MINIMUM_TB_WIN_SCORE - 1024)
+    let clamped = v.clamp(-MINIMUM_TB_WIN_SCORE + 1024, MINIMUM_TB_WIN_SCORE - 1024);
+
+    (clamped, nn_hash)
 }
 
-pub fn evaluate(t: &mut ThreadData, nodes: u64) -> i32 {
+pub fn evaluate(t: &mut ThreadData, nodes: u64) -> (i32, u64) {
     // detect draw by insufficient material
     if t.board.state.bbs.pieces[PieceType::Pawn] == SquareSet::EMPTY
         && t.board.state.bbs.is_material_draw()
     {
-        return if t.board.turn() == Colour::White {
+        let eval = if t.board.turn() == Colour::White {
             draw_score(t, nodes, t.board.turn())
         } else {
             -draw_score(t, nodes, t.board.turn())
         };
+
+        return (eval, 0);
     }
     // apply all in-waiting updates to generate a valid
     // neural network accumulator state.
@@ -184,7 +188,7 @@ pub fn eval_stats(input: &Path) -> anyhow::Result<()> {
         let eval = if t.board.in_check() {
             continue;
         } else {
-            t.nnue.evaluate(t.nnue_params, &t.board)
+            t.nnue.evaluate(t.nnue_params, &t.board).0
         };
 
         count += 1;

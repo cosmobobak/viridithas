@@ -21,6 +21,7 @@ use crate::{
         types::Square,
     },
     image::{self, Image},
+    lookups::{PIECE_KEYS, SIDE_KEY},
     nnue,
     util::{self, Align64, MAX_DEPTH},
 };
@@ -1432,7 +1433,7 @@ impl NNUEState {
 
     /// Evaluate the final layer on the partial activations.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-    pub fn evaluate(&self, nn: &NNUEParams, board: &Board) -> i32 {
+    pub fn evaluate(&self, nn: &NNUEParams, board: &Board) -> (i32, u64) {
         let stm = board.turn();
         let out = output_bucket(board);
 
@@ -1470,7 +1471,21 @@ impl NNUEState {
             &mut l3_output,
         );
 
-        (l3_output * SCALE as f32) as i32
+        let eval = (l3_output * SCALE as f32) as i32;
+
+        let mut hash = SIDE_KEY;
+        for (i, v) in l1_outputs.0.iter().copied().enumerate() {
+            if v != 0.0 {
+                hash ^= PIECE_KEYS[Piece::WP][i];
+            }
+        }
+        for (i, v) in l2_outputs.0.iter().copied().enumerate() {
+            if v != 0.0 {
+                hash ^= PIECE_KEYS[Piece::WP][i + L2_SIZE];
+            }
+        }
+
+        (eval, hash)
     }
 }
 

@@ -33,6 +33,7 @@ pub struct ThreadData<'a> {
     pub tactical_hist: Box<CaptureHistoryTable>,
     pub cont_hist: Box<DoubleHistoryTable>,
     pub pawn_hist: Box<HashHistoryTable>,
+    pub eval_hist: Box<HashHistoryTable>,
     pub killer_move_table: [Option<Move>; MAX_DEPTH + 1],
     pub pawn_corrhist: Box<CorrectionHistoryTable>,
     pub nonpawn_corrhist: [Box<CorrectionHistoryTable>; 2],
@@ -82,6 +83,7 @@ impl<'a> ThreadData<'a> {
             tactical_hist: CaptureHistoryTable::boxed(),
             cont_hist: DoubleHistoryTable::boxed(),
             pawn_hist: HashHistoryTable::boxed(),
+            eval_hist: HashHistoryTable::boxed(),
             killer_move_table: [None; MAX_DEPTH + 1],
             pawn_corrhist: CorrectionHistoryTable::boxed(),
             nonpawn_corrhist: [
@@ -140,6 +142,7 @@ impl<'a> ThreadData<'a> {
         self.tactical_hist.clear();
         self.cont_hist.clear();
         self.pawn_hist.clear();
+        self.eval_hist.clear();
         self.pawn_corrhist.clear();
         self.nonpawn_corrhist[Colour::White].clear();
         self.nonpawn_corrhist[Colour::Black].clear();
