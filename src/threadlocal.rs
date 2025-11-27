@@ -33,12 +33,13 @@ pub struct ThreadData<'a> {
     pub tactical_hist: Box<CaptureHistoryTable>,
     pub cont_hist: Box<DoubleHistoryTable>,
     pub pawn_hist: Box<HashHistoryTable>,
-    pub eval_hist: Box<HashHistoryTable>,
+    // pub eval_hist: Box<HashHistoryTable>,
     pub killer_move_table: [Option<Move>; MAX_DEPTH + 1],
     pub pawn_corrhist: Box<CorrectionHistoryTable>,
     pub nonpawn_corrhist: [Box<CorrectionHistoryTable>; 2],
     pub major_corrhist: Box<CorrectionHistoryTable>,
     pub minor_corrhist: Box<CorrectionHistoryTable>,
+    pub nn_corrhist: Box<CorrectionHistoryTable>,
     pub continuation_corrhist: Box<ContinuationCorrectionHistoryTable>,
 
     pub thread_id: usize,
@@ -83,7 +84,7 @@ impl<'a> ThreadData<'a> {
             tactical_hist: CaptureHistoryTable::boxed(),
             cont_hist: DoubleHistoryTable::boxed(),
             pawn_hist: HashHistoryTable::boxed(),
-            eval_hist: HashHistoryTable::boxed(),
+            // eval_hist: HashHistoryTable::boxed(),
             killer_move_table: [None; MAX_DEPTH + 1],
             pawn_corrhist: CorrectionHistoryTable::boxed(),
             nonpawn_corrhist: [
@@ -92,6 +93,7 @@ impl<'a> ThreadData<'a> {
             ],
             major_corrhist: CorrectionHistoryTable::boxed(),
             minor_corrhist: CorrectionHistoryTable::boxed(),
+            nn_corrhist: CorrectionHistoryTable::boxed(),
             continuation_corrhist: ContinuationCorrectionHistoryTable::boxed(),
             thread_id,
             #[allow(clippy::large_stack_arrays)]
@@ -142,12 +144,13 @@ impl<'a> ThreadData<'a> {
         self.tactical_hist.clear();
         self.cont_hist.clear();
         self.pawn_hist.clear();
-        self.eval_hist.clear();
+        // self.eval_hist.clear();
         self.pawn_corrhist.clear();
         self.nonpawn_corrhist[Colour::White].clear();
         self.nonpawn_corrhist[Colour::Black].clear();
         self.major_corrhist.clear();
         self.minor_corrhist.clear();
+        self.nn_corrhist.clear();
         self.continuation_corrhist.clear();
         self.killer_move_table.fill(None);
         self.depth = 0;

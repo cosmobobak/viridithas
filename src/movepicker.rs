@@ -235,9 +235,9 @@ impl MovePicker {
                 score += i32::from(cmh_block[piece][to]);
             }
             score += i32::from(t.pawn_hist[pawn_index][piece][to]);
-            if nn_hash != 0 {
-                score += i32::from(t.eval_hist[eval_index][piece][to]);
-            }
+            // if nn_hash != 0 {
+            //     score += i32::from(t.eval_hist[eval_index][piece][to]);
+            // }
 
             match piece.piece_type() {
                 PieceType::Pawn => {

@@ -135,22 +135,22 @@ impl ThreadData<'_> {
             return;
         }
 
-        let eval_index = nn_hash % HASH_HISTORY_SIZE as u64;
+        // let eval_index = nn_hash % HASH_HISTORY_SIZE as u64;
 
-        #[expect(clippy::cast_possible_truncation)]
-        let table = &mut self.eval_hist[eval_index as usize];
+        // #[expect(clippy::cast_possible_truncation)]
+        // let table = &mut self.eval_hist[eval_index as usize];
 
-        let good_delta = pawn_history_bonus(&self.info.conf, depth);
-        let bad_delta = pawn_history_malus(&self.info.conf, depth);
+        // let good_delta = pawn_history_bonus(&self.info.conf, depth);
+        // let bad_delta = pawn_history_malus(&self.info.conf, depth);
 
-        Self::update_hash_hist(
-            table,
-            &self.board,
-            moves_to_adjust,
-            best_move,
-            good_delta,
-            bad_delta,
-        );
+        // Self::update_hash_hist(
+        //     table,
+        //     &self.board,
+        //     moves_to_adjust,
+        //     best_move,
+        //     good_delta,
+        //     bad_delta,
+        // );
     }
 
     /// Update the feature vector hash history counter for a single move.
@@ -166,20 +166,20 @@ impl ThreadData<'_> {
             return;
         }
 
-        let eval_index = nn_hash % HASH_HISTORY_SIZE as u64;
+        // let eval_index = nn_hash % HASH_HISTORY_SIZE as u64;
 
-        #[expect(clippy::cast_possible_truncation)]
-        let table = &mut self.eval_hist[eval_index as usize];
+        // #[expect(clippy::cast_possible_truncation)]
+        // let table = &mut self.eval_hist[eval_index as usize];
 
-        let delta = if good {
-            pawn_history_bonus(&self.info.conf, depth)
-        } else {
-            -pawn_history_malus(&self.info.conf, depth)
-        };
+        // let delta = if good {
+        //     pawn_history_bonus(&self.info.conf, depth)
+        // } else {
+        //     -pawn_history_malus(&self.info.conf, depth)
+        // };
 
-        let val = &mut table[moved][to];
+        // let val = &mut table[moved][to];
 
-        update_history(val, delta);
+        // update_history(val, delta);
     }
 
     /// Update the tactical history counters of a batch of moves.
@@ -262,7 +262,13 @@ impl ThreadData<'_> {
     }
 
     /// Update the correction history for a pawn pattern.
-    pub fn update_correction_history(&mut self, depth: i32, tt_complexity: i32, diff: i32) {
+    pub fn update_correction_history(
+        &mut self,
+        nn_hash: u64,
+        depth: i32,
+        tt_complexity: i32,
+        diff: i32,
+    ) {
         #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
 
         use Colour::{Black, White};
@@ -299,6 +305,10 @@ impl ThreadData<'_> {
         update(minor);
         update(major);
 
+        if nn_hash != 0 {
+            update(self.nn_corrhist.get_mut(us, nn_hash));
+        }
+
         if height > 2 {
             let ch1 = self.ss[height - 1].ch_idx;
             let ch2 = self.ss[height - 2].ch_idx;
@@ -310,7 +320,7 @@ impl ThreadData<'_> {
 
     /// Adjust a raw evaluation using statistics from the correction history.
     #[allow(clippy::cast_possible_truncation)]
-    pub fn correction(&self) -> i32 {
+    pub fn correction(&self, nn_hash: u64) -> i32 {
         use Colour::{Black, White};
 
         let keys = &self.board.state.keys;
@@ -323,6 +333,12 @@ impl ThreadData<'_> {
         let black = black.get(us, keys.non_pawn[Black]);
         let minor = self.minor_corrhist.get(us, keys.minor);
         let major = self.major_corrhist.get(us, keys.major);
+
+        let nn = if nn_hash != 0 {
+            self.nn_corrhist.get(us, nn_hash)
+        } else {
+            0
+        };
 
         let cont = if height > 2 {
             let ch1 = self.ss[height - 1].ch_idx;
@@ -338,6 +354,7 @@ impl ThreadData<'_> {
             + major * i64::from(self.info.conf.major_corrhist_weight)
             + minor * i64::from(self.info.conf.minor_corrhist_weight)
             + (white + black) * i64::from(self.info.conf.nonpawn_corrhist_weight)
+            + nn * i64::from(self.info.conf.nn_corrhist_weight)
             + cont * i64::from(self.info.conf.continuation_corrhist_weight);
 
         (adjustment * 12 / 0x40000) as i32

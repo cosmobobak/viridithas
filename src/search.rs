@@ -138,6 +138,7 @@ const PAWN_CORRHIST_WEIGHT: i32 = 1710;
 const MAJOR_CORRHIST_WEIGHT: i32 = 1241;
 const MINOR_CORRHIST_WEIGHT: i32 = 1274;
 const NONPAWN_CORRHIST_WEIGHT: i32 = 1664;
+const NN_CORRHIST_WEIGHT: i32 = 1500;
 const CONTINUATION_CORRHIST_WEIGHT: i32 = 1863;
 const EVAL_POLICY_IMPROVEMENT_SCALE: i32 = 227;
 const EVAL_POLICY_OFFSET: i32 = 9;
@@ -606,7 +607,7 @@ pub fn quiescence<NT: NodeType>(
             raw_eval = tte.eval;
             nn_hash = 0;
         }
-        let adj_eval = adj_shuffle(t, raw_eval, clock) + t.correction();
+        let adj_eval = adj_shuffle(t, raw_eval, clock) + t.correction(nn_hash);
 
         // try correcting via search score from TT.
         // notably, this doesn't work for main search for ~reasons.
@@ -636,7 +637,7 @@ pub fn quiescence<NT: NodeType>(
             t.ss[height].ttpv,
         );
 
-        stand_pat = adj_shuffle(t, raw_eval, clock) + t.correction();
+        stand_pat = adj_shuffle(t, raw_eval, clock) + t.correction(nn_hash);
     }
 
     if stand_pat >= beta {
@@ -930,7 +931,7 @@ pub fn alpha_beta<NT: NodeType>(
     let static_eval;
     let eval;
     let nn_hash;
-    let correction = t.correction();
+    let correction;
 
     if in_check {
         // when we're in check, it could be checkmate, so it's unsound to use evaluate().
@@ -938,6 +939,7 @@ pub fn alpha_beta<NT: NodeType>(
         static_eval = VALUE_NONE;
         eval = VALUE_NONE;
         nn_hash = 0;
+        correction = t.correction(nn_hash);
     } else if excluded.is_some() {
         // if we're in a singular-verification search, we already have the static eval.
         // we can set raw_eval to whatever we like, because we're not going to be saving it.
@@ -945,6 +947,7 @@ pub fn alpha_beta<NT: NodeType>(
         static_eval = t.ss[height].static_eval;
         eval = t.ss[height].eval;
         nn_hash = t.ss[height].nn_hash;
+        correction = t.correction(nn_hash);
         t.nnue.hint_common_access(&t.board, t.nnue_params);
     } else if let Some(tte) = &tt_hit {
         let v = tte.eval; // if we have a TT hit, check the cached TT eval.
@@ -959,6 +962,7 @@ pub fn alpha_beta<NT: NodeType>(
                 t.nnue.hint_common_access(&t.board, t.nnue_params);
             }
         }
+        correction = t.correction(nn_hash);
         static_eval = adj_shuffle(t, raw_eval, clock) + correction;
         if tte.value != VALUE_NONE
             && !is_decisive(tte.value)
@@ -990,6 +994,7 @@ pub fn alpha_beta<NT: NodeType>(
             t.ss[height].ttpv,
         );
 
+        correction = t.correction(nn_hash);
         static_eval = adj_shuffle(t, raw_eval, clock) + correction;
         eval = static_eval;
     }
@@ -1608,7 +1613,7 @@ pub fn alpha_beta<NT: NodeType>(
             || flag == Bound::Lower && best_score <= static_eval
             || flag == Bound::Upper && best_score >= static_eval)
         {
-            t.update_correction_history(depth, tt_complexity, best_score - static_eval);
+            t.update_correction_history(nn_hash, depth, tt_complexity, best_score - static_eval);
         }
         t.tt.store(
             key,
