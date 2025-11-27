@@ -13,14 +13,14 @@ use crate::{
         CONT2_HISTORY_MALUS_MUL, CONT2_HISTORY_MALUS_OFFSET, CONT2_STAT_SCORE_MUL,
         CONT4_HISTORY_BONUS_MAX, CONT4_HISTORY_BONUS_MUL, CONT4_HISTORY_BONUS_OFFSET,
         CONT4_HISTORY_MALUS_MAX, CONT4_HISTORY_MALUS_MUL, CONT4_HISTORY_MALUS_OFFSET,
-        CONT4_STAT_SCORE_MUL, CONTINUATION_CORRHIST_WEIGHT, DELTA_BASE_MUL, DELTA_INITIAL,
-        DELTA_REDUCTION_MUL, DO_DEEPER_BASE_MARGIN, DO_DEEPER_DEPTH_MARGIN,
-        DOUBLE_EXTENSION_MARGIN, EVAL_POLICY_IMPROVEMENT_SCALE, EVAL_POLICY_OFFSET,
-        EVAL_POLICY_UPDATE_MAX, FUTILITY_COEFF_0, FUTILITY_COEFF_1, HINDSIGHT_EXT_DEPTH,
-        HINDSIGHT_RED_DEPTH, HINDSIGHT_RED_EVAL, HISTORY_LMR_DIVISOR, HISTORY_PRUNING_MARGIN,
-        LMR_BASE, LMR_BASE_OFFSET, LMR_CHECK_MUL, LMR_CORR_MUL, LMR_CUT_NODE_MUL, LMR_DIVISION,
-        LMR_NON_IMPROVING_MUL, LMR_NON_PV_MUL, LMR_REFUTATION_MUL, LMR_TT_CAPTURE_MUL,
-        LMR_TTPV_MUL, MAIN_HISTORY_BONUS_MAX, MAIN_HISTORY_BONUS_MUL, MAIN_HISTORY_BONUS_OFFSET,
+        CONT4_STAT_SCORE_MUL, CONTINUATION_CORRHIST_WEIGHT, DELTA_BASE_MUL, DELTA_REDUCTION_MUL,
+        DO_DEEPER_BASE_MARGIN, DO_DEEPER_DEPTH_MARGIN, DOUBLE_EXTENSION_MARGIN,
+        EVAL_POLICY_IMPROVEMENT_SCALE, EVAL_POLICY_OFFSET, EVAL_POLICY_UPDATE_MAX,
+        FUTILITY_COEFF_0, FUTILITY_COEFF_1, HINDSIGHT_EXT_DEPTH, HINDSIGHT_RED_DEPTH,
+        HINDSIGHT_RED_EVAL, HISTORY_LMR_DIVISOR, HISTORY_PRUNING_MARGIN, LMR_BASE, LMR_BASE_OFFSET,
+        LMR_CHECK_MUL, LMR_CORR_MUL, LMR_CUT_NODE_MUL, LMR_DIVISION, LMR_NON_IMPROVING_MUL,
+        LMR_NON_PV_MUL, LMR_REFUTATION_MUL, LMR_TT_CAPTURE_MUL, LMR_TTPV_MUL,
+        MAIN_HISTORY_BONUS_MAX, MAIN_HISTORY_BONUS_MUL, MAIN_HISTORY_BONUS_OFFSET,
         MAIN_HISTORY_MALUS_MAX, MAIN_HISTORY_MALUS_MUL, MAIN_HISTORY_MALUS_OFFSET, MAIN_SEE_BOUND,
         MAIN_STAT_SCORE_MUL, MAJOR_CORRHIST_WEIGHT, MINOR_CORRHIST_WEIGHT, NMP_DEPTH_MUL,
         NMP_IMPROVING_MARGIN, NMP_REDUCTION_EVAL_DIVISOR, NONPAWN_CORRHIST_WEIGHT,
@@ -43,7 +43,6 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct Config {
     pub aspiration_eval_divisor: i32,
-    pub delta_initial: i32,
     pub delta_base_mul: i32,
     pub delta_reduction_mul: i32,
     pub rfp_margin: i32,
@@ -157,7 +156,6 @@ impl Config {
     pub const fn default() -> Self {
         Self {
             aspiration_eval_divisor: ASPIRATION_EVAL_DIVISOR,
-            delta_initial: DELTA_INITIAL,
             delta_base_mul: DELTA_BASE_MUL,
             delta_reduction_mul: DELTA_REDUCTION_MUL,
             rfp_margin: RFP_MARGIN,
@@ -310,7 +308,6 @@ impl Config {
     pub fn ids_with_parsers(&mut self) -> Vec<(&str, LazyFieldParser<'_>)> {
         id_parser_gen![
             ASPIRATION_EVAL_DIVISOR = [self.aspiration_eval_divisor],
-            DELTA_INITIAL = [self.delta_initial],
             DELTA_BASE_MUL = [self.delta_base_mul],
             DELTA_REDUCTION_MUL = [self.delta_reduction_mul],
             RFP_MARGIN = [self.rfp_margin],
@@ -433,7 +430,6 @@ impl Config {
         #![allow(clippy::cast_precision_loss)]
         id_value_gen![
             ASPIRATION_EVAL_DIVISOR = [self.aspiration_eval_divisor, 1024, 65536, 1024],
-            DELTA_INITIAL = [self.delta_initial, 1, 64, 1],
             DELTA_BASE_MUL = [self.delta_base_mul, 2, 256, 2],
             DELTA_REDUCTION_MUL = [self.delta_reduction_mul, 0, 128, 2],
             RFP_MARGIN = [self.rfp_margin, 16, 256, 10],

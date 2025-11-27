@@ -55,7 +55,6 @@ use self::parameters::Config;
 const TIME_MANAGER_UPDATE_MIN_DEPTH: i32 = 4;
 
 const ASPIRATION_EVAL_DIVISOR: i32 = 31722;
-const DELTA_INITIAL: i32 = 12;
 const DELTA_BASE_MUL: i32 = 42;
 const DELTA_REDUCTION_MUL: i32 = 17;
 const RFP_MARGIN: i32 = 82;
@@ -366,7 +365,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
         let mut alpha = -INFINITY;
         let mut beta = INFINITY;
 
-        let mut delta = t.info.conf.delta_initial;
+        let mut delta = 12;
         let mut reduction = 0;
 
         if t.depth > 1 {
