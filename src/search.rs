@@ -1352,7 +1352,7 @@ pub fn alpha_beta<NT: NodeType>(
             && tte.bound.is_lower()
             && tte.depth >= depth - 3
         {
-            let r_beta = singularity_margin(tte.value, depth);
+            let r_beta = singularity_margin(tte.value, depth, NT::PV, t.ss[height].ttpv);
             let r_depth = (depth - 1) / 2;
 
             t.ss[t.board.height()].excluded = Some(m);
@@ -1704,8 +1704,8 @@ fn update_tactical_history(
 }
 
 /// The reduced beta margin for Singular Extension.
-fn singularity_margin(tt_value: i32, depth: i32) -> i32 {
-    (tt_value - (depth * 3 / 4)).max(-MINIMUM_TB_WIN_SCORE + 1)
+fn singularity_margin(tt_value: i32, depth: i32, pv: bool, tt_pv: bool) -> i32 {
+    (tt_value - (depth * (45 + 75 * i32::from(tt_pv && !pv)) / 60)).max(-MINIMUM_TB_WIN_SCORE + 1)
 }
 
 /// Test if a move is *forced* - that is, if it is a move that is
