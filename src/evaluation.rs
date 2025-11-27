@@ -4,7 +4,6 @@ use std::{
     fs::File,
     io::{BufRead, BufReader},
     path::Path,
-    sync::atomic::{AtomicBool, AtomicU64},
 };
 
 use anyhow::Context;
@@ -16,11 +15,10 @@ use crate::{
         piece::{Colour, PieceType},
         squareset::SquareSet,
     },
-    nnue::network::{self, NNUEParams},
+    nnue::network::{self, NNUEParams, NNUEState},
     search::{draw_score, parameters::Config},
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
-    transpositiontable::TT,
     util::MAX_DEPTH,
 };
 
@@ -149,13 +147,9 @@ pub const fn see_value(piece_type: PieceType, conf: &Config) -> i32 {
 
 pub fn eval_stats(input: &Path) -> anyhow::Result<()> {
     let f = File::open(input).with_context(|| format!("Failed to open {}", input.display()))?;
-    let pos = Board::default();
-    let tt = TT::new();
-    let nnue = NNUEParams::decompress_and_alloc()?;
-    let stop = AtomicBool::new(false);
-    let nodes = AtomicU64::new(0);
-    let tbhits = AtomicU64::new(0);
-    let mut t = ThreadData::new(0, pos, tt.view(), nnue, &stop, &nodes, &tbhits);
+    let mut board = Board::default();
+    let nnue_params = NNUEParams::decompress_and_alloc()?;
+    let mut nnue = NNUEState::new(&board, nnue_params);
 
     let mut total = 0i128;
     let mut count = 0i128;
@@ -179,12 +173,12 @@ pub fn eval_stats(input: &Path) -> anyhow::Result<()> {
             .map(|(idx, _)| idx)
             .with_context(|| format!("Failed to parse FEN from line {}: {}", i + 1, line))?;
         let fen = &line[..end_idx];
-        t.board.set_from_fen(fen)?;
-        t.nnue.reinit_from(&t.board, t.nnue_params);
-        let eval = if t.board.in_check() {
+        board.set_from_fen(fen)?;
+        nnue.reinit_from(&board, nnue_params);
+        let eval = if board.in_check() {
             continue;
         } else {
-            t.nnue.evaluate(t.nnue_params, &t.board)
+            nnue.evaluate(nnue_params, &board)
         };
 
         count += 1;
