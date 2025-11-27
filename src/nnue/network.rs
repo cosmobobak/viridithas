@@ -114,12 +114,10 @@ pub fn nnue_checksum() -> u64 {
 #[repr(C)]
 struct UnquantisedNetwork {
     // extra bucket for the feature-factoriser.
-    ft_weights:    [f32; 12 * 64 * L1_SIZE * (BUCKETS + UNQUANTISED_HAS_FACTORISER as usize)],
-    ft_biases:     [f32; L1_SIZE],
-    l1x_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
-    // l1f_weights:  [[f32; L2_SIZE]; L1_SIZE],
-    l1x_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
-    // l1f_biases:    [f32; L2_SIZE],
+    l0_weights:    [f32; 12 * 64 * L1_SIZE * (BUCKETS + UNQUANTISED_HAS_FACTORISER as usize)],
+    l0_biases:     [f32; L1_SIZE],
+    l1_weights:  [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
+    l1_biases:    [[f32; L2_SIZE]; OUTPUT_BUCKETS],
     l2x_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
     l2f_weights:  [[f32; L3_SIZE]; L2_SIZE],
     l2x_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
@@ -134,8 +132,8 @@ struct UnquantisedNetwork {
 #[rustfmt::skip]
 #[repr(C)]
 struct MergedNetwork {
-    ft_weights:   [f32; 12 * 64 * L1_SIZE * BUCKETS],
-    ft_biases:    [f32; L1_SIZE],
+    l0_weights:   [f32; 12 * 64 * L1_SIZE * BUCKETS],
+    l0_biases:    [f32; L1_SIZE],
     l1_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
     l2_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
@@ -149,8 +147,8 @@ struct MergedNetwork {
 #[repr(C)]
 #[derive(PartialEq, Debug)]
 struct QuantisedNetwork {
-    ft_weights:   [i16; INPUT * L1_SIZE * BUCKETS],
-    ft_biases:    [i16; L1_SIZE],
+    l0_weights:   [i16; INPUT * L1_SIZE * BUCKETS],
+    l0_biases:    [i16; L1_SIZE],
     l1_weights: [[[ i8; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
     l2_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
@@ -164,14 +162,14 @@ struct QuantisedNetwork {
 #[rustfmt::skip]
 #[repr(C)]
 pub struct NNUEParams {
-    pub feature_weights: Align64<[i16; INPUT * L1_SIZE * BUCKETS]>,
-    pub feature_bias:    Align64<[i16; L1_SIZE]>,
-    pub l1_weights:     [Align64<[ i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
-    pub l1_bias:        [Align64<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
-    pub l2_weights:     [Align64<[f32; L2_SIZE * L3_SIZE]>; OUTPUT_BUCKETS],
-    pub l2_bias:        [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
-    pub l3_weights:     [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
-    pub l3_bias:        [f32; OUTPUT_BUCKETS],
+    pub l0_weights:  Align64<[i16; INPUT * L1_SIZE * BUCKETS]>,
+    pub l0_biases:   Align64<[i16; L1_SIZE]>,
+    pub l1_weights: [Align64<[ i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
+    pub l1_bias:    [Align64<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
+    pub l2_weights: [Align64<[f32; L2_SIZE * L3_SIZE]>; OUTPUT_BUCKETS],
+    pub l2_bias:    [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
+    pub l3_weights: [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
+    pub l3_bias:    [f32; OUTPUT_BUCKETS],
 }
 
 // const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = {
@@ -246,7 +244,7 @@ impl UnquantisedNetwork {
     /// for further processing or for resuming training in a more efficient format.
     fn merge(&self) -> Box<MergedNetwork> {
         let mut net = MergedNetwork::zeroed();
-        let mut buckets = self.ft_weights.chunks_exact(12 * 64 * L1_SIZE);
+        let mut buckets = self.l0_weights.chunks_exact(12 * 64 * L1_SIZE);
         let factoriser;
         let alternate_buffer;
         if UNQUANTISED_HAS_FACTORISER {
@@ -256,7 +254,7 @@ impl UnquantisedNetwork {
             factoriser = &alternate_buffer;
         }
         for (src_bucket, tgt_bucket) in
-            buckets.zip(net.ft_weights.chunks_exact_mut(12 * 64 * L1_SIZE))
+            buckets.zip(net.l0_weights.chunks_exact_mut(12 * 64 * L1_SIZE))
         {
             for piece in Piece::all() {
                 for sq in Square::all() {
@@ -275,19 +273,19 @@ impl UnquantisedNetwork {
         }
 
         // copy the biases
-        net.ft_biases.copy_from_slice(&self.ft_biases);
+        net.l0_biases.copy_from_slice(&self.l0_biases);
         // copy the L1 weights
         for i in 0..L1_SIZE {
             for bucket in 0..OUTPUT_BUCKETS {
                 for j in 0..L2_SIZE {
-                    net.l1_weights[i][bucket][j] = self.l1x_weights[i][bucket][j]; // + self.l1f_weights[i][j];
+                    net.l1_weights[i][bucket][j] = self.l1_weights[i][bucket][j];
                 }
             }
         }
         // copy the L1 biases
         for i in 0..L2_SIZE {
             for bucket in 0..OUTPUT_BUCKETS {
-                net.l1_biases[bucket][i] = self.l1x_biases[bucket][i]; // + self.l1f_biases[i];
+                net.l1_biases[bucket][i] = self.l1_biases[bucket][i];
             }
         }
         // copy the L2 weights
@@ -375,8 +373,8 @@ impl MergedNetwork {
             };
         }
 
-        dump_layer!("l0w", self.ft_weights);
-        dump_layer!("l0b", self.ft_biases);
+        dump_layer!("l0w", self.l0_weights);
+        dump_layer!("l0b", self.l0_biases);
         dump_layer!("l1w", self.l1_weights);
         dump_layer!("l1b", self.l1_biases);
         dump_layer!("l2w", self.l2_weights);
@@ -394,10 +392,10 @@ impl MergedNetwork {
 
         let mut net = QuantisedNetwork::zeroed();
         // quantise the feature transformer weights.
-        let buckets = self.ft_weights.chunks_exact(12 * 64 * L1_SIZE);
+        let buckets = self.l0_weights.chunks_exact(12 * 64 * L1_SIZE);
 
         for (bucket_idx, (src_bucket, tgt_bucket)) in buckets
-            .zip(net.ft_weights.chunks_exact_mut(INPUT * L1_SIZE))
+            .zip(net.l0_weights.chunks_exact_mut(INPUT * L1_SIZE))
             .enumerate()
         {
             // for repermuting the weights.
@@ -435,7 +433,7 @@ impl MergedNetwork {
         }
 
         // quantise the FT biases
-        for (src, tgt) in self.ft_biases.iter().zip(net.ft_biases.iter_mut()) {
+        for (src, tgt) in self.l0_biases.iter().zip(net.l0_biases.iter_mut()) {
             let scaled = *src * f32::from(QA);
             if scaled.abs() > QA_BOUND {
                 eprintln!("feature transformer bias {scaled} is too large (max = {QA_BOUND})");
@@ -478,26 +476,26 @@ impl QuantisedNetwork {
     fn permute(&self, use_simd: bool) -> Box<NNUEParams> {
         let mut net = NNUEParams::zeroed();
         // permute the feature transformer weights
-        let src_buckets = self.ft_weights.chunks_exact(INPUT * L1_SIZE);
-        let tgt_buckets = net.feature_weights.chunks_exact_mut(INPUT * L1_SIZE);
+        let src_buckets = self.l0_weights.chunks_exact(INPUT * L1_SIZE);
+        let tgt_buckets = net.l0_weights.chunks_exact_mut(INPUT * L1_SIZE);
         for (src_bucket, tgt_bucket) in src_buckets.zip(tgt_buckets) {
             repermute_ft_bucket(tgt_bucket, src_bucket);
         }
 
         // permute the feature transformer biases
-        repermute_ft_bias(&mut net.feature_bias, &self.ft_biases);
+        repermute_ft_bias(&mut net.l0_biases, &self.l0_biases);
 
         // transpose FT weights and biases so that packus transposes it back to the intended order
         if use_simd {
             type PermChunk = [i16; 8];
             // reinterpret as data of size __m128i
             let mut weights: Vec<&mut PermChunk> = net
-                .feature_weights
+                .l0_weights
                 .chunks_exact_mut(8)
                 .map(|a| a.try_into().unwrap())
                 .collect();
             let mut biases: Vec<&mut PermChunk> = net
-                .feature_bias
+                .l0_biases
                 .chunks_exact_mut(8)
                 .map(|a| a.try_into().unwrap())
                 .collect();
@@ -978,7 +976,7 @@ impl NNUEParams {
         let bucket = bucket % BUCKETS;
         let start = bucket * INPUT * L1_SIZE;
         let end = start + INPUT * L1_SIZE;
-        let slice = &self.feature_weights[start..end];
+        let slice = &self.l0_weights[start..end];
         // SAFETY: The resulting slice is indeed INPUT * LAYER_1_SIZE long,
         // and we check that the slice is aligned to 64 bytes.
         // additionally, we're generating the reference from our own data,
@@ -1221,8 +1219,8 @@ impl NNUEState {
 
         // initalise all the accumulators in the bucket cache to the bias
         for acc in &mut self.bucket_cache.accs {
-            acc.white = nnue_params.feature_bias.clone();
-            acc.black = nnue_params.feature_bias.clone();
+            acc.white = nnue_params.l0_biases.clone();
+            acc.black = nnue_params.l0_biases.clone();
         }
         // initialise all the board states in the bucket cache to the empty board
         for board_state in self.bucket_cache.board_states.iter_mut().flatten() {
@@ -1549,7 +1547,7 @@ impl NNUEParams {
                         ]
                     };
                     let index = feature_indices[Colour::White].index() * L1_SIZE + starting_idx;
-                    slice.push(self.feature_weights[index]);
+                    slice.push(self.l0_weights[index]);
                 }
             }
         }
@@ -1594,7 +1592,7 @@ impl NNUEParams {
     pub fn min_max_feature_weight(&self) -> (i16, i16) {
         let mut min = i16::MAX;
         let mut max = i16::MIN;
-        for &f in &self.feature_weights.0 {
+        for &f in &self.l0_weights.0 {
             if f < min {
                 min = f;
             }
