@@ -1303,7 +1303,9 @@ pub fn alpha_beta<NT: NodeType>(
 
             // futility pruning
             // if the static eval is too low, we start skipping moves.
-            let fp_margin = lmr_depth * t.info.conf.futility_coeff_1 + t.info.conf.futility_coeff_0;
+            let fp_margin = lmr_depth * t.info.conf.futility_coeff_1
+                + t.info.conf.futility_coeff_0
+                + stat_score / 128;
             if is_quiet && lmr_depth < 6 && static_eval + fp_margin <= alpha {
                 move_picker.skip_quiets = true;
             }
