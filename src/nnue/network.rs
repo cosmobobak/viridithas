@@ -4,12 +4,13 @@ use std::{
     hash::Hasher,
     io::{BufReader, BufWriter, Write},
     mem::size_of,
+    ops::Deref,
     path::Path,
     sync::{Mutex, OnceLock},
     time::Duration,
 };
 
-use anyhow::{Context, ensure};
+use anyhow::Context;
 use arrayvec::ArrayVec;
 use memmap2::Mmap;
 
@@ -46,7 +47,7 @@ pub const INPUT: usize = (12 - MERGE_KING_PLANES as usize) * 64;
 /// The amount to scale the output of the network by.
 /// This is to allow for the sigmoid activation to differentiate positions with
 /// a small difference in evaluation.
-pub const SCALE: i32 = 400;
+pub const SCALE: i32 = 239;
 /// The size of one-half of the hidden layer of the network.
 pub const L1_SIZE: usize = 2048;
 /// The size of the second layer of the network.
@@ -113,12 +114,10 @@ pub fn nnue_checksum() -> u64 {
 #[repr(C)]
 struct UnquantisedNetwork {
     // extra bucket for the feature-factoriser.
-    ft_weights:    [f32; 12 * 64 * L1_SIZE * (BUCKETS + UNQUANTISED_HAS_FACTORISER as usize)],
-    ft_biases:     [f32; L1_SIZE],
-    l1x_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
-    l1f_weights:  [[f32; L2_SIZE]; L1_SIZE],
-    l1x_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
-    l1f_biases:    [f32; L2_SIZE],
+    l0_weights:    [f32; 12 * 64 * L1_SIZE * (BUCKETS + UNQUANTISED_HAS_FACTORISER as usize)],
+    l0_biases:     [f32; L1_SIZE],
+    l1_weights:  [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
+    l1_biases:    [[f32; L2_SIZE]; OUTPUT_BUCKETS],
     l2x_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
     l2f_weights:  [[f32; L3_SIZE]; L2_SIZE],
     l2x_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
@@ -133,8 +132,8 @@ struct UnquantisedNetwork {
 #[rustfmt::skip]
 #[repr(C)]
 struct MergedNetwork {
-    ft_weights:   [f32; 12 * 64 * L1_SIZE * BUCKETS],
-    ft_biases:    [f32; L1_SIZE],
+    l0_weights:   [f32; 12 * 64 * L1_SIZE * BUCKETS],
+    l0_biases:    [f32; L1_SIZE],
     l1_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
     l2_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
@@ -148,8 +147,8 @@ struct MergedNetwork {
 #[repr(C)]
 #[derive(PartialEq, Debug)]
 struct QuantisedNetwork {
-    ft_weights:   [i16; INPUT * L1_SIZE * BUCKETS],
-    ft_biases:    [i16; L1_SIZE],
+    l0_weights:   [i16; INPUT * L1_SIZE * BUCKETS],
+    l0_biases:    [i16; L1_SIZE],
     l1_weights: [[[ i8; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
     l2_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
@@ -163,14 +162,14 @@ struct QuantisedNetwork {
 #[rustfmt::skip]
 #[repr(C)]
 pub struct NNUEParams {
-    pub feature_weights: Align64<[i16; INPUT * L1_SIZE * BUCKETS]>,
-    pub feature_bias:    Align64<[i16; L1_SIZE]>,
-    pub l1_weights:     [Align64<[ i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
-    pub l1_bias:        [Align64<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
-    pub l2_weights:     [Align64<[f32; L2_SIZE * L3_SIZE]>; OUTPUT_BUCKETS],
-    pub l2_bias:        [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
-    pub l3_weights:     [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
-    pub l3_bias:        [f32; OUTPUT_BUCKETS],
+    pub l0_weights:  Align64<[i16; INPUT * L1_SIZE * BUCKETS]>,
+    pub l0_biases:   Align64<[i16; L1_SIZE]>,
+    pub l1_weights: [Align64<[ i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
+    pub l1_bias:    [Align64<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
+    pub l2_weights: [Align64<[f32; L2_SIZE * L3_SIZE]>; OUTPUT_BUCKETS],
+    pub l2_bias:    [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
+    pub l3_weights: [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
+    pub l3_bias:    [f32; OUTPUT_BUCKETS],
 }
 
 // const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = {
@@ -184,60 +183,60 @@ pub struct NNUEParams {
 // };
 
 const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = [
-    402, 284, 273, 342, 735, 980, 504, 618, 391, 502, 245, 704, 738, 875, 568, 100, 324, 130, 370,
-    350, 212, 58, 995, 573, 93, 413, 86, 35, 208, 428, 129, 959, 984, 521, 103, 255, 642, 51, 952,
-    570, 710, 369, 1019, 231, 887, 234, 837, 648, 283, 82, 117, 386, 46, 614, 45, 276, 819, 674,
-    790, 136, 59, 664, 697, 779, 791, 172, 1023, 581, 170, 729, 442, 27, 1007, 756, 107, 836, 16,
-    531, 6, 50, 433, 868, 983, 938, 546, 181, 169, 396, 239, 956, 654, 74, 917, 411, 476, 839, 554,
-    610, 567, 913, 80, 89, 692, 147, 857, 748, 804, 23, 832, 776, 613, 467, 204, 638, 491, 537,
-    217, 910, 705, 53, 840, 626, 493, 408, 157, 900, 639, 876, 8, 194, 40, 492, 930, 277, 1022, 88,
-    893, 463, 946, 87, 281, 924, 835, 844, 243, 60, 1009, 513, 740, 979, 1001, 533, 498, 861, 807,
-    210, 21, 850, 978, 657, 796, 374, 903, 266, 31, 356, 863, 753, 590, 713, 647, 562, 754, 322,
-    823, 417, 593, 720, 625, 358, 760, 481, 698, 335, 683, 149, 95, 392, 798, 101, 623, 780, 127,
-    334, 874, 3, 534, 551, 751, 990, 272, 714, 353, 192, 188, 866, 241, 153, 936, 889, 628, 351,
-    686, 592, 279, 565, 527, 781, 809, 393, 113, 495, 282, 39, 536, 142, 728, 321, 305, 367, 637,
-    184, 997, 146, 680, 619, 24, 970, 617, 68, 873, 700, 389, 818, 317, 1016, 443, 727, 773, 311,
-    709, 207, 110, 765, 416, 227, 553, 177, 165, 543, 200, 721, 343, 195, 250, 966, 719, 202, 825,
-    278, 251, 549, 246, 225, 36, 145, 828, 293, 878, 670, 777, 775, 580, 528, 931, 677, 942, 344,
-    66, 166, 1020, 888, 919, 879, 224, 301, 694, 559, 831, 574, 814, 734, 897, 436, 928, 309, 544,
-    385, 173, 111, 643, 133, 532, 803, 330, 576, 578, 294, 135, 689, 441, 1008, 695, 717, 547, 20,
-    805, 307, 336, 162, 624, 399, 993, 682, 598, 691, 179, 851, 96, 483, 61, 632, 675, 33, 308,
-    963, 216, 312, 432, 461, 540, 406, 667, 515, 517, 438, 75, 298, 1003, 76, 357, 191, 178, 854,
-    880, 132, 106, 285, 118, 918, 891, 470, 656, 634, 262, 26, 97, 209, 558, 500, 659, 660, 431,
-    167, 935, 599, 969, 974, 137, 78, 882, 941, 877, 295, 516, 971, 159, 187, 833, 1000, 180, 4,
-    41, 235, 226, 456, 986, 845, 601, 466, 812, 585, 469, 123, 602, 203, 460, 115, 270, 1013, 206,
-    556, 953, 131, 1011, 340, 802, 260, 786, 288, 280, 49, 630, 788, 588, 12, 789, 378, 73, 1014,
-    222, 447, 376, 977, 982, 962, 425, 561, 869, 872, 584, 810, 764, 715, 221, 829, 154, 327, 395,
-    914, 940, 14, 965, 853, 950, 104, 586, 109, 429, 2, 933, 90, 47, 615, 83, 603, 548, 434, 56,
-    652, 1015, 171, 196, 991, 484, 346, 390, 552, 944, 846, 263, 684, 257, 635, 265, 718, 506, 296,
-    945, 310, 703, 223, 627, 976, 771, 646, 253, 973, 555, 489, 43, 902, 741, 988, 999, 449, 490,
-    957, 418, 382, 328, 79, 458, 15, 685, 661, 352, 302, 479, 855, 968, 557, 929, 435, 784, 412,
-    989, 139, 927, 337, 912, 62, 9, 892, 724, 569, 895, 663, 236, 649, 94, 920, 398, 830, 174, 218,
-    746, 787, 797, 582, 249, 468, 314, 711, 182, 1010, 419, 148, 817, 958, 508, 485, 707, 151, 824,
-    644, 838, 445, 881, 454, 529, 478, 143, 71, 514, 712, 541, 415, 168, 333, 690, 566, 25, 254,
-    446, 256, 750, 108, 925, 345, 716, 141, 156, 349, 722, 507, 821, 947, 905, 864, 923, 464, 286,
-    366, 949, 985, 539, 591, 401, 215, 885, 275, 213, 772, 11, 519, 427, 992, 462, 482, 975, 379,
-    134, 291, 1002, 440, 884, 708, 347, 114, 542, 859, 890, 794, 18, 57, 1012, 650, 522, 355, 205,
-    512, 164, 725, 799, 300, 160, 745, 219, 248, 964, 233, 636, 459, 450, 669, 908, 987, 197, 620,
-    121, 811, 640, 423, 678, 451, 524, 52, 383, 318, 609, 229, 306, 439, 190, 183, 475, 320, 577,
-    158, 371, 92, 665, 292, 128, 477, 921, 488, 368, 387, 397, 242, 597, 63, 801, 768, 126, 496,
-    587, 38, 589, 214, 211, 252, 604, 896, 32, 37, 583, 759, 852, 571, 755, 72, 185, 480, 258, 201,
-    232, 806, 407, 560, 633, 676, 653, 800, 1, 744, 706, 1021, 332, 403, 732, 375, 849, 867, 538,
-    287, 509, 770, 102, 1018, 747, 937, 655, 1005, 960, 465, 457, 453, 792, 5, 901, 400, 815, 189,
-    520, 739, 673, 820, 193, 359, 922, 621, 325, 380, 742, 289, 749, 696, 737, 388, 98, 329, 17,
-    316, 448, 144, 575, 421, 505, 906, 600, 658, 834, 424, 550, 545, 377, 44, 70, 523, 230, 267,
-    730, 783, 608, 701, 948, 954, 757, 651, 290, 259, 120, 384, 510, 124, 843, 785, 795, 303, 426,
-    645, 915, 629, 414, 579, 105, 84, 535, 30, 64, 955, 67, 816, 622, 981, 681, 163, 77, 405, 631,
-    499, 671, 564, 848, 0, 782, 10, 778, 672, 487, 595, 186, 767, 996, 998, 607, 455, 244, 264,
-    733, 766, 909, 793, 862, 763, 606, 42, 472, 518, 299, 752, 951, 494, 563, 338, 911, 668, 899,
-    525, 199, 119, 943, 572, 361, 54, 1004, 116, 967, 926, 841, 497, 594, 99, 526, 313, 871, 666,
-    152, 364, 702, 373, 808, 444, 898, 616, 762, 348, 826, 501, 612, 827, 856, 813, 228, 365, 473,
-    140, 155, 404, 34, 65, 29, 774, 731, 939, 736, 530, 91, 769, 688, 916, 471, 354, 894, 339, 161,
-    860, 7, 687, 360, 409, 323, 822, 238, 112, 48, 176, 420, 220, 611, 372, 761, 452, 865, 422,
-    693, 410, 1017, 55, 69, 150, 315, 758, 907, 271, 723, 842, 847, 363, 362, 261, 972, 904, 641,
-    511, 1006, 486, 743, 22, 437, 237, 269, 886, 596, 605, 994, 331, 726, 961, 85, 274, 858, 138,
-    341, 503, 122, 240, 297, 932, 381, 662, 319, 81, 125, 268, 430, 28, 304, 175, 247, 19, 394,
-    198, 679, 870, 883, 699, 934, 474, 326, 13,
+    387, 690, 124, 208, 242, 860, 50, 106, 159, 956, 381, 404, 499, 866, 776, 356, 429, 877, 836,
+    573, 537, 661, 107, 859, 566, 379, 30, 846, 766, 294, 540, 824, 720, 596, 930, 7, 770, 137,
+    354, 634, 751, 714, 1021, 893, 43, 506, 207, 312, 478, 762, 440, 745, 35, 133, 922, 755, 339,
+    827, 377, 668, 466, 263, 982, 725, 16, 63, 778, 250, 256, 735, 460, 803, 101, 920, 749, 386,
+    126, 461, 946, 615, 546, 455, 163, 694, 663, 911, 695, 1012, 155, 96, 802, 287, 8, 158, 374,
+    320, 880, 507, 170, 613, 822, 24, 593, 872, 313, 272, 618, 203, 665, 616, 748, 542, 937, 780,
+    520, 168, 571, 882, 588, 1004, 832, 292, 586, 629, 704, 517, 128, 234, 642, 608, 547, 907, 453,
+    562, 62, 999, 734, 463, 439, 577, 206, 279, 862, 172, 548, 166, 722, 940, 311, 491, 697, 465,
+    632, 265, 375, 895, 701, 472, 902, 95, 102, 767, 369, 729, 57, 42, 80, 696, 830, 607, 438, 232,
+    621, 724, 998, 597, 743, 10, 1018, 794, 560, 622, 996, 360, 989, 13, 738, 975, 111, 965, 713,
+    857, 633, 123, 685, 512, 853, 561, 398, 771, 266, 849, 934, 249, 901, 332, 605, 268, 87, 550,
+    687, 86, 131, 328, 293, 909, 2, 534, 964, 818, 820, 523, 683, 452, 109, 600, 899, 216, 513,
+    141, 789, 531, 664, 888, 284, 726, 678, 656, 658, 307, 929, 594, 146, 835, 185, 214, 927, 938,
+    765, 5, 868, 541, 570, 764, 414, 60, 286, 489, 705, 991, 627, 709, 742, 255, 171, 679, 350,
+    913, 83, 874, 470, 885, 638, 391, 524, 993, 40, 334, 61, 660, 526, 736, 723, 645, 768, 500,
+    432, 384, 261, 91, 905, 676, 167, 301, 578, 212, 753, 361, 359, 522, 140, 565, 757, 59, 569,
+    968, 395, 108, 433, 979, 792, 670, 900, 756, 218, 782, 684, 257, 99, 759, 1023, 710, 267, 282,
+    865, 840, 400, 245, 333, 428, 995, 815, 962, 698, 906, 878, 226, 610, 259, 811, 614, 70, 130,
+    6, 599, 967, 786, 502, 153, 498, 420, 288, 700, 173, 327, 977, 352, 51, 539, 197, 943, 348,
+    184, 26, 699, 545, 443, 237, 730, 355, 364, 362, 31, 1007, 85, 446, 415, 390, 973, 535, 243,
+    258, 402, 413, 892, 129, 477, 855, 125, 521, 950, 775, 924, 373, 619, 551, 576, 828, 462, 357,
+    829, 72, 183, 202, 544, 425, 297, 1005, 115, 174, 239, 100, 908, 9, 915, 343, 972, 981, 851,
+    624, 240, 719, 471, 969, 837, 480, 514, 342, 198, 715, 646, 149, 271, 733, 923, 164, 966, 890,
+    71, 14, 654, 487, 416, 351, 408, 650, 190, 601, 712, 34, 589, 635, 916, 933, 418, 805, 388,
+    1013, 213, 903, 154, 285, 28, 1020, 55, 876, 54, 365, 399, 564, 727, 165, 349, 869, 469, 479,
+    248, 675, 66, 797, 445, 303, 798, 211, 19, 686, 963, 492, 221, 501, 980, 403, 580, 891, 602,
+    774, 468, 179, 879, 711, 73, 557, 254, 948, 178, 703, 842, 441, 450, 519, 603, 11, 864, 321,
+    424, 912, 484, 290, 145, 150, 405, 135, 988, 162, 444, 985, 612, 427, 653, 52, 337, 801, 483,
+    799, 192, 708, 983, 217, 971, 978, 809, 93, 953, 731, 295, 47, 431, 412, 536, 305, 209, 1022,
+    48, 98, 919, 951, 116, 274, 746, 144, 368, 45, 310, 1015, 990, 380, 655, 246, 581, 161, 543,
+    783, 194, 942, 269, 329, 744, 67, 970, 639, 595, 276, 554, 706, 353, 510, 681, 1011, 65, 308,
+    53, 1000, 199, 235, 175, 1014, 1006, 335, 49, 495, 887, 458, 319, 582, 370, 315, 181, 1008,
+    419, 238, 151, 532, 104, 584, 345, 309, 325, 189, 750, 955, 497, 873, 579, 854, 25, 196, 932,
+    291, 674, 20, 508, 976, 437, 894, 490, 1016, 409, 316, 264, 12, 620, 637, 39, 870, 739, 430,
+    563, 804, 772, 592, 525, 322, 807, 881, 482, 222, 481, 169, 247, 886, 77, 997, 825, 587, 662,
+    496, 939, 92, 253, 76, 156, 435, 800, 220, 917, 974, 33, 626, 952, 302, 808, 298, 631, 926,
+    773, 666, 182, 314, 1010, 958, 959, 200, 82, 132, 457, 224, 121, 692, 847, 147, 434, 396, 410,
+    693, 752, 231, 215, 273, 503, 845, 15, 120, 788, 528, 177, 552, 831, 193, 575, 29, 112, 583,
+    516, 44, 667, 918, 671, 157, 643, 1019, 474, 793, 954, 233, 136, 252, 74, 75, 1003, 448, 494,
+    317, 426, 838, 814, 84, 376, 904, 821, 331, 36, 611, 609, 90, 485, 509, 476, 769, 630, 941,
+    143, 117, 366, 110, 79, 961, 442, 558, 1002, 533, 278, 777, 191, 118, 914, 201, 37, 875, 680,
+    142, 280, 187, 188, 464, 372, 795, 346, 553, 833, 230, 219, 1017, 784, 69, 423, 779, 41, 852,
+    152, 604, 407, 538, 897, 436, 56, 910, 688, 338, 717, 810, 823, 555, 928, 260, 105, 816, 834,
+    856, 447, 32, 475, 330, 896, 732, 628, 841, 515, 204, 871, 456, 378, 921, 867, 673, 411, 511,
+    340, 81, 590, 549, 689, 640, 787, 649, 3, 289, 585, 210, 644, 716, 382, 122, 467, 839, 23, 417,
+    641, 473, 530, 796, 421, 383, 180, 944, 935, 160, 46, 18, 401, 262, 17, 454, 228, 241, 728, 97,
+    176, 740, 848, 718, 223, 737, 761, 406, 568, 677, 817, 651, 371, 812, 559, 22, 385, 1001, 636,
+    336, 931, 652, 389, 347, 529, 763, 459, 883, 949, 341, 493, 945, 960, 486, 986, 64, 127, 78,
+    139, 781, 861, 889, 344, 229, 89, 790, 826, 850, 957, 283, 58, 0, 4, 567, 925, 518, 251, 672,
+    68, 1, 659, 505, 244, 598, 205, 741, 392, 987, 451, 572, 488, 304, 94, 657, 617, 134, 682, 323,
+    299, 574, 758, 306, 393, 992, 38, 760, 504, 648, 947, 606, 88, 843, 113, 326, 119, 863, 281,
+    984, 994, 721, 236, 669, 702, 884, 103, 114, 186, 195, 819, 813, 358, 227, 148, 397, 394, 324,
+    21, 691, 138, 623, 449, 625, 785, 422, 844, 225, 1009, 296, 858, 747, 754, 318, 791, 591, 527,
+    707, 270, 936, 898, 275, 556, 806, 647, 277, 300, 367, 27, 363,
 ];
 
 impl UnquantisedNetwork {
@@ -245,7 +244,7 @@ impl UnquantisedNetwork {
     /// for further processing or for resuming training in a more efficient format.
     fn merge(&self) -> Box<MergedNetwork> {
         let mut net = MergedNetwork::zeroed();
-        let mut buckets = self.ft_weights.chunks_exact(12 * 64 * L1_SIZE);
+        let mut buckets = self.l0_weights.chunks_exact(12 * 64 * L1_SIZE);
         let factoriser;
         let alternate_buffer;
         if UNQUANTISED_HAS_FACTORISER {
@@ -255,7 +254,7 @@ impl UnquantisedNetwork {
             factoriser = &alternate_buffer;
         }
         for (src_bucket, tgt_bucket) in
-            buckets.zip(net.ft_weights.chunks_exact_mut(12 * 64 * L1_SIZE))
+            buckets.zip(net.l0_weights.chunks_exact_mut(12 * 64 * L1_SIZE))
         {
             for piece in Piece::all() {
                 for sq in Square::all() {
@@ -274,20 +273,19 @@ impl UnquantisedNetwork {
         }
 
         // copy the biases
-        net.ft_biases.copy_from_slice(&self.ft_biases);
+        net.l0_biases.copy_from_slice(&self.l0_biases);
         // copy the L1 weights
         for i in 0..L1_SIZE {
             for bucket in 0..OUTPUT_BUCKETS {
                 for j in 0..L2_SIZE {
-                    net.l1_weights[i][bucket][j] =
-                        self.l1x_weights[i][bucket][j] + self.l1f_weights[i][j];
+                    net.l1_weights[i][bucket][j] = self.l1_weights[i][bucket][j];
                 }
             }
         }
         // copy the L1 biases
         for i in 0..L2_SIZE {
             for bucket in 0..OUTPUT_BUCKETS {
-                net.l1_biases[bucket][i] = self.l1x_biases[bucket][i] + self.l1f_biases[i];
+                net.l1_biases[bucket][i] = self.l1_biases[bucket][i];
             }
         }
         // copy the L2 weights
@@ -375,8 +373,8 @@ impl MergedNetwork {
             };
         }
 
-        dump_layer!("l0w", self.ft_weights);
-        dump_layer!("l0b", self.ft_biases);
+        dump_layer!("l0w", self.l0_weights);
+        dump_layer!("l0b", self.l0_biases);
         dump_layer!("l1w", self.l1_weights);
         dump_layer!("l1b", self.l1_biases);
         dump_layer!("l2w", self.l2_weights);
@@ -394,10 +392,10 @@ impl MergedNetwork {
 
         let mut net = QuantisedNetwork::zeroed();
         // quantise the feature transformer weights.
-        let buckets = self.ft_weights.chunks_exact(12 * 64 * L1_SIZE);
+        let buckets = self.l0_weights.chunks_exact(12 * 64 * L1_SIZE);
 
         for (bucket_idx, (src_bucket, tgt_bucket)) in buckets
-            .zip(net.ft_weights.chunks_exact_mut(INPUT * L1_SIZE))
+            .zip(net.l0_weights.chunks_exact_mut(INPUT * L1_SIZE))
             .enumerate()
         {
             // for repermuting the weights.
@@ -435,7 +433,7 @@ impl MergedNetwork {
         }
 
         // quantise the FT biases
-        for (src, tgt) in self.ft_biases.iter().zip(net.ft_biases.iter_mut()) {
+        for (src, tgt) in self.l0_biases.iter().zip(net.l0_biases.iter_mut()) {
             let scaled = *src * f32::from(QA);
             if scaled.abs() > QA_BOUND {
                 eprintln!("feature transformer bias {scaled} is too large (max = {QA_BOUND})");
@@ -478,26 +476,26 @@ impl QuantisedNetwork {
     fn permute(&self, use_simd: bool) -> Box<NNUEParams> {
         let mut net = NNUEParams::zeroed();
         // permute the feature transformer weights
-        let src_buckets = self.ft_weights.chunks_exact(INPUT * L1_SIZE);
-        let tgt_buckets = net.feature_weights.chunks_exact_mut(INPUT * L1_SIZE);
+        let src_buckets = self.l0_weights.chunks_exact(INPUT * L1_SIZE);
+        let tgt_buckets = net.l0_weights.chunks_exact_mut(INPUT * L1_SIZE);
         for (src_bucket, tgt_bucket) in src_buckets.zip(tgt_buckets) {
             repermute_ft_bucket(tgt_bucket, src_bucket);
         }
 
         // permute the feature transformer biases
-        repermute_ft_bias(&mut net.feature_bias, &self.ft_biases);
+        repermute_ft_bias(&mut net.l0_biases, &self.l0_biases);
 
         // transpose FT weights and biases so that packus transposes it back to the intended order
         if use_simd {
             type PermChunk = [i16; 8];
             // reinterpret as data of size __m128i
             let mut weights: Vec<&mut PermChunk> = net
-                .feature_weights
+                .l0_weights
                 .chunks_exact_mut(8)
                 .map(|a| a.try_into().unwrap())
                 .collect();
             let mut biases: Vec<&mut PermChunk> = net
-                .feature_bias
+                .l0_biases
                 .chunks_exact_mut(8)
                 .map(|a| a.try_into().unwrap())
                 .collect();
@@ -978,7 +976,7 @@ impl NNUEParams {
         let bucket = bucket % BUCKETS;
         let start = bucket * INPUT * L1_SIZE;
         let end = start + INPUT * L1_SIZE;
-        let slice = &self.feature_weights[start..end];
+        let slice = &self.l0_weights[start..end];
         // SAFETY: The resulting slice is indeed INPUT * LAYER_1_SIZE long,
         // and we check that the slice is aligned to 64 bytes.
         // additionally, we're generating the reference from our own data,
@@ -1036,19 +1034,39 @@ pub fn dump_verbatim(output: &std::path::Path) -> anyhow::Result<()> {
     Ok(())
 }
 
+enum BoxedOrStatic<T: 'static> {
+    Boxed(Box<T>),
+    Static(&'static T),
+}
+
+impl<T> Deref for BoxedOrStatic<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Boxed(b) => b.as_ref(),
+            Self::Static(s) => s,
+        }
+    }
+}
+
 pub fn dry_run() -> anyhow::Result<()> {
-    ensure!(
-        EMBEDDED_NNUE_VERBATIM,
-        "We can only efficiently dry-run under MIRI if we skip net decompression."
-    );
+    use BoxedOrStatic::{Boxed, Static};
+    if !EMBEDDED_NNUE_VERBATIM {
+        println!("[#] Embedded NNUE is compressed, dry-run must operate on zeroed network.");
+    }
     println!("[#] Constructing Board");
     let start_pos = Board::default();
     println!("[#] Generating network parameters");
-    let nnue_params = NNUEParams::decompress_and_alloc()?;
+    let nnue_params = if EMBEDDED_NNUE_VERBATIM {
+        Static(NNUEParams::decompress_and_alloc()?)
+    } else {
+        // create a zeroed network
+        Boxed(NNUEParams::zeroed())
+    };
     println!("[#] Generating network state");
-    let state = NNUEState::new(&start_pos, nnue_params);
+    let state = NNUEState::new(&start_pos, &nnue_params);
     println!("[#] Running forward pass");
-    let eval = state.evaluate(nnue_params, &start_pos);
+    let eval = state.evaluate(&nnue_params, &start_pos);
     std::hint::black_box(eval);
     Ok(())
 }
@@ -1201,8 +1219,8 @@ impl NNUEState {
 
         // initalise all the accumulators in the bucket cache to the bias
         for acc in &mut self.bucket_cache.accs {
-            acc.white = nnue_params.feature_bias.clone();
-            acc.black = nnue_params.feature_bias.clone();
+            acc.white = nnue_params.l0_biases.clone();
+            acc.black = nnue_params.l0_biases.clone();
         }
         // initialise all the board states in the bucket cache to the empty board
         for board_state in self.bucket_cache.board_states.iter_mut().flatten() {
@@ -1529,7 +1547,7 @@ impl NNUEParams {
                         ]
                     };
                     let index = feature_indices[Colour::White].index() * L1_SIZE + starting_idx;
-                    slice.push(self.feature_weights[index]);
+                    slice.push(self.l0_weights[index]);
                 }
             }
         }
@@ -1574,7 +1592,7 @@ impl NNUEParams {
     pub fn min_max_feature_weight(&self) -> (i16, i16) {
         let mut min = i16::MAX;
         let mut max = i16::MIN;
-        for &f in &self.feature_weights.0 {
+        for &f in &self.l0_weights.0 {
             if f < min {
                 min = f;
             }
