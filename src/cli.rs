@@ -17,6 +17,8 @@ pub enum Subcommands {
     Bench {
         /// Optionally specify the depth at which to run the benchmark.
         depth: Option<usize>,
+        /// Optionally specify the number of threads to use.
+        threads: Option<usize>,
     },
     /// Run the perft suite.
     Perft,
@@ -43,6 +45,17 @@ pub enum Subcommands {
     VisNNUE,
     /// Dry-run the NNUE inference.
     NNUEDryRun,
+    /// Emit configuration for SPSA
+    Spsa {
+        /// Emit configuration in JSON format instead of openbench format
+        #[clap(long)]
+        json: bool,
+    },
+    /// Compute statistics about the static evaluation across an EPD file.
+    EvalStats {
+        /// Path to input EPD file.
+        input: PathBuf,
+    },
     /// Count the number of positions contained within one or more packed game records.
     #[cfg(feature = "datagen")]
     CountPositions {
@@ -54,12 +67,6 @@ pub enum Subcommands {
     Analyse {
         /// Path to input packed game record.
         input: PathBuf,
-    },
-    /// Emit configuration for SPSA
-    Spsa {
-        /// Emit configuration in JSON format instead of openbench format
-        #[clap(long)]
-        json: bool,
     },
     /// Rescale evaluations in a packed game record
     #[cfg(feature = "datagen")]
