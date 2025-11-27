@@ -173,13 +173,15 @@ pub fn eval_stats(input: &Path) -> anyhow::Result<()> {
             .map(|(idx, _)| idx)
             .with_context(|| format!("Failed to parse FEN from line {}: {}", i + 1, line))?;
         let fen = &line[..end_idx];
+
         board.set_from_fen(fen)?;
-        nnue.reinit_from(&board, nnue_params);
-        let eval = if board.in_check() {
+
+        if board.in_check() {
             continue;
-        } else {
-            nnue.evaluate(nnue_params, &board)
-        };
+        }
+
+        nnue.reinit_from(&board, nnue_params);
+        let eval = nnue.evaluate(nnue_params, &board);
 
         count += 1;
         total += i128::from(eval);
