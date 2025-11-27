@@ -17,6 +17,8 @@ pub enum Subcommands {
     Bench {
         /// Optionally specify the depth at which to run the benchmark.
         depth: Option<usize>,
+        /// Optionally specify the number of threads to use.
+        threads: Option<usize>,
     },
     /// Run the perft suite.
     Perft,
