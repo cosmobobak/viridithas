@@ -25,7 +25,7 @@ use crate::{
         tb_loss_in, tb_win_in,
     },
     history::caphist_piece_type,
-    historytable::{main_history_bonus, main_history_malus},
+    historytable::update_history,
     lookups::HM_CLOCK_KEYS,
     movepicker::{MovePicker, Stage},
     search::pv::PVariation,
@@ -117,6 +117,12 @@ const CONT4_HISTORY_BONUS_MAX: i32 = 1451;
 const CONT4_HISTORY_MALUS_MUL: i32 = 217;
 const CONT4_HISTORY_MALUS_OFFSET: i32 = -59;
 const CONT4_HISTORY_MALUS_MAX: i32 = 745;
+const PAWN_HISTORY_BONUS_MUL: i32 = 204;
+const PAWN_HISTORY_BONUS_OFFSET: i32 = 213;
+const PAWN_HISTORY_BONUS_MAX: i32 = 2001;
+const PAWN_HISTORY_MALUS_MUL: i32 = 195;
+const PAWN_HISTORY_MALUS_OFFSET: i32 = 234;
+const PAWN_HISTORY_MALUS_MAX: i32 = 1065;
 const TACTICAL_HISTORY_BONUS_MUL: i32 = 114;
 const TACTICAL_HISTORY_BONUS_OFFSET: i32 = 372;
 const TACTICAL_HISTORY_BONUS_MAX: i32 = 1174;
@@ -1010,7 +1016,13 @@ pub fn alpha_beta<NT: NodeType>(
             -t.info.conf.eval_policy_update_max,
             t.info.conf.eval_policy_update_max,
         );
-        t.update_history_single(from, to, moved, threats, delta);
+        let val = t.main_hist.get_mut(
+            moved,
+            to,
+            threats.contains_square(from),
+            threats.contains_square(to),
+        );
+        update_history(val, delta);
     }
 
     // "improving" is true when the current position has a better static evaluation than the one from a fullmove ago.
@@ -1570,8 +1582,7 @@ pub fn alpha_beta<NT: NodeType>(
         let moved = t.board.state.mailbox[to].expect("Cannot fail, move has been made.");
         debug_assert_eq!(moved.colour(), !t.board.turn());
         let threats = t.board.history().last().unwrap().threats.all;
-        let bonus = main_history_bonus(&t.info.conf, depth);
-        t.update_history_single(from, to, moved, threats, bonus);
+        t.update_history_single(from, to, moved, threats, depth, true);
     }
 
     if excluded.is_none() {
@@ -1660,6 +1671,7 @@ fn rfp_margin(pos: &Board, info: &SearchInfo, depth: i32, improving: bool, corre
 fn update_quiet_history(t: &mut ThreadData, moves_to_adjust: &[Move], best_move: Move, depth: i32) {
     t.update_history(moves_to_adjust, best_move, depth);
     t.update_cont_hist(moves_to_adjust, best_move, depth);
+    t.update_pawn_history(moves_to_adjust, best_move, depth);
 }
 
 /// Update the main and continuation history tables for a single move.
@@ -1674,13 +1686,9 @@ fn update_quiet_history_single<const MADE: bool>(
     height: usize,
     good: bool,
 ) {
-    let main = if good {
-        main_history_bonus(&t.info.conf, depth)
-    } else {
-        -main_history_malus(&t.info.conf, depth)
-    };
-    t.update_history_single(from, to, moved, threats, main);
+    t.update_history_single(from, to, moved, threats, depth, good);
     t.update_cont_hist_single(to, moved, depth, height, good);
+    t.update_pawn_history_single(to, moved, depth, good);
 }
 
 /// Update the tactical history table.
