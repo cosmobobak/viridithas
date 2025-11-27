@@ -1497,11 +1497,6 @@ impl NNUEState {
                 hash ^= PIECE_KEYS[Piece::WP][i];
             }
         }
-        for (i, v) in l2_outputs.0.iter().copied().enumerate() {
-            if v != 0.0 {
-                hash ^= PIECE_KEYS[Piece::WP][i + L2_SIZE];
-            }
-        }
 
         (eval, hash)
     }
