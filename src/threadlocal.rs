@@ -9,7 +9,7 @@ use crate::{
     chess::{board::Board, chessmove::Move, piece::Colour},
     historytable::{
         CaptureHistoryTable, ContinuationCorrectionHistoryTable, CorrectionHistoryTable,
-        DoubleHistoryTable, ThreatsHistoryTable,
+        DoubleHistoryTable, HashHistoryTable, ThreatsHistoryTable,
     },
     nnue::{self, network::NNUEParams},
     search::pv::PVariation,
@@ -32,6 +32,7 @@ pub struct ThreadData<'a> {
     pub main_hist: ThreatsHistoryTable,
     pub tactical_hist: Box<CaptureHistoryTable>,
     pub cont_hist: Box<DoubleHistoryTable>,
+    pub pawn_hist: Box<HashHistoryTable>,
     pub killer_move_table: [Option<Move>; MAX_DEPTH + 1],
     pub pawn_corrhist: Box<CorrectionHistoryTable>,
     pub nonpawn_corrhist: [Box<CorrectionHistoryTable>; 2],
@@ -80,6 +81,7 @@ impl<'a> ThreadData<'a> {
             main_hist: ThreatsHistoryTable::new(),
             tactical_hist: CaptureHistoryTable::boxed(),
             cont_hist: DoubleHistoryTable::boxed(),
+            pawn_hist: HashHistoryTable::boxed(),
             killer_move_table: [None; MAX_DEPTH + 1],
             pawn_corrhist: CorrectionHistoryTable::boxed(),
             nonpawn_corrhist: [
@@ -137,6 +139,7 @@ impl<'a> ThreadData<'a> {
         self.main_hist.clear();
         self.tactical_hist.clear();
         self.cont_hist.clear();
+        self.pawn_hist.clear();
         self.pawn_corrhist.clear();
         self.nonpawn_corrhist[Colour::White].clear();
         self.nonpawn_corrhist[Colour::Black].clear();

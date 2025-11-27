@@ -57,6 +57,18 @@ pub fn cont4_history_malus(conf: &Config, depth: i32) -> i32 {
         conf.cont4_history_malus_max,
     )
 }
+pub fn pawn_history_bonus(conf: &Config, depth: i32) -> i32 {
+    i32::min(
+        conf.pawn_history_bonus_mul * depth + conf.pawn_history_bonus_offset,
+        conf.pawn_history_bonus_max,
+    )
+}
+pub fn pawn_history_malus(conf: &Config, depth: i32) -> i32 {
+    i32::min(
+        conf.pawn_history_malus_mul * depth + conf.pawn_history_malus_offset,
+        conf.pawn_history_malus_max,
+    )
+}
 pub fn tactical_history_bonus(conf: &Config, depth: i32) -> i32 {
     i32::min(
         conf.tactical_history_bonus_mul * depth + conf.tactical_history_bonus_offset,
@@ -90,6 +102,7 @@ pub fn cont_history_malus(conf: &Config, depth: i32, index: usize) -> i32 {
 pub const MAX_HISTORY: i32 = i16::MAX as i32 / 2;
 pub const CORRECTION_HISTORY_SIZE: usize = 16_384;
 pub const CORRECTION_HISTORY_MAX: i32 = 1024;
+pub const HASH_HISTORY_SIZE: usize = 1024;
 
 #[inline]
 pub fn update_history(val: &mut i16, delta: i32) {
@@ -290,6 +303,46 @@ impl Deref for DoubleHistoryTable {
 }
 
 impl DerefMut for DoubleHistoryTable {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.table
+    }
+}
+
+#[repr(transparent)]
+pub struct HashHistoryTable {
+    table: [HistoryTable; HASH_HISTORY_SIZE],
+}
+
+impl HashHistoryTable {
+    pub fn boxed() -> Box<Self> {
+        #![allow(clippy::cast_ptr_alignment)]
+        // SAFETY: we're allocating a zeroed block of memory, and then casting it to a Box<Self>
+        // this is fine! because [HistoryTable; HASH_HISTORY_SIZE] is just a bunch of i16s
+        // at base, which are fine to zero-out.
+        unsafe {
+            let layout = std::alloc::Layout::new::<Self>();
+            let ptr = std::alloc::alloc_zeroed(layout);
+            if ptr.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
+            Box::from_raw(ptr.cast())
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.table.iter_mut().for_each(HistoryTable::clear);
+    }
+}
+
+impl Deref for HashHistoryTable {
+    type Target = [HistoryTable; HASH_HISTORY_SIZE];
+
+    fn deref(&self) -> &Self::Target {
+        &self.table
+    }
+}
+
+impl DerefMut for HashHistoryTable {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.table
     }
