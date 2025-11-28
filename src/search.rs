@@ -1357,14 +1357,15 @@ pub fn alpha_beta<NT: NodeType>(
             && depth >= 6 + i32::from(t.ss[height].ttpv)
             && let Some(tte) = tt_hit
             && tte.value != VALUE_NONE
+            && !is_decisive(tte.value)
             && tte.bound.is_lower()
             && tte.depth >= depth - 3
             && height < root_depth * 2
         {
-            let r_beta = singularity_margin(tte.value, depth);
+            let r_beta = tte.value - depth * 48 / 64;
             let r_depth = (depth - 1) / 2;
 
-            t.ss[t.board.height()].excluded = Some(m);
+            t.ss[height].excluded = Some(m);
             let value = alpha_beta::<OffPV>(
                 &mut PVariation::default(),
                 t,
@@ -1373,13 +1374,13 @@ pub fn alpha_beta<NT: NodeType>(
                 r_beta,
                 cut_node,
             );
-            t.ss[t.board.height()].excluded = None;
+            t.ss[height].excluded = None;
 
             if value == VALUE_NONE {
                 extension = 1; // extend if there's only one legal move.
             } else if value < r_beta {
                 if !NT::PV
-                    && t.ss[t.board.height()].dextensions <= 12
+                    && t.ss[height].dextensions <= 12
                     && value < r_beta - t.info.conf.dext_margin
                 {
                     // double-extend if we failed low by a lot
@@ -1710,11 +1711,6 @@ fn update_tactical_history(
     depth: i32,
 ) {
     t.update_tactical_history(moves_to_adjust, best_move, depth);
-}
-
-/// The reduced beta margin for Singular Extension.
-fn singularity_margin(tt_value: i32, depth: i32) -> i32 {
-    (tt_value - (depth * 3 / 4)).max(-MINIMUM_TB_WIN_SCORE + 1)
 }
 
 /// Test if a move is *forced* - that is, if it is a move that is
