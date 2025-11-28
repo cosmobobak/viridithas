@@ -1714,7 +1714,7 @@ fn update_tactical_history(
 
 /// The reduced beta margin for Singular Extension.
 fn singularity_margin(tt_value: i32, depth: i32, pv: bool, tt_pv: bool) -> i32 {
-    (tt_value - (depth * (45 + 75 * i32::from(tt_pv && !pv)) / 60)).max(-MINIMUM_TB_WIN_SCORE + 1)
+    (tt_value - (depth * (48 + 32 * i32::from(tt_pv && !pv)) / 64)).max(-MINIMUM_TB_WIN_SCORE + 1)
 }
 
 /// Test if a move is *forced* - that is, if it is a move that is
