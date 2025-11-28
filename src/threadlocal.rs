@@ -48,7 +48,7 @@ pub struct ThreadData<'a> {
     /// the highest finished ID iteration
     pub completed: usize,
     /// the draft we're actually kicking off searches at
-    pub depth: i32,
+    pub root_depth: i32,
 
     pub stm_at_root: Colour,
     pub optimism: [i32; 2],
@@ -96,7 +96,7 @@ impl<'a> ThreadData<'a> {
             pvs: [Self::ARRAY_REPEAT_VALUE; MAX_DEPTH],
             iteration: 0,
             completed: 0,
-            depth: 0,
+            root_depth: 0,
             stm_at_root: board.turn(),
             optimism: [0; 2],
             tt,
@@ -147,14 +147,14 @@ impl<'a> ThreadData<'a> {
         self.minor_corrhist.clear();
         self.continuation_corrhist.clear();
         self.killer_move_table.fill(None);
-        self.depth = 0;
+        self.root_depth = 0;
         self.completed = 0;
         self.pvs.fill(Self::ARRAY_REPEAT_VALUE);
     }
 
     pub fn set_up_for_search(&mut self) {
         self.killer_move_table.fill(None);
-        self.depth = 0;
+        self.root_depth = 0;
         self.completed = 0;
         self.pvs.fill(Self::ARRAY_REPEAT_VALUE);
         self.nnue.reinit_from(&self.board, self.nnue_params);
