@@ -1357,6 +1357,7 @@ pub fn alpha_beta<NT: NodeType>(
             && depth >= 6 + i32::from(t.ss[height].ttpv)
             && let Some(tte) = tt_hit
             && tte.value != VALUE_NONE
+            && !is_decisive(tte.value)
             && tte.bound.is_lower()
             && tte.depth >= depth - 3
             && height < root_depth * 2
