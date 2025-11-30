@@ -377,10 +377,9 @@ impl TTView<'_> {
         let record_prority = i32::from(tte.depth) + record_flag_bonus;
 
         // replace the entry:
-        // 1. unconditionally if we're in the root node (holdover from TT-pv probing)
-        // 2. if the entry is for a different position
-        // 3. if it's an exact entry, and the old entry is not exact
-        // 4. if the new entry is of higher priority than the old entry
+        // 1. if the entry is for a different position
+        // 2. if it's an exact entry, and the old entry is not exact
+        // 3. if the new entry is of higher priority than the old entry
         if tte.key != key
             || flag == Bound::Exact && tte.info.flag() != Bound::Exact
             || insert_priority * 3 >= record_prority * 2
@@ -399,12 +398,6 @@ impl TTView<'_> {
             cluster.entries[idx] = write;
             self.table[cluster_index].store(cluster);
         }
-        // else if cluster.entries[idx].depth >= 5
-        //     && cluster.entries[idx].info.flag() != Bound::Exact
-        // {
-        //     cluster.entries[idx].depth -= 1;
-        //     self.table[cluster_index].store(cluster);
-        // }
     }
 
     pub fn probe(&self, key: u64, ply: usize, clock: u8) -> Option<TTHit> {
