@@ -2,7 +2,7 @@
 
 use std::{
     fs::File,
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, IsTerminal},
     path::Path,
 };
 
@@ -194,12 +194,14 @@ pub fn eval_stats(input: &Path) -> anyhow::Result<()> {
             max = eval;
         }
 
-        if i % 1024 == 0 {
+        if i % 1024 == 0 && std::io::stdout().is_terminal() {
             print!("\rProcessed {:>10}/{}.", i + 1, file_len);
         }
     }
 
-    println!("\rProcessed {file_len:>10}/{file_len}.");
+    if std::io::stdout().is_terminal() {
+        println!("\rProcessed {file_len:>10}/{file_len}.");
+    }
 
     println!(" EVALUATION STATISTICS:");
 
