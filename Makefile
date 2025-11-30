@@ -13,7 +13,7 @@ ifeq ($(OS),Windows_NT)
 else
     INF := linux
     EXT :=
-    RMFILE := rm
+    RMFILE := rm -f
     RMDIR := rm -rf
     MKDIR := mkdir -p
     NAME := $(EXE)
@@ -28,7 +28,7 @@ openbench:
 	cargo rustc -r -- -C target-cpu=native --emit link=$(NAME)
 
 tmp-dir:
-	mkdir $(TMPDIR)
+	$(MKDIR) $(TMPDIR)
 
 x86-64 x86-64-v2 x86-64-v3 x86-64-v4 native: tmp-dir
 	cargo rustc -r --features final-release -- -C target-feature=+crt-static -C target-cpu=$@ -C profile-generate=$(TMPDIR) --emit link=$(LXE)-$(VERSION)-$(INF)-$@$(EXT)
