@@ -481,7 +481,7 @@ fn generate_on_thread<'a>(
         }
         // generate game
         // STEP 1: get the next starting position from the callback
-        let mut startpos = Board::new();
+        let mut startpos = Board::empty();
         match startpos_src.generate(&mut startpos, &conf) {
             ControlFlow::Break(()) => continue 'generation_main_loop,
             ControlFlow::Continue(()) => {}
