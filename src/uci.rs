@@ -874,7 +874,8 @@ pub fn bench(
     depth: Option<usize>,
     threads: Option<usize>,
 ) -> anyhow::Result<()> {
-    let bench_string = format!("go depth {}\n", depth.unwrap_or(BENCH_DEPTH));
+    // let bench_string = format!("go depth {}\n", depth.unwrap_or(BENCH_DEPTH));
+    let bench_string = format!("go movetime 2400");
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
     let tbhits = AtomicU64::new(0);

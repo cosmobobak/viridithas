@@ -864,6 +864,10 @@ pub fn alpha_beta<NT: NodeType>(
         None
     };
 
+    track!(tt_hit.is_none());
+    track!(tt_hit.is_some());
+    track!(tt_hit.is_some_and(|tte| tte.eval != VALUE_NONE));
+
     if excluded.is_none() {
         t.ss[height].ttpv = NT::PV || tt_hit.is_some_and(|hit| hit.was_pv);
     }
@@ -928,12 +932,16 @@ pub fn alpha_beta<NT: NodeType>(
     let static_eval;
     let eval;
     let correction = t.correction();
+    let eval_needed;
+    let eval_forced;
 
     if in_check {
         // when we're in check, it could be checkmate, so it's unsound to use evaluate().
         raw_eval = VALUE_NONE;
         static_eval = VALUE_NONE;
         eval = VALUE_NONE;
+        eval_needed = false;
+        eval_forced = false;
     } else if excluded.is_some() {
         // if we're in a singular-verification search, we already have the static eval.
         // we can set raw_eval to whatever we like, because we're not going to be saving it.
@@ -941,12 +949,17 @@ pub fn alpha_beta<NT: NodeType>(
         static_eval = t.ss[height].static_eval;
         eval = t.ss[height].eval;
         t.nnue.hint_common_access(&t.board, t.nnue_params);
+        eval_needed = false;
+        eval_forced = false;
     } else if let Some(tte) = &tt_hit {
+        eval_needed = true;
         let v = tte.eval; // if we have a TT hit, check the cached TT eval.
         if v == VALUE_NONE {
+            eval_forced = true;
             // regenerate the static eval if it's VALUE_NONE.
             raw_eval = evaluate(t, t.info.nodes.get_local());
         } else {
+            eval_forced = false;
             // if the TT eval is not VALUE_NONE, use it.
             raw_eval = v;
             if NT::PV {
@@ -968,6 +981,8 @@ pub fn alpha_beta<NT: NodeType>(
             eval = static_eval;
         }
     } else {
+        eval_needed = true;
+        eval_forced = true;
         // otherwise, use the static evaluation.
         raw_eval = evaluate(t, t.info.nodes.get_local());
 
@@ -983,10 +998,15 @@ pub fn alpha_beta<NT: NodeType>(
             0,
             t.ss[height].ttpv,
         );
+        let eval_cache_store = true;
+        track!(eval_cache_store);
 
         static_eval = adj_shuffle(t, raw_eval, clock) + correction;
         eval = static_eval;
     }
+
+    track!(eval_needed);
+    track!(eval_forced);
 
     t.ss[height].static_eval = static_eval;
     t.ss[height].eval = eval;
@@ -1621,6 +1641,8 @@ pub fn alpha_beta<NT: NodeType>(
             depth,
             t.ss[height].ttpv,
         );
+        let main_store = true;
+        track!(main_store);
     }
 
     t.ss[height].best_move = best_move;

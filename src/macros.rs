@@ -53,23 +53,25 @@ macro_rules! track {
             TOTAL_ABS.fetch_add(v.abs(), std::sync::atomic::Ordering::Relaxed);
             TOTAL_SQ.fetch_add(v * v, std::sync::atomic::Ordering::Relaxed);
             let count = COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            if count % 8192 == 0 {
+            // if count % 8192 == 0 {
+            if count % 1024 == 0 {
                 let total = TOTAL.load(std::sync::atomic::Ordering::Relaxed);
                 let avg = total as f64 / count as f64;
-                println!("average value of {}: {}", stringify!($v), avg);
+                // println!("average value of {}: {}", stringify!($v), avg);
                 let total_abs = TOTAL_ABS.load(std::sync::atomic::Ordering::Relaxed);
                 let avg_abs = total_abs as f64 / count as f64;
-                println!("average absolute value of {}: {}", stringify!($v), avg_abs);
+                // println!("average absolute value of {}: {}", stringify!($v), avg_abs);
                 let total_sq = TOTAL_SQ.load(std::sync::atomic::Ordering::Relaxed);
                 let variance = total_sq as f64 / count as f64 - avg * avg;
                 let stddev = variance.sqrt();
-                println!("stddev of {}: {}", stringify!($v), stddev);
-                println!(
-                    "min/max value of {}: {}/{}",
-                    stringify!($v),
-                    MIN.load(std::sync::atomic::Ordering::Relaxed),
-                    MAX.load(std::sync::atomic::Ordering::Relaxed)
-                );
+                // println!("stddev of {}: {}", stringify!($v), stddev);
+                // println!(
+                //     "min/max value of {}: {}/{}",
+                //     stringify!($v),
+                //     MIN.load(std::sync::atomic::Ordering::Relaxed),
+                //     MAX.load(std::sync::atomic::Ordering::Relaxed)
+                // );
+                println!("total of {}: {total}", stringify!($v));
             }
             // pass-through
             $v
