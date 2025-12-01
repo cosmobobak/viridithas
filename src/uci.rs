@@ -381,9 +381,9 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> anyhow::Result<SetOpti
         }
         "SyzygyProbeLimit" => {
             let value: u8 = opt_value.parse()?;
-            if value > 6 {
+            if value > 7 {
                 bail!(UciError::IllegalValue(
-                    "SyzygyProbeLimit value must be between 0 and 6".to_string()
+                    "SyzygyProbeLimit value must be between 0 and 7".to_string()
                 ));
             }
             SYZYGY_PROBE_LIMIT.store(value, Ordering::SeqCst);
@@ -576,7 +576,7 @@ fn print_uci_response(info: &SearchInfo, full: bool) {
     println!("option name Threads type spin default 1 min 1 max 512");
     println!("option name PrettyPrint type check default false");
     println!("option name SyzygyPath type string default <empty>");
-    println!("option name SyzygyProbeLimit type spin default 6 min 0 max 6");
+    println!("option name SyzygyProbeLimit type spin default 7 min 0 max 7");
     println!("option name SyzygyProbeDepth type spin default 1 min 1 max 100");
     println!("option name Contempt type spin default 0 min -10000 max 10000");
     println!("option name Ponder type check default false");
