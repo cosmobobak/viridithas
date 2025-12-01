@@ -1601,7 +1601,7 @@ inquisition | same as legion/iridescent with standard  | fixed-nodes:
             |                                          | PENTA 12⁺² 839⁺¹ 2004⁰ 996⁻¹ 11⁻²
             |                                          | vs. delenda
 ------------|------------------------------------------|-----------------------------------------------
-  sovereign | 0.4 -> 1.0 WDL & eval rescaling.         | VLTC:
+    eleison | 0.4 -> 1.0 WDL & eval rescaling.         | VLTC:
             |                                          | https://ob.expositor.dev/test/357/
             |                                          |   LLR +2.96 (−2.94 LO +2.94 HI BOUNDS for +0.00 LO +3.00 HI ELO)
             |                                          |  PERF +9.27 ± 4.03 ELO = +5.25 LO +13.30 HI ELO
