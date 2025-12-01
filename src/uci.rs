@@ -59,10 +59,8 @@ static STDIN_READER_THREAD_KEEP_RUNNING: AtomicBool = AtomicBool::new(true);
 pub static QUIT: AtomicBool = AtomicBool::new(false);
 pub static GO_MATE_MAX_DEPTH: AtomicUsize = AtomicUsize::new(MAX_DEPTH);
 pub static PRETTY_PRINT: AtomicBool = AtomicBool::new(true);
-pub static SYZYGY_PROBE_LIMIT: AtomicU8 = AtomicU8::new(6);
+pub static SYZYGY_PROBE_LIMIT: AtomicU8 = AtomicU8::new(7);
 pub static SYZYGY_PROBE_DEPTH: AtomicI32 = AtomicI32::new(1);
-pub static SYZYGY_PATH: Mutex<String> = Mutex::new(String::new());
-pub static SYZYGY_ENABLED: AtomicBool = AtomicBool::new(false);
 pub static CONTEMPT: AtomicI32 = AtomicI32::new(0);
 
 #[derive(Debug, PartialEq, Eq)]
@@ -73,7 +71,6 @@ enum UciError {
     UnexpectedCommandTermination(String),
     InvalidFormat(String),
     UnknownCommand(String),
-    InternalError(String),
     IllegalValue(String),
 }
 
@@ -118,7 +115,6 @@ impl Display for UciError {
             }
             Self::InvalidFormat(s) => write!(f, "InvalidFormat: {s}"),
             Self::UnknownCommand(s) => write!(f, "UnknownCommand: {s}"),
-            Self::InternalError(s) => write!(f, "InternalError: {s}"),
             Self::IllegalValue(s) => write!(f, "IllegalValue: {s}"),
         }
     }
@@ -382,14 +378,6 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> anyhow::Result<SetOpti
         "SyzygyPath" => {
             let path = opt_value.to_string();
             tablebases::probe::init(&path);
-            if let Ok(mut lock) = SYZYGY_PATH.lock() {
-                *lock = path;
-                SYZYGY_ENABLED.store(true, Ordering::SeqCst);
-            } else {
-                bail!(UciError::InternalError(
-                    "failed to take lock on SyzygyPath".into()
-                ));
-            }
         }
         "SyzygyProbeLimit" => {
             let value: u8 = opt_value.parse()?;
@@ -668,12 +656,6 @@ pub fn main_loop() -> anyhow::Result<()> {
                 println!("Hash: {}", tt.size() / MEGABYTE);
                 println!("Threads: {}", thread_data.len());
                 println!("PrettyPrint: {}", PRETTY_PRINT.load(Ordering::SeqCst));
-                println!(
-                    "SyzygyPath: {}",
-                    SYZYGY_PATH
-                        .lock()
-                        .map_err(|_| anyhow!("failed to lock syzygy path"))?
-                );
                 println!(
                     "SyzygyProbeLimit: {}",
                     SYZYGY_PROBE_LIMIT.load(Ordering::SeqCst)

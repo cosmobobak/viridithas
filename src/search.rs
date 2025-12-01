@@ -875,8 +875,8 @@ pub fn alpha_beta<NT: NodeType>(
     if !NT::ROOT
         && excluded.is_none()
         && n_men <= cardinality
-        && uci::SYZYGY_ENABLED.load(Ordering::SeqCst)
-        && (depth >= uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst) || n_men < cardinality)
+        && tablebases::probe::SYZYGY_ENABLED.load(Ordering::Relaxed)
+        && (depth >= uci::SYZYGY_PROBE_DEPTH.load(Ordering::Relaxed) || n_men < cardinality)
         && let Some(wdl) = tablebases::probe::get_wdl(&t.board)
     {
         t.info.tbhits.increment();
