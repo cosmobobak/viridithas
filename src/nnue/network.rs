@@ -1460,6 +1460,8 @@ impl NNUEState {
     /// Evaluate the final layer on the partial activations.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     pub fn evaluate(&self, nn: &NNUEParams, board: &Board) -> i32 {
+        const K: f32 = SCALE as f32;
+
         let stm = board.turn();
         let out = output_bucket(board);
 
@@ -1500,26 +1502,25 @@ impl NNUEState {
         }
 
         // softmax
-        let max = l3_output_logits
-            .iter()
-            .copied()
-            .fold(f32::NEG_INFINITY, f32::max);
-        let mut logit_sum = 0.0;
-        for logit in &mut l3_output_logits {
-            *logit = (*logit - max).exp();
-            logit_sum += *logit;
-        }
-        for logit in &mut l3_output_logits {
-            *logit /= logit_sum;
-        }
+        let mut win = l3_output_logits[2];
+        let mut draw = l3_output_logits[1];
+        let mut loss = l3_output_logits[0];
 
-        let l3_output = l3_output_logits[2].mul_add(1.0, l3_output_logits[1] * 0.5);
+        let max = win.max(draw).max(loss);
 
-        // l3_output is in the range [0, 1]
-        // we need to reverse the sigmoid to get the final output
-        let l3_output = (l3_output / (1.0 - l3_output)).ln();
+        win = (win - max).exp();
+        draw = (draw - max).exp();
+        loss = (loss - max).exp();
 
-        (l3_output * SCALE as f32) as i32
+        let sum = win + draw + loss;
+
+        win /= sum;
+        draw /= sum;
+        // loss /= sum;
+
+        let score = draw.mul_add(0.5, win).clamp(0.0, 1.0);
+
+        (-K * (1.0 / score - 1.0).ln()) as i32
     }
 }
 
