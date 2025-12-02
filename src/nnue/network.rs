@@ -47,7 +47,7 @@ pub const INPUT: usize = (12 - MERGE_KING_PLANES as usize) * 64;
 /// The amount to scale the output of the network by.
 /// This is to allow for the sigmoid activation to differentiate positions with
 /// a small difference in evaluation.
-pub const SCALE: i32 = 239;
+pub const SCALE: i32 = 201;
 /// The size of one-half of the hidden layer of the network.
 pub const L1_SIZE: usize = 2048;
 /// The size of the second layer of the network.
@@ -55,7 +55,7 @@ pub const L2_SIZE: usize = 16;
 /// The size of the third layer of the network.
 pub const L3_SIZE: usize = 32;
 /// The number of output heads.
-pub const HEADS: usize = 1;
+pub const HEADS: usize = 3;
 /// The quantisation factor for the feature transformer weights.
 const QA: i16 = 255;
 /// The quantisation factor for the L1 weights.
@@ -1475,7 +1475,7 @@ impl NNUEState {
 
         let mut l1_outputs = Align64([0.0; L2_SIZE]);
         let mut l2_outputs = Align64([0.0; L3_SIZE]);
-        let mut l3_output = 0.0;
+        let mut l3_output_logits = [0.0; 3];
 
         layers::activate_ft_and_propagate_l1(
             us,
@@ -1490,12 +1490,34 @@ impl NNUEState {
             &nn.l2_bias[out],
             &mut l2_outputs,
         );
-        layers::propagate_l3(
-            &l2_outputs,
-            &nn.l3_weights[out][0],
-            nn.l3_bias[out][0],
-            &mut l3_output,
-        );
+
+        for ((w, b), o) in nn.l3_weights[out]
+            .iter()
+            .zip(nn.l3_bias[out])
+            .zip(&mut l3_output_logits)
+        {
+            layers::propagate_l3(&l2_outputs, w, b, o);
+        }
+
+        // softmax
+        let max = l3_output_logits
+            .iter()
+            .copied()
+            .fold(f32::NEG_INFINITY, f32::max);
+        let mut logit_sum = 0.0;
+        for logit in &mut l3_output_logits {
+            *logit = (*logit - max).exp();
+            logit_sum += *logit;
+        }
+        for logit in &mut l3_output_logits {
+            *logit /= logit_sum;
+        }
+
+        let l3_output = l3_output_logits[2].mul_add(1.0, l3_output_logits[1] * 0.5);
+
+        // l3_output is in the range [0, 1]
+        // we need to reverse the sigmoid to get the final output
+        let l3_output = (l3_output / (1.0 - l3_output)).ln();
 
         (l3_output * SCALE as f32) as i32
     }
