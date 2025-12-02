@@ -1473,12 +1473,15 @@ pub fn alpha_beta<NT: NodeType>(
                 // depending on the value that the reduced search kicked out,
                 // we might want to do a deeper search, or a shallower search.
                 new_depth += i32::from(do_deeper_search) - i32::from(do_shallower_search);
+                t.ss[height].reduction =
+                    1024 * (1 + i32::from(do_shallower_search) - i32::from(do_deeper_search));
                 // check if we're actually going to do a deeper search than before
                 // (no point if the re-search is the same as the normal one lol)
                 if new_depth - 1 > reduced_depth {
                     score =
                         -alpha_beta::<OffPV>(l_pv, t, new_depth - 1, -alpha - 1, -alpha, !cut_node);
                 }
+                t.ss[height].reduction = 1024;
 
                 if is_quiet && (score <= alpha || score >= beta) {
                     t.update_cont_hist_single(hist_to, moved, new_depth, height, score > alpha);
