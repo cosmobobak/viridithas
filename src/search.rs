@@ -1362,7 +1362,8 @@ pub fn alpha_beta<NT: NodeType>(
             && tte.depth >= depth - 3
             && height < root_depth * 2
         {
-            let r_beta = tte.value - depth * 48 / 64;
+            let is_recapture = Some(m.to()) == t.ss[height - 1].searching.map(Move::to);
+            let r_beta = tte.value - depth * (48 - 16 * i32::from(is_recapture)) / 64;
             let r_depth = (depth - 1) / 2;
 
             t.ss[height].excluded = Some(m);
