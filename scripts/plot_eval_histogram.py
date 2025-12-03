@@ -61,6 +61,8 @@ def plot_histogram(
     """Create and display/save histogram plot."""
     fig, ax = plt.subplots(figsize=(12, 7))
 
+    counts = np.log1p(counts)  # Use log scale for better visibility
+
     # Create bar plot
     ax.bar(
         bins,
@@ -72,6 +74,10 @@ def plot_histogram(
         linewidth=0.5,
     )
 
+    max_eval = bins.max() + bin_width
+    max_eval = 3500
+    ax.set_xlim(-50, max_eval)
+
     # Formatting
     ax.set_xlabel("Evaluation (centipawns)", fontsize=12, fontweight="bold")
     ax.set_ylabel("Count", fontsize=12, fontweight="bold")
@@ -80,13 +86,10 @@ def plot_histogram(
 
     # Add statistics text
     total_positions = counts.sum()
-    mean_eval = np.average(bins + bin_width / 2, weights=counts)
-    median_idx = np.searchsorted(np.cumsum(counts), total_positions / 2)
-    median_eval = bins[median_idx] if median_idx < len(bins) else bins[-1]
+    mean_eval = np.average(np.abs(bins + bin_width / 2), weights=counts)
 
     stats_text = f"Total positions: {total_positions:,}\n"
     stats_text += f"Mean eval: {mean_eval:.1f} cp\n"
-    stats_text += f"Median eval: {median_eval:.1f} cp"
 
     ax.text(
         0.02,
