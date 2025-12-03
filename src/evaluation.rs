@@ -200,7 +200,7 @@ pub fn eval_stats(input: &Path, histogram_output: Option<&Path>) -> anyhow::Resu
             max = eval;
         }
 
-        let binned = (eval / BIN_SIZE) * BIN_SIZE;
+        let binned = (eval.abs() / BIN_SIZE) * BIN_SIZE;
         *histogram.entry(binned).or_insert(0) += 1;
 
         if i % 1024 == 0 {
