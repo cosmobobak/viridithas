@@ -55,6 +55,9 @@ pub enum Subcommands {
     EvalStats {
         /// Path to input EPD file.
         input: PathBuf,
+        /// Optional path to output histogram data.
+        #[clap(short, long)]
+        output: Option<PathBuf>,
     },
     /// Count the number of positions contained within one or more packed game records.
     #[cfg(feature = "datagen")]
