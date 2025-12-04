@@ -37,12 +37,12 @@ use crate::{
     evaluation::{is_decisive, is_mate_score},
     nnue::network::NNUEParams,
     search::{parameters::Config, search_position, static_exchange_eval},
+    tablebases::probe::SYZYGY_ENABLED,
     tablebases::{self, probe::WDL},
     threadlocal::make_thread_data,
     threadpool,
     timemgmt::{SearchLimit, TimeManager},
     transpositiontable::TT,
-    uci::{SYZYGY_ENABLED, SYZYGY_PATH},
     util::MEGABYTE,
 };
 
@@ -286,11 +286,6 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
     if let Some(tb_path) = &options.tablebases_path {
         let tb_path = tb_path.to_string_lossy();
         tablebases::probe::init(&tb_path);
-        if let Ok(mut lock) = SYZYGY_PATH.lock() {
-            *lock = tb_path.to_string();
-        } else {
-            bail!("Failed to take lock on SYZYGY_PATH");
-        }
         SYZYGY_ENABLED.store(true, Ordering::SeqCst);
         println!("Syzygy tablebases enabled.");
     }
@@ -481,7 +476,7 @@ fn generate_on_thread<'a>(
         }
         // generate game
         // STEP 1: get the next starting position from the callback
-        let mut startpos = Board::new();
+        let mut startpos = Board::empty();
         match startpos_src.generate(&mut startpos, &conf) {
             ControlFlow::Break(()) => continue 'generation_main_loop,
             ControlFlow::Continue(()) => {}
