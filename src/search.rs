@@ -723,6 +723,10 @@ pub fn quiescence<NT: NodeType>(
         return mated_in(height);
     }
 
+    if !is_decisive(best_score) && best_score > beta {
+        best_score = i32::midpoint(best_score, beta);
+    }
+
     let flag = if best_score >= beta {
         Bound::Lower
     } else if best_score > original_alpha {
