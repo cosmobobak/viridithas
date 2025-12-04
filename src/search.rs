@@ -1397,13 +1397,12 @@ pub fn alpha_beta<NT: NodeType>(
                 // multi-cut: if a move other than the best one beats beta,
                 // then we can cut with relatively high confidence.
                 return value;
+            } else if tte.value >= beta {
+                // a sort of light multi-cut.
+                extension = -3 + i32::from(NT::PV);
             } else if cut_node {
                 // produce a strong negative extension if we didn't fail low on a cut-node.
                 extension = -2;
-            } else if tte.value >= beta || tte.value <= alpha {
-                // the tt_value >= beta condition is a sort of "light multi-cut"
-                // the tt_value <= alpha condition is from Weiss (https://github.com/TerjeKir/weiss/compare/2a7b4ed0...effa8349/).
-                extension = -1;
             } else {
                 // no extension.
                 extension = 0;
@@ -1462,7 +1461,7 @@ pub fn alpha_beta<NT: NodeType>(
             };
             // perform a zero-window search
             let mut new_depth = depth + extension;
-            let reduced_depth = (new_depth - r).clamp(0, new_depth);
+            let reduced_depth = (new_depth - r).clamp(0, new_depth + 1);
             score = -alpha_beta::<OffPV>(l_pv, t, reduced_depth, -alpha - 1, -alpha, true);
             // simple reduction for any future searches
             t.ss[height].reduction = 1024;
