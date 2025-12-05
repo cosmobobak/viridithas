@@ -1178,6 +1178,9 @@ pub fn alpha_beta<NT: NodeType>(
         depth -= i32::from(depth >= 8);
     }
 
+    // freeze depth for the rest of the function.
+    let depth = depth;
+
     // the margins for static-exchange-evaluation pruning for tactical and quiet moves.
     let see_table = [
         t.info.conf.see_tactical_margin * depth * depth,
@@ -1423,48 +1426,36 @@ pub fn alpha_beta<NT: NodeType>(
 
         t.board.make_move(m, &mut t.nnue);
 
-        let mut score;
-        if moves_made == 1 {
-            // first move (presumably the PV-move)
-            let new_depth = depth + extension - 1;
-            score =
-                -alpha_beta::<NT::Next>(l_pv, t, new_depth, -beta, -alpha, !NT::PV && !cut_node);
-        } else {
-            // calculation of LMR stuff
-            let r = if depth > 2 && moves_made > (1 + usize::from(NT::ROOT)) {
-                let mut r = t.info.lm_table.lm_reduction(depth, moves_made);
-                // tunable base offset
-                r += t.info.conf.lmr_base_offset;
-                // reduce more on non-PV nodes
-                r += i32::from(!NT::PV) * t.info.conf.lmr_non_pv_mul;
-                r -= i32::from(t.ss[height].ttpv) * t.info.conf.lmr_ttpv_mul;
-                // reduce more on cut nodes
-                r += i32::from(cut_node) * t.info.conf.lmr_cut_node_mul;
-                // extend/reduce using the stat_score of the move
-                r -= stat_score * 1024 / t.info.conf.history_lmr_divisor;
-                // reduce refutation moves less
-                r -= i32::from(Some(m) == killer) * t.info.conf.lmr_refutation_mul;
-                // reduce more if not improving
-                r += i32::from(!improving) * t.info.conf.lmr_non_improving_mul;
-                // reduce more if the move from the transposition table is tactical
-                r += i32::from(tt_capture.is_some()) * t.info.conf.lmr_tt_capture_mul;
-                // reduce less if the move gives check
-                r -= i32::from(t.board.in_check()) * t.info.conf.lmr_check_mul;
-                // reduce less when the static eval is way off-base
-                r -= correction.abs() * t.info.conf.lmr_corr_mul / 16384;
+        let mut new_depth = depth + extension - 1;
 
-                t.ss[height].reduction = r;
-                r / 1024
-            } else {
-                t.ss[height].reduction = 1024;
-                1
-            };
-            // perform a zero-window search
-            let mut new_depth = depth + extension;
-            let reduced_depth = (new_depth - r).clamp(0, new_depth + 1);
+        let mut score = VALUE_NONE;
+        if depth > 2 && moves_made > (1 + usize::from(NT::ROOT)) {
+            let mut r = t.info.lm_table.lm_reduction(depth, moves_made);
+            // tunable base offset
+            r += t.info.conf.lmr_base_offset;
+            // reduce more on non-PV nodes
+            r += i32::from(!NT::PV) * t.info.conf.lmr_non_pv_mul;
+            r -= i32::from(t.ss[height].ttpv) * t.info.conf.lmr_ttpv_mul;
+            // reduce more on cut nodes
+            r += i32::from(cut_node) * t.info.conf.lmr_cut_node_mul;
+            // extend/reduce using the stat_score of the move
+            r -= stat_score * 1024 / t.info.conf.history_lmr_divisor;
+            // reduce refutation moves less
+            r -= i32::from(Some(m) == killer) * t.info.conf.lmr_refutation_mul;
+            // reduce more if not improving
+            r += i32::from(!improving) * t.info.conf.lmr_non_improving_mul;
+            // reduce more if the move from the transposition table is tactical
+            r += i32::from(tt_capture.is_some()) * t.info.conf.lmr_tt_capture_mul;
+            // reduce less if the move gives check
+            r -= i32::from(t.board.in_check()) * t.info.conf.lmr_check_mul;
+            // reduce less when the static eval is way off-base
+            r -= correction.abs() * t.info.conf.lmr_corr_mul / 16384;
+
+            t.ss[height].reduction = r;
+            r /= 1024;
+
+            let reduced_depth = (depth + extension - r).clamp(0, depth + extension + 1);
             score = -alpha_beta::<OffPV>(l_pv, t, reduced_depth, -alpha - 1, -alpha, true);
-            // simple reduction for any future searches
-            t.ss[height].reduction = 1024;
             // if we beat alpha, and reduced more than one ply,
             // then we do a zero-window search at full depth.
             if score > alpha && r > 1 {
@@ -1476,15 +1467,13 @@ pub fn alpha_beta<NT: NodeType>(
                 // depending on the value that the reduced search kicked out,
                 // we might want to do a deeper search, or a shallower search.
                 new_depth += i32::from(do_deeper_search) - i32::from(do_shallower_search);
-                t.ss[height].reduction =
-                    1024 * (1 + i32::from(do_shallower_search) - i32::from(do_deeper_search));
                 // check if we're actually going to do a deeper search than before
                 // (no point if the re-search is the same as the normal one lol)
-                if new_depth - 1 > reduced_depth {
-                    score =
-                        -alpha_beta::<OffPV>(l_pv, t, new_depth - 1, -alpha - 1, -alpha, !cut_node);
+                if new_depth > reduced_depth {
+                    t.ss[height].reduction =
+                        1024 * (1 + i32::from(do_shallower_search) - i32::from(do_deeper_search));
+                    score = -alpha_beta::<OffPV>(l_pv, t, new_depth, -alpha - 1, -alpha, !cut_node);
                 }
-                t.ss[height].reduction = 1024;
 
                 if is_quiet && (score <= alpha || score >= beta) {
                     t.update_cont_hist_single(hist_to, moved, new_depth, height, score > alpha);
@@ -1492,12 +1481,18 @@ pub fn alpha_beta<NT: NodeType>(
             } else if score > alpha && score < best_score + 16 {
                 new_depth -= 1;
             }
-            // if we failed completely, then do full-window search
-            if score > alpha && score < beta {
-                // this is a new best move, so it *is* PV.
-                score = -alpha_beta::<NT::Next>(l_pv, t, new_depth - 1, -beta, -alpha, false);
-            }
+        } else if !NT::PV || moves_made > 1 {
+            t.ss[height].reduction = 1024;
+            score = -alpha_beta::<OffPV>(l_pv, t, new_depth, -alpha - 1, -alpha, !cut_node);
         }
+
+        if NT::PV && (moves_made == 1 || score > alpha) {
+            t.ss[height].reduction = 1024;
+            score = -alpha_beta::<NT::Next>(l_pv, t, new_depth, -beta, -alpha, false);
+        }
+
+        assert_ne!(score, VALUE_NONE);
+
         t.board.unmake_move(&mut t.nnue);
 
         // record subtree size for TimeManager
