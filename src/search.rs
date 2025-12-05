@@ -1396,6 +1396,29 @@ pub fn alpha_beta<NT: NodeType>(
             } else if !NT::PV && value >= beta && !is_decisive(value) {
                 // multi-cut: if a move other than the best one beats beta,
                 // then we can cut with relatively high confidence.
+
+                // returning from the entire node is significant - we need to
+                // duplicate much of the standard node exiting code here.
+                if !in_check && is_quiet && value > static_eval {
+                    t.update_correction_history(r_depth, tt_complexity, value - static_eval);
+                }
+                t.tt.store(
+                    key,
+                    height,
+                    // storing `tt_move` is unclear.
+                    // it's a *different* move that caused the fail-high.
+                    tt_move,
+                    // value from the singular search.
+                    value,
+                    raw_eval,
+                    Bound::Lower,
+                    // depth of the singular search.
+                    // we add one here, because we're doing
+                    // searches in-place in this node.
+                    r_depth + 1,
+                    t.ss[height].ttpv,
+                );
+
                 return value;
             } else if tte.value >= beta {
                 // a sort of light multi-cut.
