@@ -1425,8 +1425,9 @@ pub fn alpha_beta<NT: NodeType>(
 
         let mut score;
         if moves_made == 1 {
-            // first move (presumably the PV-move)
-            let new_depth = depth + extension - 1;
+            // prevent a drop directly into the frontier if we're searching a PV tt-move.
+            let min_depth = i32::from(NT::PV && Some(m) == tt_move);
+            let new_depth = i32::max(depth + extension - 1, min_depth);
             score =
                 -alpha_beta::<NT::Next>(l_pv, t, new_depth, -beta, -alpha, !NT::PV && !cut_node);
         } else {
