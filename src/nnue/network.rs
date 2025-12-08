@@ -1461,7 +1461,7 @@ impl NNUEState {
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     pub fn evaluate(&self, nn: &NNUEParams, board: &Board) -> i32 {
         const K: f32 = SCALE as f32;
-        const TEMPERATURE: f32 = 1.15;
+        const TEMPERATURE: f32 = 0.9;
 
         let stm = board.turn();
         let out = output_bucket(board);
