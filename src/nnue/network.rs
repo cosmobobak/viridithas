@@ -1461,6 +1461,7 @@ impl NNUEState {
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     pub fn evaluate(&self, nn: &NNUEParams, board: &Board) -> i32 {
         const K: f32 = SCALE as f32;
+        const TEMPERATURE: f32 = 1.3;
 
         let stm = board.turn();
         let out = output_bucket(board);
@@ -1502,9 +1503,9 @@ impl NNUEState {
         }
 
         // softmax
-        let mut win = l3_output_logits[2];
-        let mut draw = l3_output_logits[1];
-        let mut loss = l3_output_logits[0];
+        let mut win = l3_output_logits[2] / TEMPERATURE;
+        let mut draw = l3_output_logits[1] / TEMPERATURE;
+        let mut loss = l3_output_logits[0] / TEMPERATURE;
 
         let max = win.max(draw).max(loss);
 
