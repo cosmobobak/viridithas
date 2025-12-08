@@ -1867,6 +1867,12 @@ pub fn static_exchange_eval(board: &Board, conf: &Config, m: Move, threshold: i3
 }
 
 pub fn adj_shuffle(t: &ThreadData, raw_eval: i32, clock: u8) -> i32 {
+    if cfg!(feature = "datagen") {
+        // during datagen, we want to use raw evals only.
+        // source: chef.
+        return raw_eval;
+    }
+
     // scale down the value estimate when there's not much
     // material left - this will incentivize keeping material
     // on the board if we have winning chances, and trading
