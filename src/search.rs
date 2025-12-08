@@ -642,8 +642,7 @@ pub fn quiescence<NT: NodeType>(
     }
 
     if stand_pat >= beta {
-        // return stand_pat instead of beta, this is fail-soft
-        return stand_pat;
+        return i32::midpoint(stand_pat, beta);
     }
 
     let original_alpha = alpha;
