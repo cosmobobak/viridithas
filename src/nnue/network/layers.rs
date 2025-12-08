@@ -361,7 +361,7 @@ mod simd {
                         let elem = elem.assume_init();
                         let nnz = elem != 0;
                         if nnz {
-                            super::NNZ_COUNTS[i % 1024][j % 1024]
+                            super::NNZ_COUNTS[i % L1_PAIR_COUNT][j % L1_PAIR_COUNT]
                                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         }
                     }
