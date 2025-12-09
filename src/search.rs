@@ -1875,10 +1875,10 @@ pub fn adj_shuffle(t: &ThreadData, raw_eval: i32, clock: u8) -> i32 {
     // material left - this will incentivize keeping material
     // on the board if we have winning chances, and trading
     // material off if the position is worse for us.
-    let material = t.board.material(&t.info);
-    let mat_mul = t.info.conf.material_scale_base + material;
-    let opt_mul = t.info.conf.optimism_mat_base + material;
-    let raw_eval = (raw_eval * mat_mul + t.optimism[t.board.turn()] * opt_mul / 32) / 1024;
+    // let material = t.board.material(&t.info);
+    // let mat_mul = t.info.conf.material_scale_base + material;
+    // let opt_mul = t.info.conf.optimism_mat_base + material;
+    // let raw_eval = (raw_eval * mat_mul + t.optimism[t.board.turn()] * opt_mul / 32) / 1024;
 
     // scale down the value when the fifty-move counter is high.
     // this goes some way toward making viri realise when he's not
