@@ -642,8 +642,7 @@ pub fn quiescence<NT: NodeType>(
     }
 
     if stand_pat >= beta {
-        // return stand_pat instead of beta, this is fail-soft
-        return stand_pat;
+        return i32::midpoint(stand_pat, beta);
     }
 
     let original_alpha = alpha;
@@ -959,7 +958,6 @@ pub fn alpha_beta<NT: NodeType>(
         }
         static_eval = adj_shuffle(t, raw_eval, clock) + correction;
         if tte.value != VALUE_NONE
-            && !is_decisive(tte.value)
             && match tte.bound {
                 Bound::Upper => tte.value < static_eval,
                 Bound::Lower => tte.value > static_eval,
