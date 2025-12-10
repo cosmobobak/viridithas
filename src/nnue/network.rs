@@ -1451,6 +1451,18 @@ impl NNUEState {
     /// Evaluate the final layer on the partial activations.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     pub fn evaluate(&self, nn: &NNUEParams, board: &Board) -> i32 {
+        self.evaluate_with_offset(nn, board, None)
+    }
+
+    /// Evaluate the final layer on the partial activations, with an optional
+    /// learned offset applied to the L3 inputs (l2out).
+    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+    pub fn evaluate_with_offset(
+        &self,
+        nn: &NNUEParams,
+        board: &Board,
+        l3_offset: Option<&Align64<[f32; L3_SIZE]>>,
+    ) -> i32 {
         let stm = board.turn();
         let out = output_bucket(board);
 
@@ -1481,6 +1493,13 @@ impl NNUEState {
             &nn.l2_bias[out],
             &mut l2_outputs,
         );
+
+        if let Some(offset) = l3_offset {
+            for i in 0..L3_SIZE {
+                l2_outputs[i] += offset[i];
+            }
+        }
+
         layers::propagate_l3(
             &l2_outputs,
             &nn.l3_weights[out],

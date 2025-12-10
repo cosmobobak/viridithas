@@ -148,6 +148,7 @@ const OPTIMISM_OFFSET: i32 = 165;
 const OPTIMISM_MATERIAL_BASE: i32 = 2103;
 const EVAL_POLICY_UPDATE_MAX: i32 = 102;
 const PROBCUT_SEE_SCALE: i32 = 257;
+const L3_OFFSET_LR: f32 = 0.001;
 
 pub trait NodeType {
     /// Whether this node is on the principal variation.
@@ -1613,7 +1614,9 @@ pub fn alpha_beta<NT: NodeType>(
             || flag == Bound::Lower && best_score <= static_eval
             || flag == Bound::Upper && best_score >= static_eval)
         {
-            t.update_correction_history(depth, tt_complexity, best_score - static_eval);
+            let diff = best_score - static_eval;
+            t.update_correction_history(depth, tt_complexity, diff);
+            t.update_l3_offsets(depth, diff);
         }
         t.tt.store(
             key,

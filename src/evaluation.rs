@@ -107,8 +107,17 @@ impl Board {
 }
 
 pub fn evaluate_nnue(t: &ThreadData) -> i32 {
-    // get the raw network output
-    let v = t.nnue.evaluate(t.nnue_params, &t.board);
+    // get the output bucket for this position
+    let bucket = network::output_bucket(&t.board);
+    // get the learned offset for this bucket
+    let offset = &t.l3_offsets.offsets[bucket];
+    // get the raw network output with the learned offset applied
+    let v = t
+        .nnue
+        .evaluate_with_offset(t.nnue_params, &t.board, Some(offset));
+
+    // let counterfactual = t.nnue.evaluate_with_offset(t.nnue_params, &t.board, None);
+    // track!(v - counterfactual);
 
     // clamp the value into the valid range.
     // this basically never comes up, but the network will

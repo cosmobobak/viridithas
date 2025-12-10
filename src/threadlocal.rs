@@ -9,7 +9,7 @@ use crate::{
     chess::{board::Board, chessmove::Move, piece::Colour},
     historytable::{
         CaptureHistoryTable, ContinuationCorrectionHistoryTable, CorrectionHistoryTable,
-        DoubleHistoryTable, HashHistoryTable, ThreatsHistoryTable,
+        DoubleHistoryTable, HashHistoryTable, L3OffsetTable, ThreatsHistoryTable,
     },
     nnue::{self, network::NNUEParams},
     search::pv::PVariation,
@@ -39,6 +39,7 @@ pub struct ThreadData<'a> {
     pub major_corrhist: Box<CorrectionHistoryTable>,
     pub minor_corrhist: Box<CorrectionHistoryTable>,
     pub continuation_corrhist: Box<ContinuationCorrectionHistoryTable>,
+    pub l3_offsets: Box<L3OffsetTable>,
 
     pub thread_id: usize,
 
@@ -91,6 +92,7 @@ impl<'a> ThreadData<'a> {
             major_corrhist: CorrectionHistoryTable::boxed(),
             minor_corrhist: CorrectionHistoryTable::boxed(),
             continuation_corrhist: ContinuationCorrectionHistoryTable::boxed(),
+            l3_offsets: L3OffsetTable::boxed(),
             thread_id,
             #[allow(clippy::large_stack_arrays)]
             pvs: [Self::ARRAY_REPEAT_VALUE; MAX_DEPTH],
@@ -146,6 +148,7 @@ impl<'a> ThreadData<'a> {
         self.major_corrhist.clear();
         self.minor_corrhist.clear();
         self.continuation_corrhist.clear();
+        self.l3_offsets.clear();
         self.killer_move_table.fill(None);
         self.root_depth = 0;
         self.completed = 0;

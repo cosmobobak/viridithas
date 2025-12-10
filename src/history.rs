@@ -254,6 +254,25 @@ impl ThreadData<'_> {
 
         (adjustment * 12 / 0x40000) as i32
     }
+
+    /// Update the L3 offset weights based on the difference between
+    /// search score and static eval.
+    #[allow(clippy::cast_precision_loss)]
+    pub fn update_l3_offsets(&mut self, depth: i32, diff: i32) {
+        use crate::nnue::network::output_bucket;
+
+        let bucket = output_bucket(&self.board);
+        let l3_weights = &self.nnue_params.l3_weights[bucket];
+
+        // scale learning rate by depth
+        let base_lr = self.info.conf.l3_offset_lr;
+        let lr = base_lr * (1.0 + depth as f32 / 16.0);
+
+        // convert diff to f32 and normalise by SCALE
+        let diff = diff as f32 / crate::nnue::network::SCALE as f32;
+
+        self.l3_offsets.update(bucket, diff, l3_weights, lr);
+    }
 }
 
 pub fn caphist_piece_type(pos: &Board, mv: Move) -> PieceType {

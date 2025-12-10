@@ -432,3 +432,61 @@ impl DerefMut for ContinuationCorrectionHistoryTable {
         &mut self.table
     }
 }
+
+use crate::nnue::network::{L3_SIZE, OUTPUT_BUCKETS};
+use crate::util::Align64;
+
+/// Maximum magnitude for L3 offset values.
+pub const L3_OFFSET_MAX: f32 = 0.02;
+
+/// Learned offsets to the L3 inputs (l2 outputs), one per output bucket.
+/// These are applied additively before the final dot product with L3 weights.
+#[repr(transparent)]
+pub struct L3OffsetTable {
+    pub offsets: [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
+}
+
+impl L3OffsetTable {
+    pub fn boxed() -> Box<Self> {
+        #![allow(clippy::cast_ptr_alignment)]
+        // SAFETY: f32 arrays can be zeroed.
+        unsafe {
+            let layout = std::alloc::Layout::new::<Self>();
+            let ptr = std::alloc::alloc_zeroed(layout);
+            if ptr.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
+            Box::from_raw(ptr.cast())
+        }
+    }
+
+    pub fn clear(&mut self) {
+        for bucket in &mut self.offsets {
+            bucket.0.fill(0.0);
+        }
+    }
+
+    /// Apply a gradient update with gravity decay toward zero.
+    /// gradient = (target - output) * l3w
+    /// The update pulls the offset toward the gradient direction, while
+    /// gravity pulls it back toward zero.
+    #[inline]
+    pub fn update(
+        &mut self,
+        bucket: usize,
+        diff: f32,
+        l3_weights: &Align64<[f32; L3_SIZE]>,
+        learning_rate: f32,
+    ) {
+        let offset = &mut self.offsets[bucket];
+        for i in 0..L3_SIZE {
+            // Gradient for this weight: diff * l3_weights[i]
+            // (since d(dot(offset, weights))/d(offset[i]) = weights[i])
+            let grad = diff * l3_weights[i];
+            // Gravity decay: pull toward zero proportional to current magnitude
+            let gravity = offset[i] * grad.abs() / L3_OFFSET_MAX;
+            let new_val = learning_rate.mul_add(grad, offset[i]) - gravity;
+            offset[i] = new_val.clamp(-L3_OFFSET_MAX, L3_OFFSET_MAX);
+        }
+    }
+}
