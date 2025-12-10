@@ -1094,11 +1094,11 @@ pub fn alpha_beta<NT: NodeType>(
         // this is a generalisation of stand_pat in quiescence search.
         if !t.ss[height].ttpv
             && depth < 9
-            && !is_decisive(eval)
-            && eval >= beta
-            && eval - rfp_margin(&t.board, &t.info, depth, improving, correction) >= beta
-            && (tt_move.is_none() || tt_capture.is_some())
             && beta > -MINIMUM_TB_WIN_SCORE
+            && eval < MINIMUM_TB_WIN_SCORE
+            && eval >= beta
+            && (tt_move.is_none() || tt_capture.is_some())
+            && eval - rfp_margin(&t.board, &t.info, depth, improving, correction) >= beta
         {
             return beta + (eval - beta) / 3;
         }
