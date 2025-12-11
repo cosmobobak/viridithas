@@ -590,6 +590,8 @@ pub fn quiescence<NT: NodeType>(
         None
     };
 
+    let tt_move = tt_hit.and_then(|e| e.mov);
+
     t.ss[height].ttpv = NT::PV || tt_hit.is_some_and(|hit| hit.was_pv);
 
     let raw_eval;
@@ -662,7 +664,7 @@ pub fn quiescence<NT: NodeType>(
 
     while let Some(m) = move_picker.next(t) {
         t.tt.prefetch(t.board.key_after(m));
-        if !t.board.is_legal(m) {
+        if Some(m) != tt_move && !t.board.is_legal(m) {
             continue;
         }
         let is_tactical = t.board.is_tactical(m);
@@ -1207,7 +1209,7 @@ pub fn alpha_beta<NT: NodeType>(
         move_picker.skip_quiets = true;
         while let Some(m) = move_picker.next(t) {
             t.tt.prefetch(t.board.key_after(m));
-            if !t.board.is_legal(m) {
+            if Some(m) != tt_move && !t.board.is_legal(m) {
                 continue;
             }
             t.ss[height].searching = Some(m);
@@ -1270,7 +1272,7 @@ pub fn alpha_beta<NT: NodeType>(
         }
 
         t.tt.prefetch(t.board.key_after(m));
-        if !t.board.is_legal(m) {
+        if Some(m) != tt_move && !t.board.is_legal(m) {
             continue;
         }
 
