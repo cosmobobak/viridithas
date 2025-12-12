@@ -32,7 +32,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 
-sns.set_style("whitegrid")
+# sns.set_style("whitegrid")
+
+plt.rcParams["font.family"] = "TeX Gyre Heros"
 
 
 def load_histogram_data(csv_path: Path) -> tuple[np.ndarray, np.ndarray]:
@@ -62,7 +64,7 @@ def plot_comparison(
     bin_width: int,
 ) -> None:
     """Create and display/save comparison plot with curves."""
-    fig, ax = plt.subplots(figsize=(12, 7))
+    fig, ax = plt.subplots(figsize=(10, 8))
 
     # Use red-to-blue colormap
     cmap = plt.cm.coolwarm
@@ -87,19 +89,32 @@ def plot_comparison(
             alpha=0.8,
         )
 
-    max_eval = 3500
+    max_eval = 2500
     ax.set_xlim(-50, max_eval)
+    ax.set_ylim(0, None)
 
     # Formatting
-    ax.set_xlabel("Network output", fontsize=12, fontweight="bold")
-    ax.set_ylabel("Percentage of positions (%)", fontsize=12, fontweight="bold")
-    ax.set_title("evaluation scale, 10cp bucketed", fontsize=14, fontweight="bold")
-    ax.grid(axis="both", alpha=0.3, linestyle="--")
+    ax.set_xlabel("Absolute evaluation", fontsize=12, fontweight="bold")
+    ax.set_ylabel("Share of positions", fontsize=12, fontweight="bold")
+    ax.set_yticks([])
 
     # Add zero line
-    ax.axvline(x=0, color="red", linestyle="--", linewidth=1.5, alpha=0.5, label="0 cp")
+    # ax.axvline(x=0, color="red", linestyle="--", linewidth=1.5, alpha=0.5, label="0 cp")
 
     ax.legend(loc="upper right", fontsize=10)
+
+    ax.set_facecolor("white")
+    fig.set_facecolor("white")
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_color("black")
+    ax.spines["left"].set_linewidth(1.5)
+    ax.spines["bottom"].set_color("black")
+    ax.spines["bottom"].set_linewidth(1.5)
+
+    ax.tick_params(colors="black")
+    ax.grid(False)
 
     plt.tight_layout()
 
@@ -140,17 +155,18 @@ def main() -> None:
 
     # Load all datasets
     datasets = []
-    for path in input_paths:
+    for path in sorted(input_paths):
         if not path.exists():
             print(f"Error: Input file '{path}' does not exist", file=sys.stderr)
             sys.exit(1)
 
         print(f"Loading {path}...")
         bins, counts = load_histogram_data(path)
-        # Use stem without 'hist-' prefix as the label
-        name = path.stem
-        if name.startswith("hist-"):
-            name = name[5:]
+        # lambda-X.X-b800.txt -> λ = X.X
+        if "lambda" in path.stem:
+            name = f"λ = {path.stem[7:10]}"
+        else:
+            name = path.stem
         datasets.append((name, bins, counts))
         print(f"  {len(bins)} bins, {counts.sum():,} positions")
 
