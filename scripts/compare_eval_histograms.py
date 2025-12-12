@@ -89,9 +89,9 @@ def plot_comparison(
             alpha=0.8,
         )
 
-    max_eval = 2500
+    max_eval = 3500
     ax.set_xlim(-50, max_eval)
-    ax.set_ylim(0, None)
+    ax.set_ylim(-0.01, None)
 
     # Formatting
     ax.set_xlabel("Absolute evaluation", fontsize=12, fontweight="bold")
