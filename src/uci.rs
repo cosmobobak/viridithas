@@ -59,10 +59,8 @@ static STDIN_READER_THREAD_KEEP_RUNNING: AtomicBool = AtomicBool::new(true);
 pub static QUIT: AtomicBool = AtomicBool::new(false);
 pub static GO_MATE_MAX_DEPTH: AtomicUsize = AtomicUsize::new(MAX_DEPTH);
 pub static PRETTY_PRINT: AtomicBool = AtomicBool::new(true);
-pub static SYZYGY_PROBE_LIMIT: AtomicU8 = AtomicU8::new(6);
+pub static SYZYGY_PROBE_LIMIT: AtomicU8 = AtomicU8::new(7);
 pub static SYZYGY_PROBE_DEPTH: AtomicI32 = AtomicI32::new(1);
-pub static SYZYGY_PATH: Mutex<String> = Mutex::new(String::new());
-pub static SYZYGY_ENABLED: AtomicBool = AtomicBool::new(false);
 pub static CONTEMPT: AtomicI32 = AtomicI32::new(0);
 
 #[derive(Debug, PartialEq, Eq)]
@@ -73,7 +71,6 @@ enum UciError {
     UnexpectedCommandTermination(String),
     InvalidFormat(String),
     UnknownCommand(String),
-    InternalError(String),
     IllegalValue(String),
 }
 
@@ -118,7 +115,6 @@ impl Display for UciError {
             }
             Self::InvalidFormat(s) => write!(f, "InvalidFormat: {s}"),
             Self::UnknownCommand(s) => write!(f, "UnknownCommand: {s}"),
-            Self::InternalError(s) => write!(f, "InternalError: {s}"),
             Self::IllegalValue(s) => write!(f, "IllegalValue: {s}"),
         }
     }
@@ -382,20 +378,12 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> anyhow::Result<SetOpti
         "SyzygyPath" => {
             let path = opt_value.to_string();
             tablebases::probe::init(&path);
-            if let Ok(mut lock) = SYZYGY_PATH.lock() {
-                *lock = path;
-                SYZYGY_ENABLED.store(true, Ordering::SeqCst);
-            } else {
-                bail!(UciError::InternalError(
-                    "failed to take lock on SyzygyPath".into()
-                ));
-            }
         }
         "SyzygyProbeLimit" => {
             let value: u8 = opt_value.parse()?;
-            if value > 6 {
+            if value > 7 {
                 bail!(UciError::IllegalValue(
-                    "SyzygyProbeLimit value must be between 0 and 6".to_string()
+                    "SyzygyProbeLimit value must be between 0 and 7".to_string()
                 ));
             }
             SYZYGY_PROBE_LIMIT.store(value, Ordering::SeqCst);
@@ -588,7 +576,7 @@ fn print_uci_response(info: &SearchInfo, full: bool) {
     println!("option name Threads type spin default 1 min 1 max 512");
     println!("option name PrettyPrint type check default false");
     println!("option name SyzygyPath type string default <empty>");
-    println!("option name SyzygyProbeLimit type spin default 6 min 0 max 6");
+    println!("option name SyzygyProbeLimit type spin default 7 min 0 max 7");
     println!("option name SyzygyProbeDepth type spin default 1 min 1 max 100");
     println!("option name Contempt type spin default 0 min -10000 max 10000");
     println!("option name Ponder type check default false");
@@ -668,12 +656,6 @@ pub fn main_loop() -> anyhow::Result<()> {
                 println!("Hash: {}", tt.size() / MEGABYTE);
                 println!("Threads: {}", thread_data.len());
                 println!("PrettyPrint: {}", PRETTY_PRINT.load(Ordering::SeqCst));
-                println!(
-                    "SyzygyPath: {}",
-                    SYZYGY_PATH
-                        .lock()
-                        .map_err(|_| anyhow!("failed to lock syzygy path"))?
-                );
                 println!(
                     "SyzygyProbeLimit: {}",
                     SYZYGY_PROBE_LIMIT.load(Ordering::SeqCst)

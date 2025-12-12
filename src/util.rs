@@ -1,5 +1,3 @@
-pub mod depth;
-
 use std::{
     ops::{Deref, DerefMut},
     sync::atomic::{AtomicU64, Ordering},

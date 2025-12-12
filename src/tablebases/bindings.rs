@@ -99,31 +99,24 @@ pub const SIG_ATOMIC_MAX: u32 = 2147483647;
 pub const SIZE_MAX: i32 = -1;
 pub const WINT_MIN: u32 = 0;
 pub const WINT_MAX: u32 = 4294967295;
-pub const TB_VALUE_PAWN: u32 = 100;
-pub const TB_VALUE_MATE: u32 = 32000;
-pub const TB_VALUE_INFINITE: u32 = 32767;
-pub const TB_VALUE_DRAW: u32 = 0;
-pub const TB_MAX_MATE_PLY: u32 = 255;
 pub const __bool_true_false_are_defined: u32 = 1;
 pub const true_: u32 = 1;
 pub const false_: u32 = 0;
-pub const TB_MAX_MOVES: u32 = 193;
+pub const PYRRHIC_FLAG_NONE: u32 = 0;
+pub const PYRRHIC_FLAG_QPROMO: u32 = 1;
+pub const PYRRHIC_FLAG_RPROMO: u32 = 2;
+pub const PYRRHIC_FLAG_BPROMO: u32 = 3;
+pub const PYRRHIC_FLAG_NPROMO: u32 = 4;
+pub const PYRRHIC_FLAG_ENPASS: u32 = 8;
+pub const PYRRHIC_SHIFT_TO: u32 = 0;
+pub const PYRRHIC_SHIFT_FROM: u32 = 6;
+pub const PYRRHIC_SHIFT_FLAGS: u32 = 12;
+pub const PYRRHIC_MASK_TO: u32 = 63;
+pub const PYRRHIC_MASK_FROM: u32 = 63;
+pub const PYRRHIC_MASK_FLAGS: u32 = 15;
+pub const PYRRHIC_MASK_PROMO_FLAGS: u32 = 7;
 pub const TB_MAX_CAPTURES: u32 = 64;
 pub const TB_MAX_PLY: u32 = 256;
-pub const TB_CASTLING_K: u32 = 1;
-pub const TB_CASTLING_Q: u32 = 2;
-pub const TB_CASTLING_k: u32 = 4;
-pub const TB_CASTLING_q: u32 = 8;
-pub const TB_LOSS: u32 = 0;
-pub const TB_BLESSED_LOSS: u32 = 1;
-pub const TB_DRAW: u32 = 2;
-pub const TB_CURSED_WIN: u32 = 3;
-pub const TB_WIN: u32 = 4;
-pub const TB_PROMOTES_NONE: u32 = 0;
-pub const TB_PROMOTES_QUEEN: u32 = 1;
-pub const TB_PROMOTES_ROOK: u32 = 2;
-pub const TB_PROMOTES_BISHOP: u32 = 3;
-pub const TB_PROMOTES_KNIGHT: u32 = 4;
 pub const TB_RESULT_WDL_MASK: u32 = 15;
 pub const TB_RESULT_TO_MASK: u32 = 1008;
 pub const TB_RESULT_FROM_MASK: u32 = 64512;
@@ -136,6 +129,14 @@ pub const TB_RESULT_FROM_SHIFT: u32 = 10;
 pub const TB_RESULT_PROMOTES_SHIFT: u32 = 16;
 pub const TB_RESULT_EP_SHIFT: u32 = 19;
 pub const TB_RESULT_DTZ_SHIFT: u32 = 20;
+pub const PYRRHIC_BLACK: u32 = 0;
+pub const PYRRHIC_WHITE: u32 = 1;
+pub const TB_MAX_MOVES: u32 = 256;
+pub const TB_LOSS: u32 = 0;
+pub const TB_BLESSED_LOSS: u32 = 1;
+pub const TB_DRAW: u32 = 2;
+pub const TB_CURSED_WIN: u32 = 3;
+pub const TB_WIN: u32 = 4;
 pub const TB_RESULT_FAILED: u32 = 4294967295;
 pub type __u_char = ::std::os::raw::c_uchar;
 pub type __u_short = ::std::os::raw::c_ushort;
@@ -223,133 +224,127 @@ pub type uint_fast64_t = ::std::os::raw::c_ulong;
 pub type intmax_t = __intmax_t;
 pub type uintmax_t = __uintmax_t;
 unsafe extern "C" {
-    pub static index64: [::std::os::raw::c_int; 64usize];
+    pub fn viridithas_popcount(bb: u64) -> u32;
 }
 unsafe extern "C" {
-    pub fn tb_init_impl(_path: *const ::std::os::raw::c_char) -> bool;
+    pub fn viridithas_lsb(bb: u64) -> u32;
 }
 unsafe extern "C" {
-    pub fn tb_probe_wdl_impl(
-        _white: u64,
-        _black: u64,
-        _kings: u64,
-        _queens: u64,
-        _rooks: u64,
-        _bishops: u64,
-        _knights: u64,
-        _pawns: u64,
-        _ep: ::std::os::raw::c_uint,
-        _turn: bool,
-    ) -> ::std::os::raw::c_uint;
+    pub fn viridithas_poplsb(bb: *mut u64) -> u64;
 }
 unsafe extern "C" {
-    pub fn tb_probe_root_impl(
-        _white: u64,
-        _black: u64,
-        _kings: u64,
-        _queens: u64,
-        _rooks: u64,
-        _bishops: u64,
-        _knights: u64,
-        _pawns: u64,
-        _rule50: ::std::os::raw::c_uint,
-        _ep: ::std::os::raw::c_uint,
-        _turn: bool,
-        _results: *mut ::std::os::raw::c_uint,
-    ) -> ::std::os::raw::c_uint;
+    pub fn viridithas_pawn_attacks(sq: u32, colour: bool) -> u64;
 }
 unsafe extern "C" {
-    pub static mut TB_LARGEST: ::std::os::raw::c_uint;
+    pub fn viridithas_knight_attacks(sq: u32) -> u64;
 }
 unsafe extern "C" {
-    pub fn tb_init(_path: *const ::std::os::raw::c_char) -> bool;
+    pub fn viridithas_bishop_attacks(sq: u32, occupied: u64) -> u64;
 }
 unsafe extern "C" {
-    pub fn tb_free();
+    pub fn viridithas_rook_attacks(sq: u32, occupied: u64) -> u64;
 }
 unsafe extern "C" {
-    pub fn tb_probe_wdl(
-        _white: u64,
-        _black: u64,
-        _kings: u64,
-        _queens: u64,
-        _rooks: u64,
-        _bishops: u64,
-        _knights: u64,
-        _pawns: u64,
-        _rule50: ::std::os::raw::c_uint,
-        _castling: ::std::os::raw::c_uint,
-        _ep: ::std::os::raw::c_uint,
-        _turn: bool,
-    ) -> ::std::os::raw::c_uint;
+    pub fn viridithas_queen_attacks(sq: u32, occupied: u64) -> u64;
 }
 unsafe extern "C" {
-    pub fn tb_probe_root(
-        _white: u64,
-        _black: u64,
-        _kings: u64,
-        _queens: u64,
-        _rooks: u64,
-        _bishops: u64,
-        _knights: u64,
-        _pawns: u64,
-        _rule50: ::std::os::raw::c_uint,
-        _castling: ::std::os::raw::c_uint,
-        _ep: ::std::os::raw::c_uint,
-        _turn: bool,
-        _results: *mut ::std::os::raw::c_uint,
-    ) -> ::std::os::raw::c_uint;
+    pub fn viridithas_king_attacks(sq: u32) -> u64;
 }
-pub type TbMove = u16;
+pub type PyrrhicMove = u16;
+#[doc = " For tb_probe_root_dtz() and tb_probe_root_wdl()"]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct TbRootMove {
-    pub move_: TbMove,
-    pub pv: [TbMove; 256usize],
-    pub pvSize: ::std::os::raw::c_uint,
-    pub tbScore: i32,
+    pub move_: PyrrhicMove,
     pub tbRank: i32,
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct TbRootMoves {
     pub size: ::std::os::raw::c_uint,
-    pub moves: [TbRootMove; 193usize],
+    pub moves: [TbRootMove; 256usize],
+}
+unsafe extern "C" {
+    #[doc = " Init/Deinit for Pyrrhic"]
+    pub fn tb_init(_path: *const ::std::os::raw::c_char) -> bool;
+}
+unsafe extern "C" {
+    pub fn tb_free();
+}
+unsafe extern "C" {
+    #[doc = " Pyrrhic Tablebase Probing Functions"]
+    pub fn tb_probe_wdl(
+        white: u64,
+        black: u64,
+        kings: u64,
+        queens: u64,
+        rooks: u64,
+        bishops: u64,
+        knights: u64,
+        pawns: u64,
+        ep: ::std::os::raw::c_uint,
+        turn: bool,
+    ) -> ::std::os::raw::c_uint;
+}
+unsafe extern "C" {
+    pub fn tb_probe_root(
+        white: u64,
+        black: u64,
+        kings: u64,
+        queens: u64,
+        rooks: u64,
+        bishops: u64,
+        knights: u64,
+        pawns: u64,
+        rule50: ::std::os::raw::c_uint,
+        ep: ::std::os::raw::c_uint,
+        turn: bool,
+        results: *mut ::std::os::raw::c_uint,
+    ) -> ::std::os::raw::c_uint;
 }
 unsafe extern "C" {
     pub fn tb_probe_root_dtz(
-        _white: u64,
-        _black: u64,
-        _kings: u64,
-        _queens: u64,
-        _rooks: u64,
-        _bishops: u64,
-        _knights: u64,
-        _pawns: u64,
-        _rule50: ::std::os::raw::c_uint,
-        _castling: ::std::os::raw::c_uint,
-        _ep: ::std::os::raw::c_uint,
-        _turn: bool,
+        white: u64,
+        black: u64,
+        kings: u64,
+        queens: u64,
+        rooks: u64,
+        bishops: u64,
+        knights: u64,
+        pawns: u64,
+        rule50: ::std::os::raw::c_uint,
+        ep: ::std::os::raw::c_uint,
+        turn: bool,
         hasRepeated: bool,
-        useRule50: bool,
-        _results: *mut TbRootMoves,
+        results: *mut TbRootMoves,
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
     pub fn tb_probe_root_wdl(
-        _white: u64,
-        _black: u64,
-        _kings: u64,
-        _queens: u64,
-        _rooks: u64,
-        _bishops: u64,
-        _knights: u64,
-        _pawns: u64,
-        _rule50: ::std::os::raw::c_uint,
-        _castling: ::std::os::raw::c_uint,
-        _ep: ::std::os::raw::c_uint,
-        _turn: bool,
+        white: u64,
+        black: u64,
+        kings: u64,
+        queens: u64,
+        rooks: u64,
+        bishops: u64,
+        knights: u64,
+        pawns: u64,
+        rule50: ::std::os::raw::c_uint,
+        ep: ::std::os::raw::c_uint,
+        turn: bool,
         useRule50: bool,
-        _results: *mut TbRootMoves,
+        results: *mut TbRootMoves,
     ) -> ::std::os::raw::c_int;
+}
+unsafe extern "C" {
+    pub static mut TB_LARGEST: ::std::os::raw::c_int;
+}
+unsafe extern "C" {
+    pub static mut TB_NUM_WDL: ::std::os::raw::c_int;
+}
+unsafe extern "C" {
+    pub static mut TB_NUM_DTM: ::std::os::raw::c_int;
+}
+unsafe extern "C" {
+    pub static mut TB_NUM_DTZ: ::std::os::raw::c_int;
 }

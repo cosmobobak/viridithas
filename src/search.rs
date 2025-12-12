@@ -642,8 +642,7 @@ pub fn quiescence<NT: NodeType>(
     }
 
     if stand_pat >= beta {
-        // return stand_pat instead of beta, this is fail-soft
-        return stand_pat;
+        return i32::midpoint(stand_pat, beta);
     }
 
     let original_alpha = alpha;
@@ -721,6 +720,10 @@ pub fn quiescence<NT: NodeType>(
         #[cfg(debug_assertions)]
         t.board.assert_mated();
         return mated_in(height);
+    }
+
+    if !is_decisive(best_score) && best_score > beta {
+        best_score = i32::midpoint(best_score, beta);
     }
 
     let flag = if best_score >= beta {
@@ -875,8 +878,8 @@ pub fn alpha_beta<NT: NodeType>(
     if !NT::ROOT
         && excluded.is_none()
         && n_men <= cardinality
-        && uci::SYZYGY_ENABLED.load(Ordering::SeqCst)
-        && (depth >= uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst) || n_men < cardinality)
+        && tablebases::probe::SYZYGY_ENABLED.load(Ordering::Relaxed)
+        && (depth >= uci::SYZYGY_PROBE_DEPTH.load(Ordering::Relaxed) || n_men < cardinality)
         && let Some(wdl) = tablebases::probe::get_wdl(&t.board)
     {
         t.info.tbhits.increment();
@@ -955,7 +958,6 @@ pub fn alpha_beta<NT: NodeType>(
         }
         static_eval = adj_shuffle(t, raw_eval, clock) + correction;
         if tte.value != VALUE_NONE
-            && !is_decisive(tte.value)
             && match tte.bound {
                 Bound::Upper => tte.value < static_eval,
                 Bound::Lower => tte.value > static_eval,
@@ -1092,12 +1094,13 @@ pub fn alpha_beta<NT: NodeType>(
         // this is a generalisation of stand_pat in quiescence search.
         if !t.ss[height].ttpv
             && depth < 9
-            && eval >= beta
-            && static_eval - rfp_margin(&t.board, &t.info, depth, improving, correction) >= beta
-            && (tt_move.is_none() || tt_capture.is_some())
             && beta > -MINIMUM_TB_WIN_SCORE
+            && eval < MINIMUM_TB_WIN_SCORE
+            && eval >= beta
+            && (tt_move.is_none() || tt_capture.is_some())
+            && eval - rfp_margin(&t.board, &t.info, depth, improving, correction) >= beta
         {
-            return beta + (static_eval - beta) / 3;
+            return beta + (eval - beta) / 3;
         }
 
         // null-move pruning.
@@ -1393,13 +1396,12 @@ pub fn alpha_beta<NT: NodeType>(
                 // multi-cut: if a move other than the best one beats beta,
                 // then we can cut with relatively high confidence.
                 return value;
+            } else if tte.value >= beta {
+                // a sort of light multi-cut.
+                extension = -3 + i32::from(NT::PV);
             } else if cut_node {
                 // produce a strong negative extension if we didn't fail low on a cut-node.
                 extension = -2;
-            } else if tte.value >= beta || tte.value <= alpha {
-                // the tt_value >= beta condition is a sort of "light multi-cut"
-                // the tt_value <= alpha condition is from Weiss (https://github.com/TerjeKir/weiss/compare/2a7b4ed0...effa8349/).
-                extension = -1;
             } else {
                 // no extension.
                 extension = 0;
@@ -1458,7 +1460,7 @@ pub fn alpha_beta<NT: NodeType>(
             };
             // perform a zero-window search
             let mut new_depth = depth + extension;
-            let reduced_depth = (new_depth - r).clamp(0, new_depth);
+            let reduced_depth = (new_depth - r).clamp(0, new_depth + 1);
             score = -alpha_beta::<OffPV>(l_pv, t, reduced_depth, -alpha - 1, -alpha, true);
             // simple reduction for any future searches
             t.ss[height].reduction = 1024;
@@ -1473,12 +1475,15 @@ pub fn alpha_beta<NT: NodeType>(
                 // depending on the value that the reduced search kicked out,
                 // we might want to do a deeper search, or a shallower search.
                 new_depth += i32::from(do_deeper_search) - i32::from(do_shallower_search);
+                t.ss[height].reduction =
+                    1024 * (1 + i32::from(do_shallower_search) - i32::from(do_deeper_search));
                 // check if we're actually going to do a deeper search than before
                 // (no point if the re-search is the same as the normal one lol)
                 if new_depth - 1 > reduced_depth {
                     score =
                         -alpha_beta::<OffPV>(l_pv, t, new_depth - 1, -alpha - 1, -alpha, !cut_node);
                 }
+                t.ss[height].reduction = 1024;
 
                 if is_quiet && (score <= alpha || score >= beta) {
                     t.update_cont_hist_single(hist_to, moved, new_depth, height, score > alpha);
@@ -1861,6 +1866,12 @@ pub fn static_exchange_eval(board: &Board, conf: &Config, m: Move, threshold: i3
 }
 
 pub fn adj_shuffle(t: &ThreadData, raw_eval: i32, clock: u8) -> i32 {
+    if cfg!(feature = "datagen") {
+        // during datagen, we want to use raw evals only.
+        // source: chef.
+        return raw_eval;
+    }
+
     // scale down the value estimate when there's not much
     // material left - this will incentivize keeping material
     // on the board if we have winning chances, and trading
