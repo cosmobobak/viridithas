@@ -64,7 +64,9 @@ def plot_comparison(
     """Create and display/save comparison plot with curves."""
     fig, ax = plt.subplots(figsize=(12, 7))
 
-    colors = plt.cm.tab10.colors
+    # Use red-to-blue colormap
+    cmap = plt.cm.coolwarm
+    n_datasets = len(datasets)
 
     for i, (name, bins, counts) in enumerate(datasets):
         # Normalize counts to percentages for fair comparison
@@ -74,7 +76,8 @@ def plot_comparison(
         # Use bin centers for the curve
         bin_centers = bins + bin_width / 2
 
-        color = colors[i % len(colors)]
+        # Interpolate color from red (0) to blue (1)
+        color = cmap(i / (n_datasets - 1)) if n_datasets > 1 else cmap(0.5)
         ax.plot(
             bin_centers,
             percentages,
