@@ -1083,8 +1083,7 @@ impl From<&Board> for MaterialConfiguration {
             let highest_piece = subslice
                 .iter()
                 .enumerate()
-                .filter(|(_, v)| **v > 0)
-                .next_back()
+                .rfind(|(_, v)| **v > 0)
                 .unwrap_or((0, &0))
                 .0;
             count * 10 + highest_piece as u64
