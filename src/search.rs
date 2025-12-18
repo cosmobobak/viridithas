@@ -1764,10 +1764,9 @@ pub fn static_exchange_eval(board: &Board, conf: &Config, m: Move, threshold: i3
     let to = m.to();
     let bbs = &board.state.bbs;
 
-    let mut next_victim = m.promotion_type().map_or_else(
-        || board.state.mailbox[from].unwrap().piece_type(),
-        |promo| promo,
-    );
+    let mut next_victim = m
+        .promotion_type()
+        .unwrap_or_else(|| board.state.mailbox[from].unwrap().piece_type());
 
     let mut balance = board.estimated_see(conf, m) - threshold;
 
@@ -1984,8 +1983,7 @@ fn readout_info(
         if pv_string_len > max_length {
             let final_space = pv_string
                 .match_indices(' ')
-                .filter(|(i, _)| *i < max_length)
-                .next_back()
+                .rfind(|(i, _)| *i < max_length)
                 .map_or(0, |(i, _)| i);
             pv_string.truncate(final_space);
         }
