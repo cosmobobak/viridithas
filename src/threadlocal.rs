@@ -22,9 +22,8 @@ use crate::{
 
 #[repr(align(64))]
 pub struct ThreadData<'a> {
-    // stack array is right-padded by one because singular verification
-    // will try to access the next ply in an edge case.
-    pub ss: [StackEntry; MAX_DEPTH + 1],
+    // stack array is right-padded.
+    pub ss: [StackEntry; MAX_DEPTH + 2],
     pub banned_nmp: u8,
     pub nnue: Box<nnue::network::NNUEState>,
     pub nnue_params: &'static NNUEParams,

@@ -825,6 +825,8 @@ pub fn alpha_beta<NT: NodeType>(
         }
     }
 
+    t.ss[height + 2].cut_count = 0;
+
     let clock = t.board.fifty_move_counter();
 
     let excluded = t.ss[height].excluded;
@@ -1451,6 +1453,8 @@ pub fn alpha_beta<NT: NodeType>(
                 r -= i32::from(t.board.in_check()) * t.info.conf.lmr_check_mul;
                 // reduce less when the static eval is way off-base
                 r -= correction.abs() * t.info.conf.lmr_corr_mul / 16384;
+                // reduce more if the next ply's cut a lot
+                r += i32::from(t.ss[height + 1].cut_count > 2) * 1024;
 
                 t.ss[height].reduction = r;
                 r / 1024
@@ -1531,6 +1535,7 @@ pub fn alpha_beta<NT: NodeType>(
             if alpha >= beta {
                 #[cfg(feature = "stats")]
                 t.info.log_fail_high::<false>(moves_made - 1);
+                t.ss[height].cut_count += 1;
                 break;
             }
         }
