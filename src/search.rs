@@ -1535,7 +1535,7 @@ pub fn alpha_beta<NT: NodeType>(
             if alpha >= beta {
                 #[cfg(feature = "stats")]
                 t.info.log_fail_high::<false>(moves_made - 1);
-                t.ss[height].cut_count += 1;
+                t.ss[height].cut_count += u8::from(height > 2);
                 break;
             }
         }
