@@ -12,7 +12,9 @@ fn prep_net() {
         // check if net exists
         if let Err(e) = std::fs::metadata(net_path) {
             eprintln!("Couldn't read default net during build script! {e}");
-            eprintln!("Note: viri looks for a zstd-compressed default net in the project root called \"viridithas.nnue.zst\".");
+            eprintln!(
+                "Note: viri looks for a zstd-compressed default net in the project root called \"viridithas.nnue.zst\"."
+            );
         }
         return;
     }
@@ -27,8 +29,8 @@ fn build_dependencies() {
 #[cfg(feature = "syzygy")]
 fn build_fathom() {
     let cc = &mut cc::Build::new();
-    cc.file("./deps/fathom/src/tbprobe.c");
-    cc.include("./deps/fathom/src/");
+    cc.file("./deps/pyrrhic/tbprobe.c");
+    cc.include("./deps/pyrrhic/");
     cc.define("_CRT_SECURE_NO_WARNINGS", None);
 
     // MSVC doesn't support stdatomic.h, so use clang on Windows
@@ -47,7 +49,7 @@ fn generate_bindings() {
 #[cfg(all(feature = "bindgen", feature = "syzygy"))]
 fn generate_fathom_bindings() {
     let bindings = bindgen::Builder::default()
-        .header("./deps/fathom/src/tbprobe.h")
+        .header("./deps/pyrrhic/tbprobe.h")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .layout_tests(false)
         .generate()

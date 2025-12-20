@@ -6,14 +6,14 @@ use std::{
     sync::atomic::Ordering,
 };
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 
-use crate::{
-    chess::board::{movegen::MoveList, Board},
-    chess::CHESS960,
-};
 #[cfg(test)]
-use crate::{searchinfo::SearchInfo, threadlocal::ThreadData};
+use crate::threadlocal::ThreadData;
+use crate::{
+    chess::CHESS960,
+    chess::board::{Board, movegen::MoveList},
+};
 
 pub fn perft(pos: &mut Board, depth: usize) -> u64 {
     #[cfg(debug_assertions)]
@@ -45,48 +45,43 @@ pub fn perft(pos: &mut Board, depth: usize) -> u64 {
 }
 
 #[cfg(test)]
-pub fn nnue_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
+pub fn nnue_perft(t: &mut ThreadData, depth: usize) -> u64 {
     #[cfg(debug_assertions)]
-    pos.check_validity().unwrap();
-    // debug_assert!(pos.check_nnue_coherency(&t.nnue));
+    t.board.check_validity().unwrap();
+    // debug_assert!(t.board.check_nnue_coherency(&t.nnue));
 
     if depth == 0 {
         return 1;
     }
 
     let mut ml = MoveList::new();
-    pos.generate_moves(&mut ml);
+    t.board.generate_moves(&mut ml);
 
     let mut count = 0;
 
     if depth == 1 {
-        return ml.iter_moves().filter(|&m| pos.is_legal(*m)).count() as u64;
+        return ml.iter_moves().filter(|&m| t.board.is_legal(*m)).count() as u64;
     }
 
     for &m in ml.iter_moves() {
-        if !pos.is_legal(m) {
+        if !t.board.is_legal(m) {
             continue;
         }
-        pos.make_move_nnue(m, t);
-        count += nnue_perft(pos, t, depth - 1);
-        pos.unmake_move_nnue(t);
+        t.board.make_move_nnue(m, &mut t.nnue);
+        count += nnue_perft(t, depth - 1);
+        t.board.unmake_move_nnue(&mut t.nnue);
     }
 
     count
 }
 
 #[cfg(test)]
-pub fn movepicker_perft(
-    pos: &mut Board,
-    t: &mut ThreadData,
-    info: &SearchInfo,
-    depth: usize,
-) -> u64 {
+pub fn movepicker_perft(t: &mut ThreadData, depth: usize) -> u64 {
     use crate::movepicker::MovePicker;
 
     #[cfg(debug_assertions)]
-    pos.check_validity().unwrap();
-    // debug_assert!(pos.check_nnue_coherency(&t.nnue));
+    t.board.check_validity().unwrap();
+    // debug_assert!(t.board.check_nnue_coherency(&t.nnue));
 
     if depth == 0 {
         return 1;
@@ -95,13 +90,13 @@ pub fn movepicker_perft(
     let mut ml = MovePicker::new(None, None, 0);
 
     let mut count = 0;
-    while let Some(m) = ml.next(pos, t, info) {
-        if !pos.is_legal(m) {
+    while let Some(m) = ml.next(t) {
+        if !t.board.is_legal(m) {
             continue;
         }
-        pos.make_move(m, t);
-        count += movepicker_perft(pos, t, info, depth - 1);
-        pos.unmake_move(t);
+        t.board.make_move(m, &mut t.nnue);
+        count += movepicker_perft(t, depth - 1);
+        t.board.unmake_move(&mut t.nnue);
     }
 
     count
@@ -116,7 +111,7 @@ pub fn gamut() -> anyhow::Result<()> {
     println!("running perft on perftsuite.epd");
     let f =
         File::open("epds/perftsuite.epd").with_context(|| "Failed to open epds/perftsuite.epd")?;
-    let mut pos = Board::new();
+    let mut pos = Board::empty();
     for line in BufReader::new(f).lines() {
         let line = line?;
         let mut parts = line.split(';');
@@ -146,7 +141,7 @@ pub fn gamut() -> anyhow::Result<()> {
     println!("running perft on frcperftsuite.epd");
     CHESS960.store(true, Ordering::SeqCst);
     let f = File::open("epds/frcperftsuite.epd").unwrap();
-    let mut pos = Board::new();
+    let mut pos = Board::empty();
     for line in BufReader::new(f).lines() {
         let line = line.unwrap();
         let mut parts = line.split(';');
@@ -178,8 +173,9 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicU64};
 
     use crate::{
-        chess::{chessmove::Move, piece::PieceType, types::Square, CHESS960},
+        chess::{CHESS960, chessmove::Move, piece::PieceType, types::Square},
         nnue::network::NNUEParams,
+        threadpool,
         transpositiontable::TT,
         util::MEGABYTE,
     };
@@ -190,8 +186,7 @@ mod tests {
         const TEST_FEN: &str =
             "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
 
-        std::env::set_var("RUST_BACKTRACE", "1");
-        let mut pos = Board::new();
+        let mut pos = Board::empty();
         pos.set_from_fen(TEST_FEN).unwrap();
         assert_eq!(perft(&mut pos, 1), 48, "got {}", {
             pos.legal_moves()
@@ -209,8 +204,7 @@ mod tests {
     fn perft_start_position() {
         use super::*;
 
-        let mut pos = Board::new();
-        std::env::set_var("RUST_BACKTRACE", "1");
+        let mut pos = Board::empty();
         pos.set_startpos();
         assert_eq!(perft(&mut pos, 1), 20, "got {}", {
             pos.legal_moves()
@@ -228,20 +222,32 @@ mod tests {
     fn perft_nnue_start_position() {
         use super::*;
 
-        let mut pos = Board::default();
+        let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16, 1);
+        tt.resize(MEGABYTE * 16, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
-        let mut t = ThreadData::new(0, &pos, tt.view(), nnue_params);
-        assert_eq!(nnue_perft(&mut pos, &mut t, 1), 20, "got {}", {
-            pos.legal_moves()
+        let stopped = AtomicBool::new(false);
+        let nodes = AtomicU64::new(0);
+        let tbhits = AtomicU64::new(0);
+        let mut t = ThreadData::new(
+            0,
+            Board::default(),
+            tt.view(),
+            nnue_params,
+            &stopped,
+            &nodes,
+            &tbhits,
+        );
+        assert_eq!(nnue_perft(&mut t, 1), 20, "got {}", {
+            t.board
+                .legal_moves()
                 .into_iter()
                 .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
-        assert_eq!(nnue_perft(&mut pos, &mut t, 2), 400);
-        assert_eq!(nnue_perft(&mut pos, &mut t, 3), 8_902);
+        assert_eq!(nnue_perft(&mut t, 2), 400);
+        assert_eq!(nnue_perft(&mut t, 3), 8_902);
         // assert_eq!(nnue_perft(&mut pos, &mut t, 4), 197_281);
     }
 
@@ -249,29 +255,26 @@ mod tests {
     fn perft_movepicker_start_position() {
         use super::*;
 
-        let mut pos = Board::default();
+        let pos = Board::default();
+        let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16, 1);
+        tt.resize(MEGABYTE * 16, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
-        let mut t = ThreadData::new(0, &pos, tt.view(), nnue_params);
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
-        let info = SearchInfo::new(&stopped, &nodes);
-        assert_eq!(
-            movepicker_perft(&mut pos, &mut t, &info, 1),
-            20,
-            "got {}",
-            {
-                pos.legal_moves()
-                    .into_iter()
-                    .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            }
-        );
-        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 2), 400);
-        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 3), 8_902);
-        // assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 4), 197_281);
+        let tbhits = AtomicU64::new(0);
+        let mut t = ThreadData::new(0, pos, tt.view(), nnue_params, &stopped, &nodes, &tbhits);
+        assert_eq!(movepicker_perft(&mut t, 1), 20, "got {}", {
+            t.board
+                .legal_moves()
+                .into_iter()
+                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        });
+        assert_eq!(movepicker_perft(&mut t, 2), 400);
+        assert_eq!(movepicker_perft(&mut t, 3), 8_902);
+        // assert_eq!(movepicker_perft(&mut t, &info, 4), 197_281);
     }
 
     #[test]
@@ -280,31 +283,27 @@ mod tests {
         const TEST_FEN: &str =
             "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
 
-        std::env::set_var("RUST_BACKTRACE", "1");
-        let mut pos = Board::new();
+        let mut pos = Board::empty();
         pos.set_from_fen(TEST_FEN).unwrap();
+        let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16, 1);
+        tt.resize(MEGABYTE * 16, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
-        let mut t = ThreadData::new(0, &pos, tt.view(), nnue_params);
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
-        let info = SearchInfo::new(&stopped, &nodes);
-        assert_eq!(
-            movepicker_perft(&mut pos, &mut t, &info, 1),
-            48,
-            "got {}",
-            {
-                pos.legal_moves()
-                    .into_iter()
-                    .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            }
-        );
-        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 2), 2_039);
-        // assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 3), 97_862);
-        // assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 4), 4_085_603);
+        let tbhits = AtomicU64::new(0);
+        let mut t = ThreadData::new(0, pos, tt.view(), nnue_params, &stopped, &nodes, &tbhits);
+        assert_eq!(movepicker_perft(&mut t, 1), 48, "got {}", {
+            t.board
+                .legal_moves()
+                .into_iter()
+                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        });
+        assert_eq!(movepicker_perft(&mut t, 2), 2_039);
+        // assert_eq!(movepicker_perft(&mut t, 3), 97_862);
+        // assert_eq!(movepicker_perft(&mut t, 4), 4_085_603);
     }
 
     #[test]
@@ -312,25 +311,26 @@ mod tests {
         use super::*;
         const TEST_FEN: &str = "r7/P2r4/7R/8/5p2/5K2/3p2P1/R5k1 b - - 0 1";
 
-        std::env::set_var("RUST_BACKTRACE", "1");
-        let mut pos = Board::new();
+        let mut pos = Board::empty();
         pos.set_from_fen(TEST_FEN).unwrap();
+        let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16, 1);
+        tt.resize(MEGABYTE * 16, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
-        let mut t = ThreadData::new(0, &pos, tt.view(), nnue_params);
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
-        let info = SearchInfo::new(&stopped, &nodes);
-        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 1), 4, "got {}", {
-            pos.legal_moves()
+        let tbhits = AtomicU64::new(0);
+        let mut t = ThreadData::new(0, pos, tt.view(), nnue_params, &stopped, &nodes, &tbhits);
+        assert_eq!(movepicker_perft(&mut t, 1), 4, "got {}", {
+            t.board
+                .legal_moves()
                 .into_iter()
                 .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
-        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 2), 62);
-        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 3), 1474);
+        assert_eq!(movepicker_perft(&mut t, 2), 62);
+        assert_eq!(movepicker_perft(&mut t, 3), 1474);
     }
 
     #[test]
@@ -338,32 +338,33 @@ mod tests {
         use super::*;
         const TEST_FEN: &str = "r7/P2r4/7R/8/5p2/5K2/3p2P1/2R3k1 b - - 0 1";
 
-        std::env::set_var("RUST_BACKTRACE", "1");
-        let mut pos = Board::new();
+        let mut pos = Board::empty();
         pos.set_from_fen(TEST_FEN).unwrap();
+        let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16, 1);
+        tt.resize(MEGABYTE * 16, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
-        let mut t = ThreadData::new(0, &pos, tt.view(), nnue_params);
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
-        let info = SearchInfo::new(&stopped, &nodes);
-        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 1), 8, "got {}", {
-            pos.legal_moves()
+        let tbhits = AtomicU64::new(0);
+        let mut t = ThreadData::new(0, pos, tt.view(), nnue_params, &stopped, &nodes, &tbhits);
+        assert_eq!(movepicker_perft(&mut t, 1), 8, "got {}", {
+            t.board
+                .legal_moves()
                 .into_iter()
                 .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
-        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 2), 143);
-        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 3), 3954);
+        assert_eq!(movepicker_perft(&mut t, 2), 143);
+        assert_eq!(movepicker_perft(&mut t, 3), 3954);
     }
 
     #[test]
     fn perft_krk() {
         use super::*;
 
-        let mut pos = Board::new();
+        let mut pos = Board::empty();
         pos.set_from_fen("8/8/8/8/8/8/1k6/R2K4 b - - 1 1").unwrap();
         assert_eq!(perft(&mut pos, 1), 3, "got {}", {
             pos.legal_moves()
@@ -378,7 +379,7 @@ mod tests {
     fn simple_move_undoability() {
         use super::*;
 
-        let mut pos = Board::new();
+        let mut pos = Board::empty();
         pos.set_startpos();
         let e4 = Move::new(Square::E2, Square::E4);
         let piece_layout_before = pos.state.bbs;
@@ -398,7 +399,7 @@ mod tests {
     fn simple_capture_undoability() {
         use super::*;
 
-        let mut pos = Board::new();
+        let mut pos = Board::empty();
         pos.set_from_fen("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
             .unwrap();
         let exd5 = Move::new(Square::E4, Square::D5);

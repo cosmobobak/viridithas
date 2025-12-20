@@ -1,5 +1,4 @@
 use std::{
-    ops::ControlFlow,
     sync::atomic::{AtomicBool, Ordering},
     time::{Duration, Instant},
 };
@@ -7,20 +6,20 @@ use std::{
 use crate::{
     chess::chessmove::Move,
     evaluation::{is_mate_score, mate_in},
-    search::{parameters::Config, pv::PVariation, SmpThreadType},
+    search::parameters::Config,
     transpositiontable::Bound,
 };
 
 const MOVE_OVERHEAD: u64 = 30;
 
-pub const STRONG_FORCED_TM_FRAC: u32 = 236;
-pub const WEAK_FORCED_TM_FRAC: u32 = 602;
+pub const STRONG_FORCED_TM_FRAC: u32 = 354;
+pub const WEAK_FORCED_TM_FRAC: u32 = 650;
 pub const DEFAULT_MOVES_TO_GO: u32 = 27;
-pub const HARD_WINDOW_FRAC: u32 = 61;
-pub const OPTIMAL_WINDOW_FRAC: u32 = 65;
-pub const INCREMENT_FRAC: u32 = 99;
-pub const NODE_TM_SUBTREE_MULTIPLIER: u32 = 147;
-pub const FAIL_LOW_TM_BONUS: u32 = 258;
+pub const HARD_WINDOW_FRAC: u32 = 53;
+pub const OPTIMAL_WINDOW_FRAC: u32 = 78;
+pub const INCREMENT_FRAC: u32 = 74;
+pub const NODE_TM_SUBTREE_MULTIPLIER: u32 = 148;
+pub const FAIL_LOW_TM_BONUS: u32 = 306;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum ForcedMoveType {
@@ -41,10 +40,11 @@ impl ForcedMoveType {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Default)]
 pub enum SearchLimit {
+    #[default]
     Infinite,
-    Depth(i32),
+    Depth(usize),
     Time(u64),
     Nodes(u64),
     Mate {
@@ -63,14 +63,8 @@ pub enum SearchLimit {
         hard_limit: u64,
     },
     Pondering {
-        saved_limit: Box<SearchLimit>,
+        saved_limit: Box<Self>,
     },
-}
-
-impl Default for SearchLimit {
-    fn default() -> Self {
-        Self::Infinite
-    }
 }
 
 impl SearchLimit {
@@ -89,7 +83,7 @@ impl SearchLimit {
         }
     }
 
-    pub const fn depth(&self) -> Option<i32> {
+    pub const fn depth(&self) -> Option<usize> {
         match self {
             Self::Depth(d) => Some(*d),
             _ => None,
@@ -102,33 +96,33 @@ impl SearchLimit {
         our_inc: u64,
         conf: &Config,
     ) -> (u64, u64, u64) {
-        // The absolute maximum time we could spend without losing on the clock:
-        let absolute_maximum = our_clock.saturating_sub(MOVE_OVERHEAD);
+        // The very highest amount of time we are
+        // willing to search in a position, ever.
+        let max_time = (our_clock * 95 / 100).saturating_sub(MOVE_OVERHEAD);
 
         // The maximum time we can spend searching before forcibly stopping:
-        let hard_time_window =
-            (our_clock * u64::from(conf.hard_window_frac) / 100).min(absolute_maximum);
+        let hard_time_window = (our_clock * u64::from(conf.hard_window_frac) / 100).min(max_time);
 
         // If we have a moves to go, we can use that to compute a time window.
         if let Some(moves_to_go) = moves_to_go {
             // Use more time if we have fewer moves to go, but not more than default_moves_to_go.
             let divisor = moves_to_go.clamp(2, u64::from(conf.default_moves_to_go));
             let computed_time_window = our_clock / divisor;
-            let optimal_time_window = computed_time_window.min(absolute_maximum)
-                * u64::from(conf.optimal_window_frac)
-                / 100;
-            return (optimal_time_window, hard_time_window, absolute_maximum);
+            let optimal_time_window =
+                computed_time_window.min(max_time) * u64::from(conf.optimal_window_frac) / 100;
+            return (optimal_time_window, hard_time_window, max_time);
         }
 
         // Otherwise, we use default_moves_to_go.
         let computed_time_window = our_clock / u64::from(conf.default_moves_to_go)
             + our_inc * u64::from(conf.increment_frac) / 100
             - MOVE_OVERHEAD;
-        let optimal_time_window = (computed_time_window.min(absolute_maximum)
-            * u64::from(conf.optimal_window_frac)
-            / 100)
-            .min(hard_time_window);
-        (optimal_time_window, hard_time_window, absolute_maximum)
+
+        let optimal_time_window =
+            (computed_time_window.min(max_time) * u64::from(conf.optimal_window_frac) / 100)
+                .min(hard_time_window);
+
+        (optimal_time_window, hard_time_window, max_time)
     }
 
     #[cfg(test)]
@@ -303,57 +297,24 @@ impl TimeManager {
         matches!(self.limit, SearchLimit::Dynamic { .. })
     }
 
-    #[allow(clippy::unused_self)]
-    pub const fn is_soft_nodes(&self) -> bool {
-        #[cfg(feature = "datagen")]
-        {
-            matches!(self.limit, SearchLimit::SoftNodes { .. })
-        }
-        #[cfg(not(feature = "datagen"))]
-        false
-    }
-
-    pub const fn solved_breaker<ThTy: SmpThreadType>(
-        &self,
-        value: i32,
-        depth: usize,
-    ) -> ControlFlow<()> {
-        if !ThTy::MAIN_THREAD || depth < 8 {
-            return ControlFlow::Continue(());
-        }
-        if let &SearchLimit::Mate { ply } = &self.limit {
-            let expected_score = mate_in(ply);
-            let is_good_enough = value.abs() >= expected_score;
-            #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
-            if is_good_enough && depth >= ply {
-                ControlFlow::Break(())
-            } else {
-                ControlFlow::Continue(())
-            }
+    pub const fn solved_breaker(&self, value: i32) -> bool {
+        if let SearchLimit::Mate { ply } = self.limit {
+            value.abs() >= mate_in(ply)
         } else {
-            ControlFlow::Continue(())
+            false
         }
     }
 
-    pub fn mate_found_breaker<ThTy: SmpThreadType>(
-        &mut self,
-        pv: &PVariation,
-        depth: i32,
-    ) -> ControlFlow<()> {
-        const MINIMUM_MATE_BREAK_DEPTH: i32 = 10;
-        if ThTy::MAIN_THREAD
-            && self.is_dynamic()
-            && is_mate_score(pv.score())
-            && depth > MINIMUM_MATE_BREAK_DEPTH
-        {
+    pub fn mate_found_breaker(&mut self, value: i32) -> bool {
+        if matches!(self.limit, SearchLimit::Dynamic { .. }) && is_mate_score(value) {
             self.mate_counter += 1;
             if self.mate_counter >= 3 {
-                return ControlFlow::Break(());
+                return true;
             }
-        } else if ThTy::MAIN_THREAD {
+        } else {
             self.mate_counter = 0;
         }
-        ControlFlow::Continue(())
+        false
     }
 
     const SLIGHTLY_FORCED: i32 = 12;

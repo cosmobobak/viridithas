@@ -5,10 +5,13 @@ use std::{
     str::FromStr,
 };
 
-use crate::chess::{
-    piece::{Colour, Piece},
-    piecelayout::{PieceLayout, Threats},
-    squareset::SquareSet,
+use crate::{
+    chess::{
+        piece::{Colour, Piece, PieceType},
+        piecelayout::{PieceLayout, Threats},
+        squareset::SquareSet,
+    },
+    lookups::{CASTLE_KEYS, EP_KEYS, PIECE_KEYS, SIDE_KEY},
 };
 
 use super::piece::Col;
@@ -211,7 +214,8 @@ impl Square {
     /// SAFETY: you may only call this function with value of `inner` less than 64.
     pub const unsafe fn new_unchecked(inner: u8) -> Self {
         debug_assert!(inner < 64);
-        std::mem::transmute(inner)
+        // Safety: Caller's precondition.
+        unsafe { std::mem::transmute(inner) }
     }
 
     pub const fn flip_rank(self) -> Self {
@@ -292,27 +296,29 @@ impl Square {
     }
 
     /// SAFETY: You may not call this function with a square and offset such that
-    /// `square as u8 + offset` is outwith `0..64`.
-    pub const unsafe fn add_unchecked(self, offset: u8) -> Self {
+    /// `square as i8 + offset` is outwith `0..64`.
+    pub const unsafe fn add_unchecked(self, offset: i8) -> Self {
         #![allow(
             clippy::cast_possible_truncation,
             clippy::cast_possible_wrap,
             clippy::cast_sign_loss
         )]
-        let res = self as u8 + offset;
-        Self::new_unchecked(res)
+        let res = self as i8 + offset;
+        // Safety: caller's precondition.
+        unsafe { Self::new_unchecked(res as u8) }
     }
 
     /// SAFETY: You may not call this function with a square and offset such that
-    /// `square as u8 - offset` is outwith `0..64`.
-    pub const unsafe fn sub_unchecked(self, offset: u8) -> Self {
+    /// `square as i8 - offset` is outwith `0..64`.
+    pub const unsafe fn sub_unchecked(self, offset: i8) -> Self {
         #![allow(
             clippy::cast_possible_truncation,
             clippy::cast_possible_wrap,
             clippy::cast_sign_loss
         )]
-        let res = self as u8 - offset;
-        Self::new_unchecked(res)
+        let res = self as i8 - offset;
+        // Safety: caller's precondition.
+        unsafe { Self::new_unchecked(res as u8) }
     }
 
     pub const fn sub(self, offset: u8) -> Option<Self> {
@@ -400,7 +406,21 @@ impl From<Square> for u16 {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct ContHistIndex {
     pub piece: Piece,
-    pub square: Square,
+    pub to: Square,
+}
+
+impl<T> Index<ContHistIndex> for [[T; 64]; 12] {
+    type Output = T;
+
+    fn index(&self, index: ContHistIndex) -> &Self::Output {
+        &self[index.piece][index.to]
+    }
+}
+
+impl<T> IndexMut<ContHistIndex> for [[T; 64]; 12] {
+    fn index_mut(&mut self, index: ContHistIndex) -> &mut Self::Output {
+        &mut self[index.piece][index.to]
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
@@ -455,6 +475,43 @@ impl Default for State {
             pinned: <[SquareSet; 2]>::default(),
             keys: Keys::default(),
         }
+    }
+}
+
+impl State {
+    pub fn generate_pos_keys(&self, side: Colour) -> Keys {
+        let mut keys = Keys::default();
+        self.bbs.visit_pieces(|sq, piece| {
+            let piece_key = PIECE_KEYS[piece][sq];
+            keys.zobrist ^= piece_key;
+            if piece.piece_type() == PieceType::Pawn {
+                keys.pawn ^= piece_key;
+            } else {
+                keys.non_pawn[piece.colour()] ^= piece_key;
+                if piece.piece_type() == PieceType::King {
+                    keys.major ^= piece_key;
+                    keys.minor ^= piece_key;
+                } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
+                    keys.major ^= piece_key;
+                } else {
+                    keys.minor ^= piece_key;
+                }
+            }
+        });
+
+        if side == Colour::White {
+            keys.zobrist ^= SIDE_KEY;
+        }
+
+        if let Some(ep_sq) = self.ep_square {
+            keys.zobrist ^= EP_KEYS[ep_sq];
+        }
+
+        keys.zobrist ^= CASTLE_KEYS[self.castle_perm.hashkey_index()];
+
+        debug_assert!(self.fifty_move_counter <= 100);
+
+        keys
     }
 }
 

@@ -1,4 +1,3 @@
-// #![feature(stdarch_x86_avx512)]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::missing_const_for_fn)]
 #![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
@@ -31,14 +30,17 @@ mod stack;
 mod tablebases;
 mod term;
 mod threadlocal;
+mod threadpool;
 mod timemgmt;
 mod transpositiontable;
 mod uci;
 mod util;
 
 #[cfg(feature = "datagen")]
-use cli::Subcommands::{Analyse, CountPositions, Datagen, Splat};
-use cli::Subcommands::{Bench, Merge, NNUEDryRun, Perft, Quantise, Spsa, Verbatim, VisNNUE};
+use cli::Subcommands::{Analyse, CountPositions, Datagen, Rescale, Splat};
+use cli::Subcommands::{
+    Bench, EvalStats, Merge, NNUEDryRun, Perft, Quantise, Spsa, Verbatim, VisNNUE,
+};
 
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";
@@ -46,9 +48,6 @@ pub static NAME: &str = "Viridithas";
 pub static VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn main() -> anyhow::Result<()> {
-    #[cfg(debug_assertions)]
-    std::env::set_var("RUST_BACKTRACE", "1");
-
     if std::env::args_os().len() == 1 {
         // fast path to UCI:
         return uci::main_loop();
@@ -57,16 +56,21 @@ fn main() -> anyhow::Result<()> {
     let cli = <cli::Cli as clap::Parser>::parse();
 
     match cli.subcommand {
+        Some(Bench { depth, threads }) => {
+            let nnue_params = nnue::network::NNUEParams::decompress_and_alloc()?;
+            let stopped = std::sync::atomic::AtomicBool::new(false);
+            let nodes = std::sync::atomic::AtomicU64::new(0);
+            let tbhits = std::sync::atomic::AtomicU64::new(0);
+            let info = searchinfo::SearchInfo::new(&stopped, &nodes, &tbhits);
+            uci::bench("openbench", &info.conf, nnue_params, depth, threads)?;
+            Ok(())
+        }
         Some(Perft) => perft::gamut(),
-        Some(VisNNUE) => nnue::network::visualise_nnue(),
-        Some(NNUEDryRun) => nnue::network::dry_run(),
         Some(Quantise { input, output }) => nnue::network::quantise(&input, &output),
         Some(Merge { input, output }) => nnue::network::merge(&input, &output),
         Some(Verbatim { output }) => nnue::network::dump_verbatim(&output),
-        #[cfg(feature = "datagen")]
-        Some(Analyse { input }) => datagen::dataset_stats(&input),
-        #[cfg(feature = "datagen")]
-        Some(CountPositions { input }) => datagen::dataset_count(&input),
+        Some(VisNNUE) => nnue::network::visualise_nnue(),
+        Some(NNUEDryRun) => nnue::network::dry_run(),
         Some(Spsa { json }) => {
             if json {
                 println!(
@@ -81,6 +85,17 @@ fn main() -> anyhow::Result<()> {
             }
             Ok(())
         }
+        Some(EvalStats { input, output }) => evaluation::eval_stats(&input, output.as_deref()),
+        #[cfg(feature = "datagen")]
+        Some(Analyse { input }) => datagen::dataset_stats(&input),
+        #[cfg(feature = "datagen")]
+        Some(CountPositions { input }) => datagen::dataset_count(&input),
+        #[cfg(feature = "datagen")]
+        Some(Rescale {
+            scale,
+            input,
+            output,
+        }) => datagen::run_rescale(&input, &output, scale),
         #[cfg(feature = "datagen")]
         Some(Splat {
             input,
@@ -102,24 +117,16 @@ fn main() -> anyhow::Result<()> {
             threads,
             tbs,
             book,
-            depth_limit,
+            nodes,
             dfrc,
         }) => datagen::gen_data_main(datagen::DataGenOptionsBuilder {
             games,
             threads,
             tbs,
             book,
-            depth_limit,
+            nodes,
             dfrc,
         }),
-        Some(Bench { depth }) => {
-            let nnue_params = nnue::network::NNUEParams::decompress_and_alloc()?;
-            let stopped = std::sync::atomic::AtomicBool::new(false);
-            let nodes = std::sync::atomic::AtomicU64::new(0);
-            let info = searchinfo::SearchInfo::new(&stopped, &nodes);
-            uci::bench("openbench", &info.conf, nnue_params, depth)?;
-            Ok(())
-        }
         None => uci::main_loop(),
     }
 }

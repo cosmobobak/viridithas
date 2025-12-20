@@ -13,7 +13,7 @@ ifeq ($(OS),Windows_NT)
 else
     INF := linux
     EXT :=
-    RMFILE := rm
+    RMFILE := rm -f
     RMDIR := rm -rf
     MKDIR := mkdir -p
     NAME := $(EXE)
@@ -25,25 +25,10 @@ V3NAME := $(LXE)-$(VERSION)-$(INF)-x86_64-v3$(EXT)
 V4NAME := $(LXE)-$(VERSION)-$(INF)-x86_64-v4$(EXT)
 
 openbench:
-	cargo rustc --release -- -C target-cpu=native --emit link=$(NAME)
-
-final-release:
-	cargo rustc --release --features final-release -- -C target-feature=+crt-static -C target-cpu=x86-64 --emit link=$(V1NAME)
-	cargo rustc --release --features final-release -- -C target-feature=+crt-static -C target-cpu=x86-64-v2 --emit link=$(V2NAME)
-	cargo rustc --release --features final-release -- -C target-feature=+crt-static -C target-cpu=x86-64-v3 --emit link=$(V3NAME)
-	cargo rustc --release --features final-release -- -C target-feature=+crt-static -C target-cpu=x86-64-v4 --emit link=$(V4NAME)
-
-release:
-	cargo rustc --release --features syzygy,bindgen -- -C target-feature=+crt-static -C target-cpu=x86-64 --emit link=$(V1NAME)
-	cargo rustc --release --features syzygy,bindgen -- -C target-feature=+crt-static -C target-cpu=x86-64-v2 --emit link=$(V2NAME)
-	cargo rustc --release --features syzygy,bindgen -- -C target-feature=+crt-static -C target-cpu=x86-64-v3 --emit link=$(V3NAME)
-	cargo rustc --release --features syzygy,bindgen -- -C target-feature=+crt-static -C target-cpu=x86-64-v4 --emit link=$(V4NAME)
-
-datagen:
-	cargo rustc --release --features syzygy,bindgen,datagen -- -C target-cpu=native
+	cargo rustc -r --features syzygy -- -C target-cpu=native --emit link=$(NAME)
 
 tmp-dir:
-	mkdir $(TMPDIR)
+	$(MKDIR) $(TMPDIR)
 
 x86-64 x86-64-v2 x86-64-v3 x86-64-v4 native: tmp-dir
 	cargo rustc -r --features final-release -- -C target-feature=+crt-static -C target-cpu=$@ -C profile-generate=$(TMPDIR) --emit link=$(LXE)-$(VERSION)-$(INF)-$@$(EXT)
@@ -51,6 +36,16 @@ x86-64 x86-64-v2 x86-64-v3 x86-64-v4 native: tmp-dir
 	llvm-profdata merge -o $(TMPDIR)/merged.profdata $(TMPDIR)
 
 	cargo rustc -r --features final-release -- -C target-feature=+crt-static -C target-cpu=$@ -C profile-use=$(TMPDIR)/merged.profdata --emit link=$(LXE)-$(VERSION)-$(INF)-$@$(EXT)
+
+	$(RMDIR) $(TMPDIR)
+	$(RMFILE) *.pdb
+
+x86-64-datagen x86-64-v2-datagen x86-64-v3-datagen x86-64-v4-datagen native-datagen: tmp-dir
+	cargo rustc -r --features datagen -- -C target-feature=+crt-static -C target-cpu=$(subst -datagen,,$@) -C profile-generate=$(TMPDIR) --emit link=$(LXE)-$(VERSION)-$(INF)-$(subst -datagen,,$@)$(EXT)
+	./$(LXE)-$(VERSION)-$(INF)-$(subst -datagen,,$@)$(EXT) bench
+	llvm-profdata merge -o $(TMPDIR)/merged.profdata $(TMPDIR)
+
+	cargo rustc -r --features datagen -- -C target-feature=+crt-static -C target-cpu=$(subst -datagen,,$@) -C profile-use=$(TMPDIR)/merged.profdata --emit link=$(LXE)-$(VERSION)-$(INF)-$(subst -datagen,,$@)$(EXT)
 
 	$(RMDIR) $(TMPDIR)
 	$(RMFILE) *.pdb

@@ -1,5 +1,3 @@
-pub mod depth;
-
 use std::{
     ops::{Deref, DerefMut},
     sync::atomic::{AtomicU64, Ordering},
@@ -8,8 +6,7 @@ use std::{
 use crate::evaluation::MATE_SCORE;
 
 pub const BOARD_N_SQUARES: usize = 64;
-pub const MAX_DEPTH: i32 = 128;
-pub const MAX_PLY: usize = MAX_DEPTH as usize;
+pub const MAX_DEPTH: usize = 128;
 pub const INFINITY: i32 = MATE_SCORE + 1;
 pub const VALUE_NONE: i32 = INFINITY + 1;
 pub const MEGABYTE: usize = 1024 * 1024;
@@ -61,6 +58,12 @@ impl<'a> BatchedAtomicCounter<'a> {
 
     pub const fn just_ticked_over(&self) -> bool {
         self.buffer == 0
+    }
+
+    pub fn flush(&mut self) {
+        self.global.fetch_add(self.buffer, Ordering::Relaxed);
+        self.local += self.buffer;
+        self.buffer = 0;
     }
 }
 

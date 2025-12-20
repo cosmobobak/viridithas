@@ -17,6 +17,8 @@ pub enum Subcommands {
     Bench {
         /// Optionally specify the depth at which to run the benchmark.
         depth: Option<usize>,
+        /// Optionally specify the number of threads to use.
+        threads: Option<usize>,
     },
     /// Run the perft suite.
     Perft,
@@ -43,6 +45,20 @@ pub enum Subcommands {
     VisNNUE,
     /// Dry-run the NNUE inference.
     NNUEDryRun,
+    /// Emit configuration for SPSA
+    Spsa {
+        /// Emit configuration in JSON format instead of openbench format
+        #[clap(long)]
+        json: bool,
+    },
+    /// Compute statistics about the static evaluation across an EPD file.
+    EvalStats {
+        /// Path to input EPD file.
+        input: PathBuf,
+        /// Optional path to output histogram data.
+        #[clap(short, long)]
+        output: Option<PathBuf>,
+    },
     /// Count the number of positions contained within one or more packed game records.
     #[cfg(feature = "datagen")]
     CountPositions {
@@ -55,11 +71,16 @@ pub enum Subcommands {
         /// Path to input packed game record.
         input: PathBuf,
     },
-    /// Emit configuration for SPSA
-    Spsa {
-        /// Emit configuration in JSON format instead of openbench format
+    /// Rescale evaluations in a packed game record
+    #[cfg(feature = "datagen")]
+    Rescale {
+        /// Scaling factor to apply to evaluations
         #[clap(long)]
-        json: bool,
+        scale: f64,
+        /// Path to input packed game record.
+        input: PathBuf,
+        /// Path to output packed game record.
+        output: PathBuf,
     },
     /// Splat a packed game record into bulletformat records (or other format)
     #[cfg(feature = "datagen")]
@@ -77,8 +98,18 @@ pub enum Subcommands {
         /// Limit the number of games to convert.
         #[clap(long, value_name = "N")]
         limit: Option<usize>,
-        /// Override the filter settings.
-        #[clap(long)]
+        /// Override the filter settings with a TOML configuration file.
+        /// Example file format:
+        /// ```toml
+        /// min_ply = 16
+        /// min_pieces = 4
+        /// max_eval = 10000
+        /// filter_tactical = true
+        /// filter_check = true
+        /// filter_castling = false
+        /// max_eval_incorrectness = 4294967295
+        /// ```
+        #[clap(long, verbatim_doc_comment)]
         cfg_path: Option<PathBuf>,
     },
     /// Generate self-play data
@@ -96,9 +127,9 @@ pub enum Subcommands {
         /// Path to a book file to use for starting positions
         #[clap(long, value_name = "PATH")]
         book: Option<PathBuf>,
-        /// Limit by depth instead of nodes
+        /// Number of nodes to search per position.
         #[clap(long)]
-        depth_limit: bool,
+        nodes: u64,
         // Whether to generate DFRC data.
         #[clap(long)]
         dfrc: bool,

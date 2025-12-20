@@ -1,12 +1,13 @@
 use std::{
-    mem::{size_of, MaybeUninit},
-    sync::atomic::{AtomicU16, AtomicU32, AtomicU64, AtomicU8, Ordering},
+    mem::{MaybeUninit, size_of},
+    sync::atomic::{AtomicU8, AtomicU64, Ordering},
 };
 
 use crate::{
     chess::chessmove::Move,
-    evaluation::MINIMUM_TB_WIN_SCORE,
-    util::{self, depth::CompactDepthStorage, MEGABYTE},
+    evaluation::{MATE_SCORE, MINIMUM_MATE_SCORE, MINIMUM_TB_WIN_SCORE},
+    threadpool::{self, ScopeExt},
+    util::{MEGABYTE, VALUE_NONE},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -16,6 +17,24 @@ pub enum Bound {
     Upper = 1,
     Lower = 2,
     Exact = 3,
+}
+
+impl Bound {
+    pub fn is_lower(self) -> bool {
+        self as u8 & 0b10 != 0
+    }
+
+    pub fn is_upper(self) -> bool {
+        self as u8 & 0b01 != 0
+    }
+
+    pub fn invert(self) -> Self {
+        match self {
+            Self::Upper => Self::Lower,
+            Self::Lower => Self::Upper,
+            x => x,
+        }
+    }
 }
 
 macro_rules! impl_from_bound {
@@ -36,26 +55,40 @@ fn divide_into_chunks<T>(slice: &[T], chunks: usize) -> impl Iterator<Item = &[T
     slice.chunks(chunk_size)
 }
 
-unsafe fn threaded_memset_zero(ptr: *mut MaybeUninit<u8>, len: usize, threads: usize) {
+unsafe fn threaded_memset_zero(
+    ptr: *mut MaybeUninit<u8>,
+    len: usize,
+    threads: &[threadpool::WorkerThread],
+) {
     #[allow(clippy::collection_is_never_read)]
     std::thread::scope(|s| {
-        let chunk_size = len / threads + 64;
-        let mut handles = Vec::with_capacity(threads);
-        for thread in 0..threads {
-            let start = thread * chunk_size;
-            let end = ((thread + 1) * chunk_size).min(len);
+        let thread_count = threads.len();
+        let chunk_size = len / thread_count + 64;
+        let mut handles = Vec::with_capacity(thread_count);
+        for (thread_idx, thread) in threads.iter().enumerate() {
+            let start = thread_idx * chunk_size;
+            let end = ((thread_idx + 1) * chunk_size).min(len);
             if start > end {
                 // with many threads we can hit this
                 break;
             }
-            let slice_ptr = ptr.add(start);
+            // Safety: Resultant pointer is in-bounds.
+            let slice_ptr = unsafe { ptr.add(start) };
             let slice_len = end.checked_sub(start).unwrap();
             // launder address
             let addr = slice_ptr as usize;
-            handles.push(s.spawn(move || {
-                let slice_ptr = addr as *mut u8;
-                std::ptr::write_bytes(slice_ptr, 0, slice_len);
-            }));
+            handles.push(s.spawn_into(
+                move || {
+                    let slice_ptr = addr as *mut u8;
+                    // Safety: Slice is in-bounds and is disjoint with the other
+                    // threads' slices.
+                    unsafe { std::ptr::write_bytes(slice_ptr, 0, slice_len) };
+                },
+                thread,
+            ));
+        }
+        for handle in handles {
+            handle.join();
         }
     });
 }
@@ -95,14 +128,20 @@ impl PackedInfo {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(C, align(8))]
+#[repr(C)]
 pub struct TTEntry {
-    pub key: u16,                   // 2 bytes
-    pub m: Option<Move>,            // 2 bytes
-    pub score: i16,                 // 2 bytes
-    pub depth: CompactDepthStorage, // 1 byte, wrapper around a u8
-    pub info: PackedInfo,           // 1 byte (5 + 1 + 2 bits), wrapper around a u8
-    pub evaluation: i16,            // 2 bytes
+    pub key: u16,         // 2 bytes
+    pub m: Option<Move>,  // 2 bytes
+    pub score: i16,       // 2 bytes
+    pub depth: u8,        // 1 byte
+    pub info: PackedInfo, // 1 byte (5 + 1 + 2 bits), wrapper around a u8
+    pub evaluation: i16,  // 2 bytes
+}
+
+#[repr(C)]
+union TTEntryReadTarget {
+    bytes: u128,
+    entry: TTEntry,
 }
 
 impl TTEntry {
@@ -123,100 +162,39 @@ const CLUSTER_SIZE: usize = 3;
 #[derive(Debug, Default)]
 #[repr(C, align(32))]
 struct TTClusterMemory {
-    entry1_block1: AtomicU64,
-    entry1_block2: AtomicU16,
-    entry2_block1: AtomicU16,
-    entry2_block2: AtomicU32,
-    entry2_block3: AtomicU32,
-    entry3_block1: AtomicU32,
-    entry3_block2: AtomicU64,
+    memory: [AtomicU64; 4],
 }
 
-#[repr(C)]
-union TTEntryReadTarget {
-    bytes: u128,
-    entry: TTEntry,
+#[repr(C, align(32))]
+struct TTCluster {
+    entries: [TTEntry; 3],
+    padding: [u8; 2],
 }
 
 impl TTClusterMemory {
-    pub fn load(&self, idx: usize) -> TTEntry {
-        let bytes = match idx {
-            // INTERNAL IMPLEMENTATION DETAIL:
-            // We swap the access pattern of the second and third entries, accessing the entry that is third
-            // in terms of memory layout when index = 1 is passed, and accessing the entry that is second
-            // w.r.t. memory layout when index = 2 is passed. This is because we will often be looping
-            // through indexes 0..3, and have a chance to short-circuit before reaching index 2.
-            // As such, we save the costliest access for last.
-            // (the memory-layout-second entry requires three atomic operations, because of address alignment)
-            0 => {
-                let part1 = self.entry1_block1.load(Ordering::Relaxed);
-                let part2 = self.entry1_block2.load(Ordering::Relaxed);
-                // [ 01, 23, 45, 67 ] + [ 89 ] => 10 byte struct.
-                u128::from(part1) | (u128::from(part2) << 64)
-            }
-            2 => {
-                let part1 = self.entry2_block1.load(Ordering::Relaxed);
-                let part2 = self.entry2_block2.load(Ordering::Relaxed);
-                let part3 = self.entry2_block3.load(Ordering::Relaxed);
-                // [ 01 ] + [ 23, 45 ] + [ 67, 89 ] => 10 byte struct.
-                u128::from(part1) | (u128::from(part2) << 16) | (u128::from(part3) << 48)
-            }
-            1 => {
-                let part1 = self.entry3_block1.load(Ordering::Relaxed);
-                let part2 = self.entry3_block2.load(Ordering::Relaxed);
-                // [ 01, 23 ] + [ 45, 67, 89, __ ] => 10 byte struct.
-                u128::from(part1) | (u128::from(part2) << 32)
-            }
-            _ => panic!("Index out of bounds!"),
-        };
-        // SAFETY: All bitpatterns of TTEntry are valid.
-        unsafe { TTEntryReadTarget { bytes }.entry }
+    pub fn load(&self) -> TTCluster {
+        let a = self.memory[0].load(Ordering::Relaxed);
+        let b = self.memory[1].load(Ordering::Relaxed);
+        let c = self.memory[2].load(Ordering::Relaxed);
+        let d = self.memory[3].load(Ordering::Relaxed);
+        // Safety: TTCluster is POD.
+        unsafe { std::mem::transmute::<[u64; 4], TTCluster>([a, b, c, d]) }
     }
 
-    pub fn store(&self, idx: usize, entry: TTEntry) {
-        #![allow(clippy::cast_possible_truncation)]
-        let mut memory = TTEntryReadTarget { bytes: 0 };
-        memory.entry = entry;
-        // SAFETY: TTEntry can be safely reinterpreted as bytes, and the
-        // whole u128 is initialised.
-        let bytes = unsafe { memory.bytes };
-        match idx {
-            // INTERNAL IMPLEMENTATION DETAIL:
-            // We swap the access pattern of the second and third entries, accessing the entry that is third
-            // in terms of memory layout when index = 1 is passed, and accessing the entry that is second
-            // w.r.t. memory layout when index = 2 is passed. This is because we will often be looping
-            // through indexes 0..3, and have a chance to short-circuit before reaching index 2.
-            // As such, we save the costliest access for last.
-            // (the memory-layout-second entry requires three atomic operations, because of address alignment)
-            0 => {
-                self.entry1_block1.store(bytes as u64, Ordering::Relaxed);
-                self.entry1_block2
-                    .store((bytes >> 64) as u16, Ordering::Relaxed);
-            }
-            2 => {
-                self.entry2_block1.store(bytes as u16, Ordering::Relaxed);
-                self.entry2_block2
-                    .store((bytes >> 16) as u32, Ordering::Relaxed);
-                self.entry2_block3
-                    .store((bytes >> 48) as u32, Ordering::Relaxed);
-            }
-            1 => {
-                self.entry3_block1.store(bytes as u32, Ordering::Relaxed);
-                self.entry3_block2
-                    .store((bytes >> 32) as u64, Ordering::Relaxed);
-            }
-            _ => panic!("Index out of bounds!"),
-        }
+    pub fn store(&self, cluster: TTCluster) {
+        // Safety: [u64; 4] is POD.
+        let memory = unsafe { std::mem::transmute::<TTCluster, [u64; 4]>(cluster) };
+        self.memory[0].store(memory[0], Ordering::Relaxed);
+        self.memory[1].store(memory[1], Ordering::Relaxed);
+        self.memory[2].store(memory[2], Ordering::Relaxed);
+        self.memory[3].store(memory[3], Ordering::Relaxed);
     }
 
     pub fn clear(&self) {
-        self.entry1_block1.store(0, Ordering::Relaxed);
-        self.entry1_block2.store(0, Ordering::Relaxed);
-        self.entry2_block1.store(0, Ordering::Relaxed);
-        self.entry2_block2.store(0, Ordering::Relaxed);
-        self.entry2_block3.store(0, Ordering::Relaxed);
-        self.entry3_block1.store(0, Ordering::Relaxed);
-        self.entry3_block2.store(0, Ordering::Relaxed);
+        self.memory[0].store(0, Ordering::Relaxed);
+        self.memory[1].store(0, Ordering::Relaxed);
+        self.memory[2].store(0, Ordering::Relaxed);
+        self.memory[3].store(0, Ordering::Relaxed);
     }
 }
 
@@ -255,7 +233,7 @@ impl TT {
         }
     }
 
-    pub fn resize(&mut self, bytes: usize, threads: usize) {
+    pub fn resize(&mut self, bytes: usize, threads: &[threadpool::WorkerThread]) {
         let start = std::time::Instant::now();
         let new_len = bytes / size_of::<TTClusterMemory>();
         // dealloc the old table:
@@ -278,17 +256,25 @@ impl TT {
         );
     }
 
-    pub fn clear(&self, threads: usize) {
+    pub fn clear(&self, threads: &[threadpool::WorkerThread]) {
         #[allow(clippy::collection_is_never_read)]
         std::thread::scope(|s| {
-            let mut handles = Vec::with_capacity(threads);
-            for chunk in divide_into_chunks(&self.table, threads) {
-                let handle = s.spawn(move || {
-                    for entry in chunk {
-                        entry.clear();
-                    }
-                });
+            let mut handles = Vec::with_capacity(threads.len());
+            for (chunk, worker) in
+                divide_into_chunks(&self.table, threads.len()).zip(threads.iter().cycle())
+            {
+                let handle = s.spawn_into(
+                    move || {
+                        for entry in chunk {
+                            entry.clear();
+                        }
+                    },
+                    worker,
+                );
                 handles.push(handle);
+            }
+            for handle in handles {
+                handle.join();
             }
         });
     }
@@ -298,7 +284,7 @@ impl TT {
         key as u16
     }
 
-    pub fn view(&self) -> TTView {
+    pub fn view(&self) -> TTView<'_> {
         TTView {
             table: &self.table,
             age: self.age.load(Ordering::Relaxed),
@@ -344,14 +330,14 @@ impl TTView<'_> {
         // get current table age:
         let tt_age = i32::from(self.age);
         // load the cluster:
-        let cluster = &self.table[cluster_index];
-        let mut tte = cluster.load(0);
+        let mut cluster = self.table[cluster_index].load();
+        let mut tte = cluster.entries[0];
         let mut idx = 0;
 
         // select the entry:
         if !(tte.key == 0 || tte.key == key) {
             for i in 1..CLUSTER_SIZE {
-                let entry = cluster.load(i);
+                let entry = cluster.entries[i];
 
                 if entry.key == 0 || entry.key == key {
                     tte = entry;
@@ -359,9 +345,9 @@ impl TTView<'_> {
                     break;
                 }
 
-                if i32::from(tte.depth.inner())
+                if i32::from(tte.depth)
                     - ((MAX_AGE + tt_age - i32::from(tte.info.age())) & AGE_MASK) * 4
-                    > i32::from(entry.depth.inner())
+                    > i32::from(entry.depth)
                         - ((MAX_AGE + tt_age - i32::from(entry.info.age())) & AGE_MASK) * 4
                 {
                     tte = entry;
@@ -391,10 +377,9 @@ impl TTView<'_> {
         let record_prority = i32::from(tte.depth) + record_flag_bonus;
 
         // replace the entry:
-        // 1. unconditionally if we're in the root node (holdover from TT-pv probing)
-        // 2. if the entry is for a different position
-        // 3. if it's an exact entry, and the old entry is not exact
-        // 4. if the new entry is of higher priority than the old entry
+        // 1. if the entry is for a different position
+        // 2. if it's an exact entry, and the old entry is not exact
+        // 3. if the new entry is of higher priority than the old entry
         if tte.key != key
             || flag == Bound::Exact && tte.info.flag() != Bound::Exact
             || insert_priority * 3 >= record_prority * 2
@@ -403,28 +388,25 @@ impl TTView<'_> {
                 key,
                 m: best_move,
                 // normalise mate / TB scores:
-                score: normalise_gt_truth_score(score, ply).try_into().expect(
-                    "attempted to store a score with value outwith [i16::MIN, i16::MAX] in the transposition table",
-                ),
+                score: normalise_gt_truth_score(score, ply)
+                    .try_into()
+                    .expect("score with value outwith i16"),
                 depth: depth.try_into().unwrap(),
                 info: PackedInfo::new(self.age, flag, pv),
-                evaluation: eval.try_into().expect(
-                    "attempted to store an eval with value outwith [i16::MIN, i16::MAX] in the transposition table",
-                ),
+                evaluation: eval.try_into().expect("eval with value outwith i16"),
             };
-            cluster.store(idx, write);
+            cluster.entries[idx] = write;
+            self.table[cluster_index].store(cluster);
         }
     }
 
-    pub fn probe(&self, key: u64, ply: usize) -> Option<TTHit> {
+    pub fn probe(&self, key: u64, ply: usize, clock: u8) -> Option<TTHit> {
         let index = self.wrap_key(key);
         let key = TT::pack_key(key);
 
-        let cluster = &self.table[index];
+        let cluster = self.table[index].load();
 
-        for i in 0..CLUSTER_SIZE {
-            let entry = cluster.load(i);
-
+        for entry in cluster.entries {
             if entry.key != key {
                 continue;
             }
@@ -433,7 +415,7 @@ impl TTView<'_> {
                 mov: entry.m,
                 depth: entry.depth.into(),
                 bound: entry.info.flag(),
-                value: reconstruct_gt_truth_score(entry.score.into(), ply),
+                value: reconstruct_gt_truth_score(entry.score.into(), ply, clock),
                 eval: entry.evaluation.into(),
                 was_pv: entry.info.pv(),
             });
@@ -447,7 +429,7 @@ impl TTView<'_> {
         // doesn't really do anything particularly dangerous anyway.
         #[cfg(target_arch = "x86_64")]
         unsafe {
-            use std::arch::x86_64::{_mm_prefetch, _MM_HINT_T0};
+            use std::arch::x86_64::{_MM_HINT_T0, _mm_prefetch};
 
             // get a reference to the entry in the table:
             let index = self.wrap_key(key);
@@ -455,23 +437,29 @@ impl TTView<'_> {
 
             // prefetch the entry:
             _mm_prefetch(
-                util::from_ref::<TTClusterMemory>(entry).cast::<i8>(),
+                crate::util::from_ref::<TTClusterMemory>(entry).cast::<i8>(),
                 _MM_HINT_T0,
             );
+        }
+        #[cfg(target_arch = "aarch64")]
+        {
+            // Silence warnings on ARM, which lacks a prefetch equivalent.
+            let _ = self;
+            let _ = key;
         }
     }
 
     pub fn probe_move(&self, key: u64) -> Option<(Option<Move>, i32)> {
-        self.probe(key, 0)
+        self.probe(key, 0, 0)
             .map(|TTHit { mov, value, .. }| (mov, value))
     }
 
     pub fn hashfull(&self) -> usize {
         let mut hit = 0;
         for i in 0..2000 {
-            let cluster = &self.table[i];
+            let cluster = self.table[i].load();
             for i in 0..CLUSTER_SIZE {
-                let entry = cluster.load(i);
+                let entry = cluster.entries[i];
                 if entry.key != 0 && entry.info.age() == self.age {
                     hit += 1;
                 }
@@ -483,6 +471,9 @@ impl TTView<'_> {
 
 const fn normalise_gt_truth_score(mut score: i32, ply: usize) -> i32 {
     #![allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+    if score == VALUE_NONE {
+        return VALUE_NONE;
+    }
     if score >= MINIMUM_TB_WIN_SCORE {
         score += ply as i32;
     } else if score <= -MINIMUM_TB_WIN_SCORE {
@@ -491,12 +482,28 @@ const fn normalise_gt_truth_score(mut score: i32, ply: usize) -> i32 {
     score
 }
 
-const fn reconstruct_gt_truth_score(mut score: i32, ply: usize) -> i32 {
+const fn reconstruct_gt_truth_score(score: i32, ply: usize, clock: u8) -> i32 {
     #![allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+    if score == VALUE_NONE {
+        return VALUE_NONE;
+    }
     if score >= MINIMUM_TB_WIN_SCORE {
-        score -= ply as i32;
-    } else if score <= -MINIMUM_TB_WIN_SCORE {
-        score += ply as i32;
+        if score >= MINIMUM_MATE_SCORE && MATE_SCORE - score > 100 - clock as i32 {
+            return MINIMUM_TB_WIN_SCORE - 1;
+        }
+        if MINIMUM_TB_WIN_SCORE - score > 100 - clock as i32 {
+            return MINIMUM_TB_WIN_SCORE - 1;
+        }
+        return score - ply as i32;
+    }
+    if score <= -MINIMUM_TB_WIN_SCORE {
+        if score <= -MINIMUM_MATE_SCORE && MATE_SCORE + score > 100 - clock as i32 {
+            return -MINIMUM_TB_WIN_SCORE + 1;
+        }
+        if -MINIMUM_TB_WIN_SCORE + score > 100 - clock as i32 {
+            return -MINIMUM_TB_WIN_SCORE + 1;
+        }
+        return score + ply as i32;
     }
     score
 }
@@ -528,8 +535,10 @@ mod tests {
         };
         let cluster_memory = TTClusterMemory::default();
         for i in 0..3 {
-            cluster_memory.store(i, entry);
-            let loaded = cluster_memory.load(i);
+            let mut cluster = cluster_memory.load();
+            cluster.entries[i] = entry;
+            cluster_memory.store(cluster);
+            let loaded = cluster_memory.load().entries[i];
             println!("Slot {i}");
             println!(" Stored: {}", format_slice_hex(&entry.to_ne_bytes()));
             println!(" Loaded: {}", format_slice_hex(&loaded.to_ne_bytes()));
@@ -545,40 +554,45 @@ mod tests {
     fn memset_correct() {
         #![allow(clippy::undocumented_unsafe_blocks)]
         let mut x = vec![1u8; 2048];
+        let pool = threadpool::make_worker_threads(1);
         unsafe {
-            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), 1);
+            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), &pool);
         }
         for (i, v) in x.iter().enumerate() {
             assert_eq!(*v, 0, "unset at index {i}");
         }
 
         x = vec![1u8; 2048];
+        let pool = threadpool::make_worker_threads(2);
         unsafe {
-            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), 2);
+            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), &pool);
         }
         for (i, v) in x.iter().enumerate() {
             assert_eq!(*v, 0, "unset at index {i}");
         }
 
         x = vec![1u8; 2048];
+        let pool = threadpool::make_worker_threads(7);
         unsafe {
-            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), 7);
+            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), &pool);
         }
         for (i, v) in x.iter().enumerate() {
             assert_eq!(*v, 0, "unset at index {i}");
         }
 
         x = vec![1u8; 2048];
+        let pool = threadpool::make_worker_threads(1337);
         unsafe {
-            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), 1337);
+            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), &pool);
         }
         for (i, v) in x.iter().enumerate() {
             assert_eq!(*v, 0, "unset at index {i}");
         }
 
         x = vec![1u8; 2048];
+        let pool = threadpool::make_worker_threads(5555);
         unsafe {
-            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), 5555);
+            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), &pool);
         }
         for (i, v) in x.iter().enumerate() {
             assert_eq!(*v, 0, "unset at index {i}");

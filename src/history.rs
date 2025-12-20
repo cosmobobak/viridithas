@@ -1,50 +1,40 @@
-use std::sync::atomic::Ordering;
-
 use crate::{
     chess::{
         chessmove::Move,
         piece::{Colour, Piece, PieceType},
         squareset::SquareSet,
         types::Square,
-        CHESS960,
     },
     historytable::{
-        cont_history_bonus, cont_history_malus, main_history_bonus, main_history_malus,
-        tactical_history_bonus, tactical_history_malus, update_history, CORRECTION_HISTORY_GRAIN,
-        CORRECTION_HISTORY_MAX, CORRECTION_HISTORY_WEIGHT_SCALE,
+        CORRECTION_HISTORY_MAX, HASH_HISTORY_SIZE, cont_history_bonus, cont_history_malus,
+        main_history_bonus, main_history_malus, pawn_history_bonus, pawn_history_malus,
+        tactical_history_bonus, tactical_history_malus, update_cont_history, update_correction,
+        update_history,
     },
-    search::parameters::Config,
     threadlocal::ThreadData,
-    util::MAX_PLY,
+    util::MAX_DEPTH,
 };
 
-use crate::chess::board::{movegen::MoveListEntry, Board};
+use crate::chess::board::Board;
 
 impl ThreadData<'_> {
     /// Update the history counters of a batch of moves.
-    pub fn update_history(
-        &mut self,
-        conf: &Config,
-        pos: &Board,
-        moves_to_adjust: &[Move],
-        best_move: Move,
-        depth: i32,
-    ) {
-        let threats = pos.state.threats.all;
+    pub fn update_history(&mut self, moves_to_adjust: &[Move], best_move: Move, depth: i32) {
+        let threats = self.board.state.threats.all;
         for &m in moves_to_adjust {
             let from = m.from();
-            let piece_moved = pos.state.mailbox[from];
+            let piece_moved = self.board.state.mailbox[from];
             let to = m.history_to_square();
-            let val = self.main_history.get_mut(
+            let val = self.main_hist.get_mut(
                 piece_moved.unwrap(),
                 to,
                 threats.contains_square(from),
                 threats.contains_square(to),
             );
             let delta = if m == best_move {
-                main_history_bonus(conf, depth)
+                main_history_bonus(&self.info.conf, depth)
             } else {
-                -main_history_malus(conf, depth)
+                -main_history_malus(&self.info.conf, depth)
             };
             update_history(val, delta);
         }
@@ -57,9 +47,15 @@ impl ThreadData<'_> {
         to: Square,
         moved: Piece,
         threats: SquareSet,
-        delta: i32,
+        depth: i32,
+        good: bool,
     ) {
-        let val = self.main_history.get_mut(
+        let delta = if good {
+            main_history_bonus(&self.info.conf, depth)
+        } else {
+            -main_history_malus(&self.info.conf, depth)
+        };
+        let val = self.main_hist.get_mut(
             moved,
             to,
             threats.contains_square(from),
@@ -68,241 +64,195 @@ impl ThreadData<'_> {
         update_history(val, delta);
     }
 
-    /// Get the history scores for a batch of moves.
-    pub(super) fn get_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry]) {
-        let threats = pos.state.threats.all;
-        for m in ms {
-            let from = m.mov.from();
-            let piece_moved = pos.state.mailbox[from];
-            let to = m.mov.history_to_square();
-            m.score += i32::from(self.main_history.get(
-                piece_moved.unwrap(),
-                to,
-                threats.contains_square(from),
-                threats.contains_square(to),
-            ));
-        }
-    }
-
-    /// Get the history score for a single move.
-    pub fn get_history_score(&self, pos: &Board, m: Move) -> i32 {
-        let from = m.from();
-        let piece_moved = pos.state.mailbox[from];
-        let to = m.history_to_square();
-        let threats = pos.state.threats.all;
-        i32::from(self.main_history.get(
-            piece_moved.unwrap(),
-            to,
-            threats.contains_square(from),
-            threats.contains_square(to),
-        ))
-    }
-
-    /// Update the tactical history counters of a batch of moves.
-    pub fn update_tactical_history(
-        &mut self,
-        conf: &Config,
-        pos: &Board,
-        moves_to_adjust: &[Move],
-        best_move: Move,
-        depth: i32,
-    ) {
+    /// Update the pawn-structure history counters of a batch of moves.
+    pub fn update_pawn_history(&mut self, moves_to_adjust: &[Move], best_move: Move, depth: i32) {
+        let pawn_index = self.board.state.keys.pawn % HASH_HISTORY_SIZE as u64;
         for &m in moves_to_adjust {
-            let piece_moved = pos.state.mailbox[m.from()];
-            let capture = caphist_piece_type(pos, m);
-            debug_assert!(
-                piece_moved.is_some(),
-                "Invalid piece moved by move {} in position \n{pos:X}",
-                m.display(CHESS960.load(Ordering::Relaxed))
-            );
-            let to = m.to();
-            let val = self
-                .tactical_history
-                .get_mut(piece_moved.unwrap(), to, capture);
+            let piece_moved = self.board.state.mailbox[m.from()].unwrap();
+            let to = m.history_to_square();
+            #[expect(clippy::cast_possible_truncation)]
+            let val = &mut self.pawn_hist[pawn_index as usize][piece_moved][to];
             let delta = if m == best_move {
-                tactical_history_bonus(conf, depth)
+                pawn_history_bonus(&self.info.conf, depth)
             } else {
-                -tactical_history_malus(conf, depth)
+                -pawn_history_malus(&self.info.conf, depth)
             };
             update_history(val, delta);
         }
     }
 
-    /// Get the tactical history scores for a batch of moves.
-    pub(super) fn get_tactical_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry]) {
-        for m in ms {
-            let piece_moved = pos.state.mailbox[m.mov.from()];
-            let capture = caphist_piece_type(pos, m.mov);
-            let to = m.mov.to();
-            m.score += i32::from(self.tactical_history.get(piece_moved.unwrap(), to, capture));
-        }
+    /// Update the pawn-structure history counter for a single move.
+    pub fn update_pawn_history_single(&mut self, to: Square, moved: Piece, depth: i32, good: bool) {
+        let delta = if good {
+            pawn_history_bonus(&self.info.conf, depth)
+        } else {
+            -pawn_history_malus(&self.info.conf, depth)
+        };
+        let pawn_index = self.board.state.keys.pawn % HASH_HISTORY_SIZE as u64;
+        #[expect(clippy::cast_possible_truncation)]
+        let val = &mut self.pawn_hist[pawn_index as usize][moved][to];
+        update_history(val, delta);
     }
 
-    /// Get the tactical history score for a single move.
-    pub fn get_tactical_history_score(&self, pos: &Board, m: Move) -> i32 {
-        let piece_moved = pos.state.mailbox[m.from()];
-        let capture = caphist_piece_type(pos, m);
-        let to = m.to();
-        i32::from(self.tactical_history.get(piece_moved.unwrap(), to, capture))
-    }
-
-    /// Update the continuation history counters of a batch of moves.
-    pub fn update_continuation_history(
+    /// Update the tactical history counters of a batch of moves.
+    pub fn update_tactical_history(
         &mut self,
-        conf: &Config,
-        pos: &Board,
         moves_to_adjust: &[Move],
         best_move: Move,
         depth: i32,
-        index: usize,
     ) {
-        let height = pos.height();
-        if height <= index {
-            return;
-        }
-        let Some(ss) = self.ss.get(height - index - 1) else {
-            return;
-        };
-        let cmh_block = self.continuation_history.get_index_mut(ss.conthist_index);
+        let threats = self.board.state.threats.all;
         for &m in moves_to_adjust {
-            let to = m.history_to_square();
-            let piece = pos.state.mailbox[m.from()].unwrap();
-
+            let piece_moved = self.board.state.mailbox[m.from()].unwrap();
+            let capture = caphist_piece_type(&self.board, m);
+            let to = m.to();
+            let to_threat = threats.contains_square(to);
+            let val = &mut self.tactical_hist[usize::from(to_threat)][capture][piece_moved][to];
             let delta = if m == best_move {
-                cont_history_bonus(conf, depth, index)
+                tactical_history_bonus(&self.info.conf, depth)
             } else {
-                -cont_history_malus(conf, depth, index)
+                -tactical_history_malus(&self.info.conf, depth)
             };
-            update_history(cmh_block.get_mut(piece, to), delta);
+            update_history(val, delta);
         }
     }
 
-    /// Update the continuation history counter for a single move.
-    pub fn update_continuation_history_single(
+    /// Update the continuation history counters of a batch of moves.
+    pub fn update_cont_hist(&mut self, moves_to_adjust: &[Move], best_move: Move, depth: i32) {
+        let height = self.board.height();
+
+        for &m in moves_to_adjust {
+            let good = m == best_move;
+            let to = m.history_to_square();
+            let piece = self.board.state.mailbox[m.from()].unwrap();
+            self.update_cont_hist_single(to, piece, depth, height, good);
+        }
+    }
+
+    pub fn update_cont_hist_single(
         &mut self,
-        pos: &Board,
         to: Square,
-        moved: Piece,
-        delta: i32,
-        index: usize,
+        piece: Piece,
+        depth: i32,
+        height: usize,
+        good: bool,
     ) {
-        let height = pos.height();
-        if height <= index {
-            return;
-        }
-        let Some(ss) = self.ss.get(height - index - 1) else {
-            return;
-        };
-        let cmh_block = self.continuation_history.get_index_mut(ss.conthist_index);
-        update_history(cmh_block.get_mut(moved, to), delta);
-    }
+        let list = [
+            (1, self.info.conf.cont1_stat_score_mul),
+            (2, self.info.conf.cont2_stat_score_mul),
+            (4, self.info.conf.cont4_stat_score_mul),
+        ];
 
-    /// Get the continuation history scores for a batch of moves.
-    pub(super) fn get_continuation_history_scores(
-        &self,
-        pos: &Board,
-        ms: &mut [MoveListEntry],
-        index: usize,
-    ) {
-        let height = pos.height();
-        if height <= index {
-            return;
+        let mut sum = 0;
+        for (index, mul) in list {
+            if height < index {
+                break;
+            }
+            sum += mul * i32::from(self.cont_hist[self.ss[height - index].ch_idx][piece][to]);
         }
-        let Some(ss) = self.ss.get(height - index - 1) else {
-            return;
-        };
-        let cmh_block = self.continuation_history.get_index(ss.conthist_index);
-        for m in ms {
-            let to = m.mov.history_to_square();
-            let piece = pos.state.mailbox[m.mov.from()].unwrap();
-            m.score += i32::from(cmh_block.get(piece, to));
-        }
-    }
+        sum /= 32;
 
-    /// Get the continuation history score for a single move.
-    pub fn get_continuation_history_score(&self, pos: &Board, m: Move, index: usize) -> i32 {
-        let height = pos.height();
-        if height <= index {
-            return 0;
+        for (index, _) in list {
+            if height < index {
+                break;
+            }
+            let delta = if good {
+                cont_history_bonus(&self.info.conf, depth, index)
+            } else {
+                -cont_history_malus(&self.info.conf, depth, index)
+            };
+            let val = &mut self.cont_hist[self.ss[height - index].ch_idx][piece][to];
+            update_cont_history(val, sum, delta);
         }
-        let Some(ss) = self.ss.get(height - index - 1) else {
-            return 0;
-        };
-        let cmh_block = self.continuation_history.get_index(ss.conthist_index);
-        let to = m.history_to_square();
-        let piece = pos.state.mailbox[m.from()].unwrap();
-        i32::from(cmh_block.get(piece, to))
     }
 
     /// Add a killer move.
-    pub fn insert_killer(&mut self, pos: &Board, m: Move) {
-        debug_assert!(pos.height() < MAX_PLY);
-        let idx = pos.height();
+    pub fn insert_killer(&mut self, m: Move) {
+        debug_assert!(self.board.height() < MAX_DEPTH);
+        let idx = self.board.height();
         self.killer_move_table[idx] = Some(m);
     }
 
     /// Update the correction history for a pawn pattern.
-    pub fn update_correction_history(&mut self, pos: &Board, depth: i32, diff: i32) {
+    pub fn update_correction_history(&mut self, depth: i32, tt_complexity: i32, diff: i32) {
+        #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+
         use Colour::{Black, White};
-        fn update(entry: &mut i32, new_weight: i32, scaled_diff: i32) {
-            let update =
-                *entry * (CORRECTION_HISTORY_WEIGHT_SCALE - new_weight) + scaled_diff * new_weight;
-            *entry = i32::clamp(
-                update / CORRECTION_HISTORY_WEIGHT_SCALE,
-                -CORRECTION_HISTORY_MAX,
-                CORRECTION_HISTORY_MAX,
-            );
+
+        let us = self.board.turn();
+        let height = self.board.height();
+
+        // wow! floating point in a chess engine!
+        let tt_complexity_factor =
+            ((1.0 + (tt_complexity as f32 + 1.0).log2() / 10.0) * 8.0) as i32;
+
+        let bonus = i32::clamp(
+            diff * depth * tt_complexity_factor / 64,
+            -CORRECTION_HISTORY_MAX / 4,
+            CORRECTION_HISTORY_MAX / 4,
+        );
+
+        let keys = &self.board.state.keys;
+
+        let pawn = self.pawn_corrhist.get_mut(us, keys.pawn);
+        let [nonpawn_white, nonpawn_black] = &mut self.nonpawn_corrhist;
+        let nonpawn_white = nonpawn_white.get_mut(us, keys.non_pawn[White]);
+        let nonpawn_black = nonpawn_black.get_mut(us, keys.non_pawn[Black]);
+        let minor = self.minor_corrhist.get_mut(us, keys.minor);
+        let major = self.major_corrhist.get_mut(us, keys.major);
+
+        let update = move |entry: &mut i16| {
+            update_correction(entry, bonus);
+        };
+
+        update(pawn);
+        update(nonpawn_white);
+        update(nonpawn_black);
+        update(minor);
+        update(major);
+
+        if height > 2 {
+            let ch1 = self.ss[height - 1].ch_idx;
+            let ch2 = self.ss[height - 2].ch_idx;
+            let pt1 = ch1.piece.piece_type();
+            let pt2 = ch2.piece.piece_type();
+            update(&mut self.continuation_corrhist[ch1.to][pt1][ch2.to][pt2][us]);
         }
-        let scaled_diff = diff * CORRECTION_HISTORY_GRAIN;
-        let new_weight = 16.min(1 + depth);
-        debug_assert!(new_weight <= CORRECTION_HISTORY_WEIGHT_SCALE);
-        let us = pos.turn();
-
-        let keys = &pos.state.keys;
-
-        update(
-            self.pawn_corrhist.get_mut(us, keys.pawn),
-            new_weight,
-            scaled_diff,
-        );
-        update(
-            self.nonpawn_corrhist[White].get_mut(us, keys.non_pawn[White]),
-            new_weight,
-            scaled_diff,
-        );
-        update(
-            self.nonpawn_corrhist[Black].get_mut(us, keys.non_pawn[Black]),
-            new_weight,
-            scaled_diff,
-        );
-        update(
-            self.minor_corrhist.get_mut(us, keys.minor),
-            new_weight,
-            scaled_diff,
-        );
-        update(
-            self.major_corrhist.get_mut(us, keys.major),
-            new_weight,
-            scaled_diff,
-        );
     }
 
     /// Adjust a raw evaluation using statistics from the correction history.
     #[allow(clippy::cast_possible_truncation)]
-    pub fn correction(&self, conf: &Config, pos: &Board) -> i32 {
-        let keys = &pos.state.keys;
-        let pawn = self.pawn_corrhist.get(pos.turn(), keys.pawn);
-        let white =
-            self.nonpawn_corrhist[Colour::White].get(pos.turn(), keys.non_pawn[Colour::White]);
-        let black =
-            self.nonpawn_corrhist[Colour::Black].get(pos.turn(), keys.non_pawn[Colour::Black]);
-        let minor = self.minor_corrhist.get(pos.turn(), keys.minor);
-        let major = self.major_corrhist.get(pos.turn(), keys.major);
-        let adjustment = pawn * i64::from(conf.pawn_corrhist_weight)
-            + major * i64::from(conf.major_corrhist_weight)
-            + minor * i64::from(conf.minor_corrhist_weight)
-            + (white + black) * i64::from(conf.nonpawn_corrhist_weight);
-        (adjustment / 1024) as i32 / CORRECTION_HISTORY_GRAIN
+    pub fn correction(&self) -> i32 {
+        use Colour::{Black, White};
+
+        let keys = &self.board.state.keys;
+        let us = self.board.turn();
+        let height = self.board.height();
+
+        let pawn = self.pawn_corrhist.get(us, keys.pawn);
+        let [white, black] = &self.nonpawn_corrhist;
+        let white = white.get(us, keys.non_pawn[White]);
+        let black = black.get(us, keys.non_pawn[Black]);
+        let minor = self.minor_corrhist.get(us, keys.minor);
+        let major = self.major_corrhist.get(us, keys.major);
+
+        let cont = if height > 2 {
+            let ch1 = self.ss[height - 1].ch_idx;
+            let ch2 = self.ss[height - 2].ch_idx;
+            let pt1 = ch1.piece.piece_type();
+            let pt2 = ch2.piece.piece_type();
+            i64::from(self.continuation_corrhist[ch1.to][pt1][ch2.to][pt2][us])
+        } else {
+            0
+        };
+
+        let adjustment = pawn * i64::from(self.info.conf.pawn_corrhist_weight)
+            + major * i64::from(self.info.conf.major_corrhist_weight)
+            + minor * i64::from(self.info.conf.minor_corrhist_weight)
+            + (white + black) * i64::from(self.info.conf.nonpawn_corrhist_weight)
+            + cont * i64::from(self.info.conf.continuation_corrhist_weight);
+
+        (adjustment * 12 / 0x40000) as i32
     }
 }
 

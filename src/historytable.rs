@@ -1,13 +1,13 @@
+use std::ops::{Deref, DerefMut};
+
 use crate::{
     chess::{
-        piece::{Colour, Piece, PieceType},
-        types::{ContHistIndex, Square},
+        piece::{Colour, Piece},
+        types::Square,
     },
     search::parameters::Config,
     util::BOARD_N_SQUARES,
 };
-
-const AGEING_DIVISOR: i16 = 2;
 
 pub fn main_history_bonus(conf: &Config, depth: i32) -> i32 {
     i32::min(
@@ -45,6 +45,30 @@ pub fn cont2_history_malus(conf: &Config, depth: i32) -> i32 {
         conf.cont2_history_malus_max,
     )
 }
+pub fn cont4_history_bonus(conf: &Config, depth: i32) -> i32 {
+    i32::min(
+        conf.cont4_history_bonus_mul * depth + conf.cont4_history_bonus_offset,
+        conf.cont4_history_bonus_max,
+    )
+}
+pub fn cont4_history_malus(conf: &Config, depth: i32) -> i32 {
+    i32::min(
+        conf.cont4_history_malus_mul * depth + conf.cont4_history_malus_offset,
+        conf.cont4_history_malus_max,
+    )
+}
+pub fn pawn_history_bonus(conf: &Config, depth: i32) -> i32 {
+    i32::min(
+        conf.pawn_history_bonus_mul * depth + conf.pawn_history_bonus_offset,
+        conf.pawn_history_bonus_max,
+    )
+}
+pub fn pawn_history_malus(conf: &Config, depth: i32) -> i32 {
+    i32::min(
+        conf.pawn_history_malus_mul * depth + conf.pawn_history_malus_offset,
+        conf.pawn_history_malus_max,
+    )
+}
 pub fn tactical_history_bonus(conf: &Config, depth: i32) -> i32 {
     i32::min(
         conf.tactical_history_bonus_mul * depth + conf.tactical_history_bonus_offset,
@@ -60,30 +84,52 @@ pub fn tactical_history_malus(conf: &Config, depth: i32) -> i32 {
 
 pub fn cont_history_bonus(conf: &Config, depth: i32, index: usize) -> i32 {
     match index {
-        0 => cont1_history_bonus(conf, depth),
-        1 => cont2_history_bonus(conf, depth),
+        1 => cont1_history_bonus(conf, depth),
+        2 => cont2_history_bonus(conf, depth),
+        4 => cont4_history_bonus(conf, depth),
         _ => unreachable!(),
     }
 }
 pub fn cont_history_malus(conf: &Config, depth: i32, index: usize) -> i32 {
     match index {
-        0 => cont1_history_malus(conf, depth),
-        1 => cont2_history_malus(conf, depth),
+        1 => cont1_history_malus(conf, depth),
+        2 => cont2_history_malus(conf, depth),
+        4 => cont4_history_malus(conf, depth),
         _ => unreachable!(),
     }
 }
 
-pub const MAX_HISTORY: i16 = i16::MAX / 2;
+pub const MAX_HISTORY: i32 = i16::MAX as i32 / 2;
 pub const CORRECTION_HISTORY_SIZE: usize = 16_384;
-pub const CORRECTION_HISTORY_GRAIN: i32 = 256;
-pub const CORRECTION_HISTORY_WEIGHT_SCALE: i32 = 256;
-pub const CORRECTION_HISTORY_MAX: i32 = CORRECTION_HISTORY_GRAIN * 32;
+pub const CORRECTION_HISTORY_MAX: i32 = 1024;
+pub const HASH_HISTORY_SIZE: usize = 1024;
 
+#[inline]
 pub fn update_history(val: &mut i16, delta: i32) {
+    gravity_update::<MAX_HISTORY>(val, delta);
+}
+
+#[inline]
+pub fn update_cont_history(val: &mut i16, sum: i32, delta: i32) {
+    gravity_update_with_modulator::<MAX_HISTORY>(val, sum, delta);
+}
+
+#[inline]
+pub fn update_correction(val: &mut i16, delta: i32) {
+    gravity_update::<CORRECTION_HISTORY_MAX>(val, delta);
+}
+
+#[inline]
+fn gravity_update<const MAX: i32>(val: &mut i16, delta: i32) {
+    gravity_update_with_modulator::<MAX>(val, i32::from(*val), delta);
+}
+
+#[inline]
+fn gravity_update_with_modulator<const MAX: i32>(val: &mut i16, modulator: i32, delta: i32) {
     #![allow(clippy::cast_possible_truncation)]
-    const MAX_HISTORY: i32 = crate::historytable::MAX_HISTORY as i32;
-    let curr = i32::from(*val);
-    *val += delta as i16 - (curr * delta.abs() / MAX_HISTORY) as i16;
+    const { assert!(MAX < i16::MAX as i32 * 3 / 4) }
+    let new = i32::from(*val) + delta - modulator * delta.abs() / MAX;
+    *val = i32::clamp(new, -MAX, MAX) as i16;
 }
 
 #[repr(transparent)]
@@ -105,21 +151,19 @@ impl HistoryTable {
             self.table.iter_mut().flatten().for_each(|x| *x = 0);
         }
     }
+}
 
-    pub fn age_entries(&mut self) {
-        debug_assert!(!self.table.is_empty());
-        self.table
-            .iter_mut()
-            .flatten()
-            .for_each(|x| *x /= AGEING_DIVISOR);
+impl Deref for HistoryTable {
+    type Target = [[i16; BOARD_N_SQUARES]; 12];
+
+    fn deref(&self) -> &Self::Target {
+        &self.table
     }
+}
 
-    pub fn get(&self, piece: Piece, sq: Square) -> i16 {
-        self.table[piece][sq]
-    }
-
-    pub fn get_mut(&mut self, piece: Piece, sq: Square) -> &mut i16 {
-        &mut self.table[piece][sq]
+impl DerefMut for HistoryTable {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.table
     }
 }
 
@@ -143,18 +187,6 @@ impl ThreatsHistoryTable {
             .for_each(HistoryTable::clear);
     }
 
-    pub fn age_entries(&mut self) {
-        debug_assert!(!self.table.is_empty());
-        self.table
-            .iter_mut()
-            .flatten()
-            .for_each(HistoryTable::age_entries);
-    }
-
-    pub fn get(&self, piece: Piece, sq: Square, threat_from: bool, threat_to: bool) -> i16 {
-        self.table[usize::from(threat_from)][usize::from(threat_to)].get(piece, sq)
-    }
-
     pub fn get_mut(
         &mut self,
         piece: Piece,
@@ -162,13 +194,27 @@ impl ThreatsHistoryTable {
         threat_from: bool,
         threat_to: bool,
     ) -> &mut i16 {
-        self.table[usize::from(threat_from)][usize::from(threat_to)].get_mut(piece, sq)
+        &mut self.table[usize::from(threat_from)][usize::from(threat_to)][piece][sq]
+    }
+}
+
+impl Deref for ThreatsHistoryTable {
+    type Target = [[HistoryTable; 2]; 2];
+
+    fn deref(&self) -> &Self::Target {
+        &self.table
+    }
+}
+
+impl DerefMut for ThreatsHistoryTable {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.table
     }
 }
 
 #[repr(transparent)]
 pub struct CaptureHistoryTable {
-    table: [HistoryTable; 6],
+    table: [[HistoryTable; 6]; 2],
 }
 
 impl CaptureHistoryTable {
@@ -188,20 +234,24 @@ impl CaptureHistoryTable {
     }
 
     pub fn clear(&mut self) {
-        self.table.iter_mut().for_each(HistoryTable::clear);
+        self.table
+            .iter_mut()
+            .flatten()
+            .for_each(HistoryTable::clear);
     }
+}
 
-    pub fn age_entries(&mut self) {
-        debug_assert!(!self.table.is_empty());
-        self.table.iter_mut().for_each(HistoryTable::age_entries);
+impl Deref for CaptureHistoryTable {
+    type Target = [[HistoryTable; 6]; 2];
+
+    fn deref(&self) -> &Self::Target {
+        &self.table
     }
+}
 
-    pub fn get(&self, piece: Piece, sq: Square, capture: PieceType) -> i16 {
-        self.table[capture].get(piece, sq)
-    }
-
-    pub fn get_mut(&mut self, piece: Piece, sq: Square, capture: PieceType) -> &mut i16 {
-        self.table[capture].get_mut(piece, sq)
+impl DerefMut for CaptureHistoryTable {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.table
     }
 }
 
@@ -232,27 +282,65 @@ impl DoubleHistoryTable {
             .flatten()
             .for_each(HistoryTable::clear);
     }
+}
 
-    pub fn age_entries(&mut self) {
-        debug_assert!(!self.table.is_empty());
-        self.table
-            .iter_mut()
-            .flatten()
-            .for_each(HistoryTable::age_entries);
+impl Deref for DoubleHistoryTable {
+    type Target = [[HistoryTable; BOARD_N_SQUARES]; 12];
+
+    fn deref(&self) -> &Self::Target {
+        &self.table
+    }
+}
+
+impl DerefMut for DoubleHistoryTable {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.table
+    }
+}
+
+#[repr(transparent)]
+pub struct HashHistoryTable {
+    table: [HistoryTable; HASH_HISTORY_SIZE],
+}
+
+impl HashHistoryTable {
+    pub fn boxed() -> Box<Self> {
+        #![allow(clippy::cast_ptr_alignment)]
+        // SAFETY: we're allocating a zeroed block of memory, and then casting it to a Box<Self>
+        // this is fine! because [HistoryTable; HASH_HISTORY_SIZE] is just a bunch of i16s
+        // at base, which are fine to zero-out.
+        unsafe {
+            let layout = std::alloc::Layout::new::<Self>();
+            let ptr = std::alloc::alloc_zeroed(layout);
+            if ptr.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
+            Box::from_raw(ptr.cast())
+        }
     }
 
-    pub fn get_index_mut(&mut self, index: ContHistIndex) -> &mut HistoryTable {
-        &mut self.table[index.piece][index.square]
+    pub fn clear(&mut self) {
+        self.table.iter_mut().for_each(HistoryTable::clear);
     }
+}
 
-    pub fn get_index(&self, index: ContHistIndex) -> &HistoryTable {
-        &self.table[index.piece][index.square]
+impl Deref for HashHistoryTable {
+    type Target = [HistoryTable; HASH_HISTORY_SIZE];
+
+    fn deref(&self) -> &Self::Target {
+        &self.table
+    }
+}
+
+impl DerefMut for HashHistoryTable {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.table
     }
 }
 
 #[repr(transparent)]
 pub struct CorrectionHistoryTable {
-    table: [[i32; 2]; CORRECTION_HISTORY_SIZE],
+    table: [[i16; 2]; CORRECTION_HISTORY_SIZE],
 }
 
 impl CorrectionHistoryTable {
@@ -281,7 +369,66 @@ impl CorrectionHistoryTable {
     }
 
     #[allow(clippy::cast_possible_truncation)]
-    pub fn get_mut(&mut self, side: Colour, key: u64) -> &mut i32 {
+    pub fn get_mut(&mut self, side: Colour, key: u64) -> &mut i16 {
         &mut self.table[(key % CORRECTION_HISTORY_SIZE as u64) as usize][side]
+    }
+}
+
+impl Deref for CorrectionHistoryTable {
+    type Target = [[i16; 2]; CORRECTION_HISTORY_SIZE];
+
+    fn deref(&self) -> &Self::Target {
+        &self.table
+    }
+}
+
+impl DerefMut for CorrectionHistoryTable {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.table
+    }
+}
+
+#[repr(transparent)]
+pub struct ContinuationCorrectionHistoryTable {
+    table: [[[[[i16; 2]; 6]; 64]; 6]; 64],
+}
+
+impl ContinuationCorrectionHistoryTable {
+    pub fn boxed() -> Box<Self> {
+        #![allow(clippy::cast_ptr_alignment)]
+        // SAFETY: we're allocating a zeroed block of memory, and then casting it to a Box<Self>
+        // this is fine! because [[HistoryTable; BOARD_N_SQUARES]; 12] is just a bunch of i16s
+        // at base, which are fine to zero-out.
+        unsafe {
+            let layout = std::alloc::Layout::new::<Self>();
+            let ptr = std::alloc::alloc_zeroed(layout);
+            if ptr.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
+            Box::from_raw(ptr.cast())
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.table
+            .iter_mut()
+            .flatten()
+            .flatten()
+            .flatten()
+            .for_each(|t| t.fill(0));
+    }
+}
+
+impl Deref for ContinuationCorrectionHistoryTable {
+    type Target = [[[[[i16; 2]; 6]; 64]; 6]; 64];
+
+    fn deref(&self) -> &Self::Target {
+        &self.table
+    }
+}
+
+impl DerefMut for ContinuationCorrectionHistoryTable {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.table
     }
 }

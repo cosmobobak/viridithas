@@ -73,7 +73,7 @@ impl PackedBoard {
     }
 
     pub fn unpack(&self) -> (Board, i16, u8, u8) {
-        let mut builder = Board::new();
+        let mut builder = Board::empty();
 
         let mut seen_king = [false; 2];
         for (i, sq) in SquareSet::from_inner(self.occupancy.get())
@@ -175,6 +175,10 @@ pub mod util {
 
         pub const fn get(self) -> i16 {
             i16::from_le(self.0)
+        }
+
+        pub fn set(&mut self, v: i16) {
+            self.0 = v.to_le();
         }
     }
 

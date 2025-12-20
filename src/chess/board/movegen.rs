@@ -10,36 +10,30 @@ use std::{
 use crate::{
     cfor,
     chess::{
+        CHESS960,
         board::Board,
         chessmove::{Move, MoveFlags},
         magic::{
-            bishop_attacks_on_the_fly, rook_attacks_on_the_fly, set_occupancy, BISHOP_ATTACKS,
-            BISHOP_REL_BITS, BISHOP_TABLE, ROOK_ATTACKS, ROOK_REL_BITS, ROOK_TABLE,
+            BISHOP_ATTACKS, BISHOP_REL_BITS, BISHOP_TABLE, ROOK_ATTACKS, ROOK_REL_BITS, ROOK_TABLE,
+            bishop_attacks_on_the_fly, rook_attacks_on_the_fly, set_occupancy,
         },
         piece::{Black, Col, Colour, PieceType, White},
         squareset::SquareSet,
         types::{Rank, Square},
-        CHESS960,
     },
 };
 
 pub const MAX_POSITION_MOVES: usize = 218;
 
+#[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MoveListEntry {
-    pub mov: Move,
     pub score: i32,
-}
-
-impl MoveListEntry {
-    pub const TACTICAL_SENTINEL: i32 = 0x7FFF_FFFF;
-    pub const QUIET_SENTINEL: i32 = 0x7FFF_FFFE;
+    pub mov: Move,
 }
 
 #[derive(Clone, Debug)]
 pub struct MoveList {
-    // moves: [MoveListEntry; MAX_POSITION_MOVES],
-    // count: usize,
     inner: ArrayVec<MoveListEntry, MAX_POSITION_MOVES>,
 }
 
@@ -50,15 +44,8 @@ impl MoveList {
         }
     }
 
-    fn push<const TACTICAL: bool>(&mut self, m: Move) {
-        // debug_assert!(self.count < MAX_POSITION_MOVES, "overflowed {self}");
-        let score = if TACTICAL {
-            MoveListEntry::TACTICAL_SENTINEL
-        } else {
-            MoveListEntry::QUIET_SENTINEL
-        };
-
-        self.inner.push(MoveListEntry { mov: m, score });
+    fn push(&mut self, m: Move) {
+        self.inner.push(MoveListEntry { mov: m, score: 0 });
     }
 
     pub fn iter_moves(&self) -> impl Iterator<Item = &Move> {
@@ -340,6 +327,13 @@ pub fn pawn_attacks<C: Col>(bb: SquareSet) -> SquareSet {
         bb.south_east_one() | bb.south_west_one()
     }
 }
+pub fn pawn_attacks_by(bb: SquareSet, colour: Colour) -> SquareSet {
+    if colour == Colour::White {
+        bb.north_east_one() | bb.north_west_one()
+    } else {
+        bb.south_east_one() | bb.south_west_one()
+    }
+}
 
 pub fn attacks_by_type(pt: PieceType, sq: Square, blockers: SquareSet) -> SquareSet {
     match pt {
@@ -374,83 +368,62 @@ impl Board {
         move_list: &mut MoveList,
         valid_target_squares: SquareSet,
     ) {
+        #![allow(clippy::useless_let_if_seq)]
+
         use PieceType::{Bishop, Knight, Pawn, Queen, Rook};
+
         let bbs = &self.state.bbs;
         let our_pawns = bbs.pieces[Pawn] & bbs.colours[C::COLOUR];
-        let their_pieces = bbs.colours[!C::COLOUR];
-        // to determine which pawns can capture, we shift the opponent's pieces backwards and find the intersection
-        let attacking_west = if C::WHITE {
-            their_pieces.south_east_one() & our_pawns
+        let valid_targets = bbs.colours[!C::COLOUR] & valid_target_squares;
+        let promo_rank = [SquareSet::RANK_7, SquareSet::RANK_2][C::COLOUR];
+
+        let attacking_west;
+        let attacking_east;
+
+        // to determine which pawns can capture,
+        // we shift the opponent's pieces backwards and find the intersection.
+        if C::WHITE {
+            attacking_west = valid_targets.south_east_one() & our_pawns;
+            attacking_east = valid_targets.south_west_one() & our_pawns;
         } else {
-            their_pieces.north_east_one() & our_pawns
-        };
-        let attacking_east = if C::WHITE {
-            their_pieces.south_west_one() & our_pawns
-        } else {
-            their_pieces.north_west_one() & our_pawns
-        };
-        let valid_west = if C::WHITE {
-            valid_target_squares.south_east_one()
-        } else {
-            valid_target_squares.north_east_one()
-        };
-        let valid_east = if C::WHITE {
-            valid_target_squares.south_west_one()
-        } else {
-            valid_target_squares.north_west_one()
-        };
-        let promo_rank = if C::WHITE {
-            SquareSet::RANK_7
-        } else {
-            SquareSet::RANK_2
-        };
-        let from_mask = attacking_west & !promo_rank & valid_west;
-        let to_mask = if C::WHITE {
-            from_mask.north_west_one()
-        } else {
-            from_mask.south_west_one()
-        };
-        for (from, to) in from_mask.into_iter().zip(to_mask) {
-            move_list.push::<true>(Move::new(from, to));
+            attacking_west = valid_targets.north_east_one() & our_pawns;
+            attacking_east = valid_targets.north_west_one() & our_pawns;
         }
-        let from_mask = attacking_east & !promo_rank & valid_east;
-        let to_mask = if C::WHITE {
-            from_mask.north_east_one()
-        } else {
-            from_mask.south_east_one()
-        };
-        for (from, to) in from_mask.into_iter().zip(to_mask) {
-            move_list.push::<true>(Move::new(from, to));
+
+        for from in attacking_west & !promo_rank {
+            // SAFETY: masking guarantees a valid square
+            let to = unsafe { from.add_unchecked(C::PAWN_LEFT_OFFSET) };
+            move_list.push(Move::new(from, to));
         }
-        let from_mask = attacking_west & promo_rank & valid_west;
-        let to_mask = if C::WHITE {
-            from_mask.north_west_one()
-        } else {
-            from_mask.south_west_one()
-        };
-        for (from, to) in from_mask.into_iter().zip(to_mask) {
+
+        for from in attacking_east & !promo_rank {
+            // SAFETY: masking guarantees a valid square
+            let to = unsafe { from.add_unchecked(C::PAWN_RIGHT_OFFSET) };
+            move_list.push(Move::new(from, to));
+        }
+
+        for from in attacking_west & promo_rank {
+            // SAFETY: masking guarantees a valid square
+            let to = unsafe { from.add_unchecked(C::PAWN_LEFT_OFFSET) };
             // in quiescence search, we only generate promotions to queen.
             if Mode::SKIP_QUIETS {
-                move_list.push::<true>(Move::new_with_promo(from, to, Queen));
+                move_list.push(Move::new_with_promo(from, to, Queen));
             } else {
                 for promo in [Queen, Rook, Bishop, Knight] {
-                    move_list.push::<true>(Move::new_with_promo(from, to, promo));
+                    move_list.push(Move::new_with_promo(from, to, promo));
                 }
             }
         }
-        let from_mask = attacking_east & promo_rank & valid_east;
-        let to_mask = if C::WHITE {
-            from_mask.north_east_one()
-        } else {
-            from_mask.south_east_one()
-        };
-        for (from, to) in from_mask.into_iter().zip(to_mask) {
+
+        for from in attacking_east & promo_rank {
+            // SAFETY: masking guarantees a valid square
+            let to = unsafe { from.add_unchecked(C::PAWN_RIGHT_OFFSET) };
             // in quiescence search, we only generate promotions to queen.
             if Mode::SKIP_QUIETS {
-                move_list.push::<true>(Move::new_with_promo(from, to, Queen));
+                move_list.push(Move::new_with_promo(from, to, Queen));
             } else {
                 for promo in [Queen, Rook, Bishop, Knight] {
-                    move_list.push::<true>(Move::new_with_promo(from, to, promo));
+                    move_list.push(Move::new_with_promo(from, to, promo));
                 }
             }
         }
@@ -460,24 +433,17 @@ impl Board {
         let Some(ep_sq) = self.state.ep_square else {
             return;
         };
+
         let ep_bb = ep_sq.as_set();
         let our_pawns = self.state.bbs.pieces[PieceType::Pawn] & self.state.bbs.colours[C::COLOUR];
-        let attacks_west = if C::WHITE {
-            ep_bb.south_east_one() & our_pawns
+        let attacks = if C::WHITE {
+            ep_bb.south_east_one() | ep_bb.south_west_one()
         } else {
-            ep_bb.north_east_one() & our_pawns
-        };
-        let attacks_east = if C::WHITE {
-            ep_bb.south_west_one() & our_pawns
-        } else {
-            ep_bb.north_west_one() & our_pawns
-        };
+            ep_bb.north_east_one() | ep_bb.north_west_one()
+        } & our_pawns;
 
-        for from_sq in attacks_west {
-            move_list.push::<true>(Move::new_with_flags(from_sq, ep_sq, MoveFlags::EnPassant));
-        }
-        for from_sq in attacks_east {
-            move_list.push::<true>(Move::new_with_flags(from_sq, ep_sq, MoveFlags::EnPassant));
+        for from_sq in attacks {
+            move_list.push(Move::new_with_flags(from_sq, ep_sq, MoveFlags::EnPassant));
         }
     }
 
@@ -486,70 +452,48 @@ impl Board {
         move_list: &mut MoveList,
         valid_target_squares: SquareSet,
     ) {
-        use PieceType::{Bishop, Knight, Pawn, Queen, Rook};
-        let bbs = &self.state.bbs;
-        let start_rank = if C::WHITE {
-            SquareSet::RANK_2
-        } else {
-            SquareSet::RANK_7
-        };
-        let promo_rank = if C::WHITE {
-            SquareSet::RANK_7
-        } else {
-            SquareSet::RANK_2
-        };
-        let shifted_empty_squares = if C::WHITE {
-            bbs.empty() >> 8
-        } else {
-            bbs.empty() << 8
-        };
-        let double_shifted_empty_squares = if C::WHITE {
-            bbs.empty() >> 16
-        } else {
-            bbs.empty() << 16
-        };
-        let shifted_valid_squares = if C::WHITE {
-            valid_target_squares >> 8
-        } else {
-            valid_target_squares << 8
-        };
-        let double_shifted_valid_squares = if C::WHITE {
-            valid_target_squares >> 16
-        } else {
-            valid_target_squares << 16
-        };
-        let our_pawns = bbs.pieces[Pawn] & bbs.colours[C::COLOUR];
-        let pushable_pawns = our_pawns & shifted_empty_squares;
-        let double_pushable_pawns = pushable_pawns & double_shifted_empty_squares & start_rank;
-        let promoting_pawns = pushable_pawns & promo_rank;
+        #![allow(clippy::useless_let_if_seq)]
 
-        let from_mask = pushable_pawns & !promoting_pawns & shifted_valid_squares;
-        let to_mask = if C::WHITE {
-            from_mask.north_one()
+        use PieceType::{Bishop, Knight, Pawn, Queen, Rook};
+
+        let bbs = &self.state.bbs;
+        let promo_rank = [SquareSet::RANK_7, SquareSet::RANK_2][C::COLOUR];
+        let start_rank = [SquareSet::RANK_2, SquareSet::RANK_7][C::COLOUR];
+        let our_pawns = bbs.pieces[Pawn] & bbs.colours[C::COLOUR];
+        let empty = bbs.empty();
+
+        let shifted_valid_squares;
+        let double_shifted_valid_squares;
+        let pushable_pawns;
+        let double_pushable_pawns;
+
+        if C::WHITE {
+            shifted_valid_squares = valid_target_squares.south_one();
+            double_shifted_valid_squares = valid_target_squares.south_one().south_one();
+            pushable_pawns = our_pawns & empty.south_one();
+            double_pushable_pawns = pushable_pawns & empty.south_one().south_one() & start_rank;
         } else {
-            from_mask.south_one()
-        };
-        for (from, to) in from_mask.into_iter().zip(to_mask) {
-            move_list.push::<false>(Move::new(from, to));
+            shifted_valid_squares = valid_target_squares.north_one();
+            double_shifted_valid_squares = valid_target_squares.north_one().north_one();
+            pushable_pawns = our_pawns & empty.north_one();
+            double_pushable_pawns = pushable_pawns & empty.north_one().north_one() & start_rank;
         }
-        let from_mask = double_pushable_pawns & double_shifted_valid_squares;
-        let to_mask = if C::WHITE {
-            from_mask.north_one().north_one()
-        } else {
-            from_mask.south_one().south_one()
-        };
-        for (from, to) in from_mask.into_iter().zip(to_mask) {
-            move_list.push::<false>(Move::new(from, to));
+
+        for from in pushable_pawns & !promo_rank & shifted_valid_squares {
+            // SAFETY: masking guarantees a valid square
+            let to = unsafe { from.add_unchecked(C::PAWN_FWD_OFFSET) };
+            move_list.push(Move::new(from, to));
         }
-        let from_mask = promoting_pawns & shifted_valid_squares;
-        let to_mask = if C::WHITE {
-            from_mask.north_one()
-        } else {
-            from_mask.south_one()
-        };
-        for (from, to) in from_mask.into_iter().zip(to_mask) {
+        for from in double_pushable_pawns & double_shifted_valid_squares {
+            // SAFETY: masking guarantees a valid square
+            let to = unsafe { from.add_unchecked(C::PAWN_DOUBLE_OFFSET) };
+            move_list.push(Move::new(from, to));
+        }
+        for from in pushable_pawns & promo_rank & shifted_valid_squares {
+            // SAFETY: masking guarantees a valid square
+            let to = unsafe { from.add_unchecked(C::PAWN_FWD_OFFSET) };
             for promo in [Queen, Knight, Rook, Bishop] {
-                move_list.push::<true>(Move::new_with_promo(from, to, promo));
+                move_list.push(Move::new_with_promo(from, to, promo));
             }
         }
     }
@@ -580,19 +524,15 @@ impl Board {
         let pushable_pawns = our_pawns & shifted_empty_squares;
         let promoting_pawns = pushable_pawns & promo_rank;
 
-        let from_mask = promoting_pawns & shifted_valid_squares;
-        let to_mask = if C::WHITE {
-            from_mask.north_one()
-        } else {
-            from_mask.south_one()
-        };
-        for (from, to) in from_mask.into_iter().zip(to_mask) {
+        for from in promoting_pawns & shifted_valid_squares {
+            // SAFETY: masking guarantees a valid square
+            let to = unsafe { from.add_unchecked(C::PAWN_FWD_OFFSET) };
             if Mode::SKIP_QUIETS {
                 // in quiescence search, we only generate promotions to queen.
-                move_list.push::<true>(Move::new_with_promo(from, to, Queen));
+                move_list.push(Move::new_with_promo(from, to, Queen));
             } else {
                 for promo in [Queen, Knight, Rook, Bishop] {
-                    move_list.push::<true>(Move::new_with_promo(from, to, promo));
+                    move_list.push(Move::new_with_promo(from, to, promo));
                 }
             }
         }
@@ -624,11 +564,8 @@ impl Board {
         if self.state.threats.checkers.count() > 1 {
             // we're in double-check, so we can only move the king.
             let moves = king_attacks(our_king_sq) & !self.state.threats.all;
-            for to in moves & their_pieces {
-                move_list.push::<true>(Move::new(our_king_sq, to));
-            }
-            for to in moves & freespace {
-                move_list.push::<false>(Move::new(our_king_sq, to));
+            for to in moves & (their_pieces | freespace) {
+                move_list.push(Move::new(our_king_sq, to));
             }
             return;
         }
@@ -647,21 +584,15 @@ impl Board {
         let our_knights = bbs.pieces[Knight] & our_pieces;
         for sq in our_knights {
             let moves = knight_attacks(sq) & valid_target_squares;
-            for to in moves & their_pieces {
-                move_list.push::<true>(Move::new(sq, to));
-            }
-            for to in moves & freespace {
-                move_list.push::<false>(Move::new(sq, to));
+            for to in moves & (their_pieces | freespace) {
+                move_list.push(Move::new(sq, to));
             }
         }
 
         // kings
         let moves = king_attacks(our_king_sq) & !self.state.threats.all;
-        for to in moves & their_pieces {
-            move_list.push::<true>(Move::new(our_king_sq, to));
-        }
-        for to in moves & freespace {
-            move_list.push::<false>(Move::new(our_king_sq, to));
+        for to in moves & (their_pieces | freespace) {
+            move_list.push(Move::new(our_king_sq, to));
         }
 
         // bishops and queens
@@ -669,11 +600,8 @@ impl Board {
         let blockers = bbs.occupied();
         for sq in our_diagonal_sliders {
             let moves = bishop_attacks(sq, blockers) & valid_target_squares;
-            for to in moves & their_pieces {
-                move_list.push::<true>(Move::new(sq, to));
-            }
-            for to in moves & freespace {
-                move_list.push::<false>(Move::new(sq, to));
+            for to in moves & (their_pieces | freespace) {
+                move_list.push(Move::new(sq, to));
             }
         }
 
@@ -681,11 +609,8 @@ impl Board {
         let our_orthogonal_sliders = (bbs.pieces[Queen] | bbs.pieces[Rook]) & our_pieces;
         for sq in our_orthogonal_sliders {
             let moves = rook_attacks(sq, blockers) & valid_target_squares;
-            for to in moves & their_pieces {
-                move_list.push::<true>(Move::new(sq, to));
-            }
-            for to in moves & freespace {
-                move_list.push::<false>(Move::new(sq, to));
+            for to in moves & (their_pieces | freespace) {
+                move_list.push(Move::new(sq, to));
             }
         }
 
@@ -720,7 +645,7 @@ impl Board {
             // we're in double-check, so we can only move the king.
             let moves = king_attacks(our_king_sq) & !self.state.threats.all;
             for to in moves & their_pieces {
-                move_list.push::<true>(Move::new(our_king_sq, to));
+                move_list.push(Move::new(our_king_sq, to));
             }
             return;
         }
@@ -743,14 +668,14 @@ impl Board {
         for sq in our_knights {
             let moves = knight_attacks(sq) & valid_target_squares;
             for to in moves & their_pieces {
-                move_list.push::<true>(Move::new(sq, to));
+                move_list.push(Move::new(sq, to));
             }
         }
 
         // kings
         let moves = king_attacks(our_king_sq) & !self.state.threats.all;
         for to in moves & their_pieces {
-            move_list.push::<true>(Move::new(our_king_sq, to));
+            move_list.push(Move::new(our_king_sq, to));
         }
 
         // bishops and queens
@@ -759,7 +684,7 @@ impl Board {
         for sq in our_diagonal_sliders {
             let moves = bishop_attacks(sq, blockers) & valid_target_squares;
             for to in moves & their_pieces {
-                move_list.push::<true>(Move::new(sq, to));
+                move_list.push(Move::new(sq, to));
             }
         }
 
@@ -768,7 +693,7 @@ impl Board {
         for sq in our_orthogonal_sliders {
             let moves = rook_attacks(sq, blockers) & valid_target_squares;
             for to in moves & their_pieces {
-                move_list.push::<true>(Move::new(sq, to));
+                move_list.push(Move::new(sq, to));
             }
         }
     }
@@ -851,7 +776,7 @@ impl Board {
                 }
                 && !self.sq_attacked_by::<C::Opposite>(k_thru)
             {
-                move_list.push::<false>(Move::new_with_flags(from, k_to, MoveFlags::Castle));
+                move_list.push(Move::new_with_flags(from, k_to, MoveFlags::Castle));
             }
 
             if q_perm.is_some()
@@ -859,7 +784,7 @@ impl Board {
                 && !cache.unwrap_or_else(|| self.sq_attacked_by::<C::Opposite>(from))
                 && !self.sq_attacked_by::<C::Opposite>(q_thru)
             {
-                move_list.push::<false>(Move::new_with_flags(from, q_to, MoveFlags::Castle));
+                move_list.push(Move::new_with_flags(from, q_to, MoveFlags::Castle));
             }
         }
     }
@@ -879,7 +804,7 @@ impl Board {
         let intersection =
             relevant_occupied & (king_path | rook_path | king_dst.as_set() | rook_dst.as_set());
         if intersection == SquareSet::EMPTY && !self.any_attacked(king_path, C::Opposite::COLOUR) {
-            move_list.push::<false>(Move::new_with_flags(
+            move_list.push(Move::new_with_flags(
                 king_sq,
                 castling_sq,
                 MoveFlags::Castle,
@@ -897,65 +822,42 @@ impl Board {
         debug_assert!(move_list.iter_moves().all(|m| m.is_valid()));
     }
 
-    fn generate_pawn_quiet<C: Col>(
-        &self,
-        move_list: &mut MoveList,
-        valid_target_squares: SquareSet,
-    ) {
-        use PieceType::Pawn;
-        let bbs = &self.state.bbs;
-        let start_rank = if C::WHITE {
-            SquareSet::RANK_2
-        } else {
-            SquareSet::RANK_7
-        };
-        let promo_rank = if C::WHITE {
-            SquareSet::RANK_7
-        } else {
-            SquareSet::RANK_2
-        };
-        let shifted_empty_squares = if C::WHITE {
-            bbs.empty() >> 8
-        } else {
-            bbs.empty() << 8
-        };
-        let double_shifted_empty_squares = if C::WHITE {
-            bbs.empty() >> 16
-        } else {
-            bbs.empty() << 16
-        };
-        let shifted_valid_squares = if C::WHITE {
-            valid_target_squares >> 8
-        } else {
-            valid_target_squares << 8
-        };
-        let double_shifted_valid_squares = if C::WHITE {
-            valid_target_squares >> 16
-        } else {
-            valid_target_squares << 16
-        };
-        let our_pawns = bbs.pieces[Pawn] & bbs.colours[C::COLOUR];
-        let pushable_pawns = our_pawns & shifted_empty_squares;
-        let double_pushable_pawns = pushable_pawns & double_shifted_empty_squares & start_rank;
-        let promoting_pawns = pushable_pawns & promo_rank;
+    fn generate_pawn_quiet<C: Col>(&self, move_list: &mut MoveList, valid_target: SquareSet) {
+        #![allow(clippy::useless_let_if_seq)]
 
-        let from_mask = pushable_pawns & !promoting_pawns & shifted_valid_squares;
-        let to_mask = if C::WHITE {
-            from_mask.north_one()
+        use PieceType::Pawn;
+
+        let bbs = &self.state.bbs;
+        let start_rank = SquareSet::RANK_2.relative_to(C::COLOUR);
+        let promo_rank = SquareSet::RANK_7.relative_to(C::COLOUR);
+
+        let shifted_empty_squares;
+        let double_shifted_empty;
+        let shifted_valid;
+        let double_shifted_valid;
+
+        if C::WHITE {
+            shifted_empty_squares = bbs.empty().south_one();
+            double_shifted_empty = bbs.empty().south_one().south_one();
+            shifted_valid = valid_target.south_one();
+            double_shifted_valid = valid_target.south_one().south_one();
         } else {
-            from_mask.south_one()
-        };
-        for (from, to) in from_mask.into_iter().zip(to_mask) {
-            move_list.push::<false>(Move::new(from, to));
+            shifted_empty_squares = bbs.empty().north_one();
+            double_shifted_empty = bbs.empty().north_one().north_one();
+            shifted_valid = valid_target.north_one();
+            double_shifted_valid = valid_target.north_one().north_one();
         }
-        let from_mask = double_pushable_pawns & double_shifted_valid_squares;
-        let to_mask = if C::WHITE {
-            from_mask.north_one().north_one()
-        } else {
-            from_mask.south_one().south_one()
-        };
-        for (from, to) in from_mask.into_iter().zip(to_mask) {
-            move_list.push::<false>(Move::new(from, to));
+
+        let pushable = bbs.pieces[Pawn] & bbs.colours[C::COLOUR] & shifted_empty_squares;
+        for from in pushable & !promo_rank & shifted_valid {
+            // SAFETY: masking guarantees a valid square
+            let to = unsafe { from.add_unchecked(C::PAWN_FWD_OFFSET) };
+            move_list.push(Move::new(from, to));
+        }
+        for from in pushable & double_shifted_empty & start_rank & double_shifted_valid {
+            // SAFETY: masking guarantees a valid square
+            let to = unsafe { from.add_unchecked(C::PAWN_DOUBLE_OFFSET) };
+            move_list.push(Move::new(from, to));
         }
     }
 
@@ -975,7 +877,7 @@ impl Board {
             // we're in double-check, so we can only move the king.
             let moves = king_attacks(our_king_sq) & !self.state.threats.all;
             for to in moves & freespace {
-                move_list.push::<false>(Move::new(our_king_sq, to));
+                move_list.push(Move::new(our_king_sq, to));
             }
             return;
         }
@@ -994,14 +896,14 @@ impl Board {
         for sq in our_knights {
             let moves = knight_attacks(sq) & valid_target_squares;
             for to in moves & !blockers {
-                move_list.push::<false>(Move::new(sq, to));
+                move_list.push(Move::new(sq, to));
             }
         }
 
         // kings
         let moves = king_attacks(our_king_sq) & !self.state.threats.all;
         for to in moves & !blockers {
-            move_list.push::<false>(Move::new(our_king_sq, to));
+            move_list.push(Move::new(our_king_sq, to));
         }
 
         // bishops and queens
@@ -1009,7 +911,7 @@ impl Board {
         for sq in our_diagonal_sliders {
             let moves = bishop_attacks(sq, blockers) & valid_target_squares;
             for to in moves & !blockers {
-                move_list.push::<false>(Move::new(sq, to));
+                move_list.push(Move::new(sq, to));
             }
         }
 
@@ -1018,7 +920,7 @@ impl Board {
         for sq in our_orthogonal_sliders {
             let moves = rook_attacks(sq, blockers) & valid_target_squares;
             for to in moves & !blockers {
-                move_list.push::<false>(Move::new(sq, to));
+                move_list.push(Move::new(sq, to));
             }
         }
 
@@ -1057,30 +959,14 @@ pub fn synced_perft(pos: &mut Board, depth: usize) -> u64 {
         {
             let mut mvs = Vec::new();
             for m in full_moves_vec {
-                mvs.push(format!(
-                    "{}{}",
-                    pos.san(m.mov).unwrap(),
-                    if m.score == MoveListEntry::TACTICAL_SENTINEL {
-                        "T"
-                    } else {
-                        "Q"
-                    }
-                ));
+                mvs.push(pos.san(m.mov).unwrap());
             }
             mvs.join(", ")
         },
         {
             let mut mvs = Vec::new();
             for m in staged_moves_vec {
-                mvs.push(format!(
-                    "{}{}",
-                    pos.san(m.mov).unwrap(),
-                    if m.score == MoveListEntry::TACTICAL_SENTINEL {
-                        "T"
-                    } else {
-                        "Q"
-                    }
-                ));
+                mvs.push(pos.san(m.mov).unwrap());
             }
             mvs.join(", ")
         }
@@ -1107,6 +993,7 @@ mod tests {
         chess::{
             board::movegen::{king_attacks, knight_attacks},
             magic::{bishop_attacks_on_the_fly, rook_attacks_on_the_fly},
+            piece::Piece,
             squareset::SquareSet,
             types::Square,
         },
@@ -1116,9 +1003,39 @@ mod tests {
     fn staged_matches_full() {
         let mut pos = Board::default();
 
-        for fen in bench::BENCH_POSITIONS {
+        let positions = bench::BENCH_POSITIONS
+            .into_iter()
+            .chain(["r4rk1/2pb1ppQ/2pp1q2/p1n5/2P1B3/PP2P3/3N1PPP/R4RK1 b - - 0 17"]);
+
+        for fen in positions {
             pos.set_from_fen(fen).unwrap();
             synced_perft(&mut pos, 2);
+        }
+    }
+
+    #[test]
+    fn no_king_into_check() {
+        let pos = Board::from_fen("r4rk1/2pb1ppQ/2pp1q2/p1n5/2P1B3/PP2P3/3N1PPP/R4RK1 b - - 0 17")
+            .unwrap();
+
+        assert_eq!(
+            pos.state.threats.checkers,
+            SquareSet::from_square(Square::H7)
+        );
+
+        assert!(pos.state.threats.all.contains_square(Square::H8));
+        assert!(pos.state.threats.all.contains_square(Square::H5));
+
+        let mut ml = MoveList::new();
+
+        pos.generate_captures::<AllMoves>(&mut ml);
+        pos.generate_quiets(&mut ml);
+
+        for m in ml.iter_moves() {
+            let Some(Piece::WK) = pos.state.mailbox[m.from()] else {
+                continue;
+            };
+            assert!(!pos.state.threats.all.contains_square(m.to()));
         }
     }
 
@@ -1185,7 +1102,7 @@ mod tests {
 
     #[test]
     fn ray_test() {
-        use super::{Square, RAY_BETWEEN};
+        use super::{RAY_BETWEEN, Square};
         use crate::chess::squareset::SquareSet;
         assert_eq!(RAY_BETWEEN[Square::A1][Square::A1], SquareSet::EMPTY);
         assert_eq!(RAY_BETWEEN[Square::A1][Square::B1], SquareSet::EMPTY);
@@ -1206,7 +1123,7 @@ mod tests {
 
     #[test]
     fn ray_diag_test() {
-        use super::{Square, RAY_BETWEEN};
+        use super::{RAY_BETWEEN, Square};
         let ray = RAY_BETWEEN[Square::B5][Square::E8];
         assert_eq!(ray, Square::C6.as_set() | Square::D7.as_set());
     }

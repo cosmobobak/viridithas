@@ -1,7 +1,9 @@
 use std::fmt::Display;
 
 use crate::chess::{
-    board::movegen::{bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks},
+    board::movegen::{
+        RAY_BETWEEN, bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks,
+    },
     piece::{Black, Colour, Piece, PieceType, White},
     squareset::SquareSet,
     types::{File, Rank, Square},
@@ -83,7 +85,9 @@ impl PieceLayout {
                 return Some(Piece::new(colour, piece));
             }
         }
-        panic!("Bit set in colour square-set for {colour:?} but not in piece square-sets! square is {sq}");
+        panic!(
+            "Bit set in colour square-set for {colour:?} but not in piece square-sets! square is {sq}"
+        );
     }
 
     fn any_bbs_overlapping(&self) -> bool {
@@ -182,14 +186,101 @@ impl PieceLayout {
         debug_assert_eq!(king_bb.count(), 1);
         king_bb.first().unwrap()
     }
+
+    pub fn generate_pinned(&self, side: Colour) -> SquareSet {
+        use PieceType::{Bishop, Queen, Rook};
+
+        let mut pinned = SquareSet::EMPTY;
+
+        let king = self.king_sq(side);
+
+        let us = self.colours[side];
+        let them = self.colours[!side];
+
+        let their_diags = (self.pieces[Queen] | self.pieces[Bishop]) & them;
+        let their_orthos = (self.pieces[Queen] | self.pieces[Rook]) & them;
+
+        let potential_attackers =
+            bishop_attacks(king, them) & their_diags | rook_attacks(king, them) & their_orthos;
+
+        for potential_attacker in potential_attackers {
+            let maybe_pinned = us & RAY_BETWEEN[king][potential_attacker];
+            if maybe_pinned.one() {
+                pinned |= maybe_pinned;
+            }
+        }
+
+        pinned
+    }
+
+    pub fn generate_threats(&self, side: Colour) -> Threats {
+        let mut checkers = SquareSet::EMPTY;
+
+        let us = self.colours[side];
+        let them = self.colours[!side];
+        let their_pawns = self.pieces[PieceType::Pawn] & them;
+        let their_knights = self.pieces[PieceType::Knight] & them;
+        let their_bishops = self.pieces[PieceType::Bishop] & them;
+        let their_rooks = self.pieces[PieceType::Rook] & them;
+        let their_queens = self.pieces[PieceType::Queen] & them;
+        let their_king = (self.pieces[PieceType::King] & them).first().unwrap();
+        let blockers = us | them;
+
+        // compute threats
+        let leq_pawn = match side {
+            Colour::White => their_pawns.south_east_one() | their_pawns.south_west_one(),
+            Colour::Black => their_pawns.north_east_one() | their_pawns.north_west_one(),
+        };
+
+        let mut leq_minor = leq_pawn;
+        for sq in their_knights {
+            leq_minor |= knight_attacks(sq);
+        }
+        for sq in their_bishops {
+            leq_minor |= bishop_attacks(sq, blockers);
+        }
+        let mut leq_rook = leq_minor;
+        for sq in their_rooks {
+            leq_rook |= rook_attacks(sq, blockers);
+        }
+        let mut all_threats = leq_rook;
+        for sq in their_queens {
+            all_threats |= bishop_attacks(sq, blockers);
+            all_threats |= rook_attacks(sq, blockers);
+        }
+        all_threats |= king_attacks(their_king);
+
+        // compute checkers
+        let our_king_bb = us & self.pieces[PieceType::King];
+        let our_king_sq = our_king_bb.first().unwrap();
+        let backwards_from_king = match side {
+            Colour::White => our_king_bb.north_east_one() | our_king_bb.north_west_one(),
+            Colour::Black => our_king_bb.south_east_one() | our_king_bb.south_west_one(),
+        };
+        checkers |= backwards_from_king & their_pawns;
+        let knight_attacks = knight_attacks(our_king_sq);
+        checkers |= knight_attacks & their_knights;
+        let diag_attacks = bishop_attacks(our_king_sq, blockers);
+        checkers |= diag_attacks & (their_bishops | their_queens);
+        let ortho_attacks = rook_attacks(our_king_sq, blockers);
+        checkers |= ortho_attacks & (their_rooks | their_queens);
+
+        Threats {
+            all: all_threats,
+            leq_pawn,
+            leq_minor,
+            leq_rook,
+            checkers,
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub struct Threats {
     pub all: SquareSet,
-    // pub pawn: SquareSet,
-    // pub minor: SquareSet,
-    // pub rook: SquareSet,
+    pub leq_pawn: SquareSet,
+    pub leq_minor: SquareSet,
+    pub leq_rook: SquareSet,
     pub checkers: SquareSet,
 }
 
