@@ -1,5 +1,14 @@
 // The granularity of evaluation in this engine is in centipawns.
 
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::{BufRead, BufReader, BufWriter, Write},
+    path::Path,
+};
+
+use anyhow::Context;
+
 use crate::{
     chess::{
         board::Board,
@@ -7,6 +16,7 @@ use crate::{
         piece::{Colour, PieceType},
         squareset::SquareSet,
     },
+    nnue::network::{self, NNUEParams, NNUEState},
     search::{draw_score, parameters::Config},
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
@@ -134,4 +144,121 @@ pub const fn see_value(piece_type: PieceType, conf: &Config) -> i32 {
         PieceType::Queen => conf.see_queen_value,
         PieceType::King => 0,
     }
+}
+
+pub fn eval_stats(input: &Path, histogram_output: Option<&Path>) -> anyhow::Result<()> {
+    // Histogram data: bin evaluations into 10 cp buckets
+    const BIN_SIZE: i32 = 10;
+
+    let f = File::open(input).with_context(|| format!("Failed to open {}", input.display()))?;
+    let mut board = Board::default();
+    let nnue_params = NNUEParams::decompress_and_alloc()?;
+    let mut nnue = NNUEState::new(&board, nnue_params);
+
+    let mut total = 0i128;
+    let mut count = 0i128;
+    let mut abs_total = 0i128;
+    let mut min = i32::MAX;
+    let mut max = i32::MIN;
+    let mut sq_total = 0i128;
+
+    let mut histogram = HashMap::new();
+
+    let lines = BufReader::new(f)
+        .lines()
+        .collect::<Result<Vec<_>, _>>()
+        .with_context(|| "Failed to read lines from input file.")?;
+
+    let file_len = lines.len();
+
+    for (i, line) in lines.into_iter().enumerate() {
+        // extract the first 6 fields as FEN
+        let end_idx = line
+            .match_indices(' ')
+            .nth(5)
+            .map(|(idx, _)| idx)
+            .with_context(|| format!("Failed to parse FEN from line {}: {}", i + 1, line))?;
+        let fen = &line[..end_idx];
+
+        board.set_from_fen(fen)?;
+
+        if board.in_check() {
+            continue;
+        }
+
+        nnue.reinit_from(&board, nnue_params);
+        let eval = nnue.evaluate(nnue_params, &board);
+
+        count += 1;
+        total += i128::from(eval);
+        abs_total += i128::from(eval.abs());
+        sq_total += i128::from(eval) * i128::from(eval);
+        if eval < min {
+            min = eval;
+        }
+        if eval > max {
+            max = eval;
+        }
+
+        let binned = (eval.abs() / BIN_SIZE) * BIN_SIZE;
+        *histogram.entry(binned).or_insert(0) += 1;
+
+        if i % 1024 == 0 {
+            print!("\rPROCESSED {:>10}/{}.", i + 1, file_len);
+        }
+    }
+
+    println!("\rPROCESSED {file_len:>10}/{file_len}.");
+
+    println!(" EVALUATION STATISTICS:");
+
+    println!("    COUNT: {count:>7}");
+    #[expect(clippy::cast_precision_loss)]
+    if count > 0 {
+        let mean = total as f64 / count as f64;
+        let abs_mean = abs_total as f64 / count as f64;
+        let mean_squared = mean * mean;
+        let variance = (sq_total as f64 / count as f64) - mean_squared;
+        let stddev = variance.sqrt();
+        let min = f64::from(min);
+        let max = f64::from(max);
+        println!("     MEAN: {mean:>10.2}");
+        println!(" ABS MEAN: {abs_mean:>10.2}");
+        println!("   STDDEV: {stddev:>10.2}");
+        println!("      MIN: {min:>10.2}");
+        println!("      MAX: {max:>10.2}");
+
+        // delenda's eval scale is 400, generating a mean absolute eval of ~780.49
+        // compute the multiplier we'd need to hit that target - e.g. if our abs-mean
+        // is 390, we should have an eval scale of 800 to push it up to 780. conversely,
+        // if our abs-mean is 1560, we should have an eval scale of 200 to bring it down to 780.
+        let delenda_abs_mean = 780.489_583_154_229_1;
+        let scale = delenda_abs_mean / abs_mean * f64::from(network::SCALE);
+
+        println!("  DELENDA SCALING FACTOR: {scale:.6}");
+    }
+
+    // write histogram data if requested
+    if let Some(output_path) = histogram_output {
+        let output = File::create(output_path).with_context(|| {
+            format!(
+                "Failed to create histogram output file {}",
+                output_path.display()
+            )
+        })?;
+        let mut output = BufWriter::new(output);
+
+        writeln!(output, "bin_start,count")?;
+
+        let mut bins = histogram.iter().collect::<Vec<_>>();
+        bins.sort_by_key(|(bin, _)| *bin);
+
+        for (bin, count) in bins {
+            writeln!(output, "{bin},{count}")?;
+        }
+
+        println!("\nHISTOGRAM RECORDED TO {}", output_path.display());
+    }
+
+    Ok(())
 }

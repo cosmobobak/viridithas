@@ -8,7 +8,7 @@ use crate::{
         squareset::SquareSet,
     },
     history,
-    historytable::MAX_HISTORY,
+    historytable::{HASH_HISTORY_SIZE, MAX_HISTORY},
     search::static_exchange_eval,
     threadlocal::ThreadData,
 };
@@ -76,9 +76,7 @@ impl MovePicker {
         }
         if self.stage == Stage::TTMove {
             self.stage = Stage::GenerateCaptures;
-            if let Some(tt_move) = self.tt_move
-                && t.board.is_pseudo_legal(tt_move)
-            {
+            if let Some(tt_move) = self.tt_move {
                 return Some(tt_move);
             }
         }
@@ -207,6 +205,8 @@ impl MovePicker {
         }
 
         let threats = t.board.state.threats.all;
+        #[expect(clippy::cast_possible_truncation)]
+        let pawn_index = (t.board.state.keys.pawn % HASH_HISTORY_SIZE as u64) as usize;
         for m in ms {
             let from = m.mov.from();
             let piece = t.board.state.mailbox[from].unwrap();
@@ -223,6 +223,7 @@ impl MovePicker {
             if let Some(cmh_block) = cont_block_1 {
                 score += i32::from(cmh_block[piece][to]);
             }
+            score += i32::from(t.pawn_hist[pawn_index][piece][to]);
 
             match piece.piece_type() {
                 PieceType::Pawn => {
