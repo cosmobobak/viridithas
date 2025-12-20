@@ -7,7 +7,7 @@ use crate::{
     chess::chessmove::Move,
     evaluation::{MATE_SCORE, MINIMUM_MATE_SCORE, MINIMUM_TB_WIN_SCORE},
     threadpool::{self, ScopeExt},
-    util::{MEGABYTE, VALUE_NONE, depth::CompactDepthStorage},
+    util::{MEGABYTE, VALUE_NONE},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -130,12 +130,12 @@ impl PackedInfo {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
 pub struct TTEntry {
-    pub key: u16,                   // 2 bytes
-    pub m: Option<Move>,            // 2 bytes
-    pub score: i16,                 // 2 bytes
-    pub depth: CompactDepthStorage, // 1 byte, wrapper around a u8
-    pub info: PackedInfo,           // 1 byte (5 + 1 + 2 bits), wrapper around a u8
-    pub evaluation: i16,            // 2 bytes
+    pub key: u16,         // 2 bytes
+    pub m: Option<Move>,  // 2 bytes
+    pub score: i16,       // 2 bytes
+    pub depth: u8,        // 1 byte
+    pub info: PackedInfo, // 1 byte (5 + 1 + 2 bits), wrapper around a u8
+    pub evaluation: i16,  // 2 bytes
 }
 
 #[repr(C)]
@@ -345,9 +345,9 @@ impl TTView<'_> {
                     break;
                 }
 
-                if i32::from(tte.depth.inner())
+                if i32::from(tte.depth)
                     - ((MAX_AGE + tt_age - i32::from(tte.info.age())) & AGE_MASK) * 4
-                    > i32::from(entry.depth.inner())
+                    > i32::from(entry.depth)
                         - ((MAX_AGE + tt_age - i32::from(entry.info.age())) & AGE_MASK) * 4
                 {
                     tte = entry;
@@ -377,10 +377,9 @@ impl TTView<'_> {
         let record_prority = i32::from(tte.depth) + record_flag_bonus;
 
         // replace the entry:
-        // 1. unconditionally if we're in the root node (holdover from TT-pv probing)
-        // 2. if the entry is for a different position
-        // 3. if it's an exact entry, and the old entry is not exact
-        // 4. if the new entry is of higher priority than the old entry
+        // 1. if the entry is for a different position
+        // 2. if it's an exact entry, and the old entry is not exact
+        // 3. if the new entry is of higher priority than the old entry
         if tte.key != key
             || flag == Bound::Exact && tte.info.flag() != Bound::Exact
             || insert_priority * 3 >= record_prority * 2

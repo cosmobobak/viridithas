@@ -1,8 +1,9 @@
 // The granularity of evaluation in this engine is in centipawns.
 
 use std::{
+    collections::HashMap,
     fs::File,
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, BufWriter, Write},
     path::Path,
 };
 
@@ -145,7 +146,10 @@ pub const fn see_value(piece_type: PieceType, conf: &Config) -> i32 {
     }
 }
 
-pub fn eval_stats(input: &Path) -> anyhow::Result<()> {
+pub fn eval_stats(input: &Path, histogram_output: Option<&Path>) -> anyhow::Result<()> {
+    // Histogram data: bin evaluations into 10 cp buckets
+    const BIN_SIZE: i32 = 10;
+
     let f = File::open(input).with_context(|| format!("Failed to open {}", input.display()))?;
     let mut board = Board::default();
     let nnue_params = NNUEParams::decompress_and_alloc()?;
@@ -157,6 +161,8 @@ pub fn eval_stats(input: &Path) -> anyhow::Result<()> {
     let mut min = i32::MAX;
     let mut max = i32::MIN;
     let mut sq_total = 0i128;
+
+    let mut histogram = HashMap::new();
 
     let lines = BufReader::new(f)
         .lines()
@@ -194,12 +200,15 @@ pub fn eval_stats(input: &Path) -> anyhow::Result<()> {
             max = eval;
         }
 
+        let binned = (eval.abs() / BIN_SIZE) * BIN_SIZE;
+        *histogram.entry(binned).or_insert(0) += 1;
+
         if i % 1024 == 0 {
-            print!("\rProcessed {:>10}/{}.", i + 1, file_len);
+            print!("\rPROCESSED {:>10}/{}.", i + 1, file_len);
         }
     }
 
-    println!("\rProcessed {file_len:>10}/{file_len}.");
+    println!("\rPROCESSED {file_len:>10}/{file_len}.");
 
     println!(" EVALUATION STATISTICS:");
 
@@ -227,6 +236,28 @@ pub fn eval_stats(input: &Path) -> anyhow::Result<()> {
         let scale = delenda_abs_mean / abs_mean * f64::from(network::SCALE);
 
         println!("  DELENDA SCALING FACTOR: {scale:.6}");
+    }
+
+    // write histogram data if requested
+    if let Some(output_path) = histogram_output {
+        let output = File::create(output_path).with_context(|| {
+            format!(
+                "Failed to create histogram output file {}",
+                output_path.display()
+            )
+        })?;
+        let mut output = BufWriter::new(output);
+
+        writeln!(output, "bin_start,count")?;
+
+        let mut bins = histogram.iter().collect::<Vec<_>>();
+        bins.sort_by_key(|(bin, _)| *bin);
+
+        for (bin, count) in bins {
+            writeln!(output, "{bin},{count}")?;
+        }
+
+        println!("\nHISTOGRAM RECORDED TO {}", output_path.display());
     }
 
     Ok(())

@@ -63,7 +63,7 @@ pub enum SearchLimit {
         hard_limit: u64,
     },
     Pondering {
-        saved_limit: Box<SearchLimit>,
+        saved_limit: Box<Self>,
     },
 }
 

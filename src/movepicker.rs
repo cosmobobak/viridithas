@@ -76,9 +76,7 @@ impl MovePicker {
         }
         if self.stage == Stage::TTMove {
             self.stage = Stage::GenerateCaptures;
-            if let Some(tt_move) = self.tt_move
-                && t.board.is_pseudo_legal(tt_move)
-            {
+            if let Some(tt_move) = self.tt_move {
                 return Some(tt_move);
             }
         }

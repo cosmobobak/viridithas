@@ -85,7 +85,7 @@ fn main() -> anyhow::Result<()> {
             }
             Ok(())
         }
-        Some(EvalStats { input }) => evaluation::eval_stats(&input),
+        Some(EvalStats { input, output }) => evaluation::eval_stats(&input, output.as_deref()),
         #[cfg(feature = "datagen")]
         Some(Analyse { input }) => datagen::dataset_stats(&input),
         #[cfg(feature = "datagen")]
