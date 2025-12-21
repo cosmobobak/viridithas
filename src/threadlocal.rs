@@ -34,6 +34,8 @@ pub struct ThreadData<'a> {
     pub cont_hist: Box<DoubleHistoryTable>,
     pub pawn_hist: Box<HashHistoryTable>,
     pub killer_move_table: [Option<Move>; MAX_DEPTH + 1],
+
+    // corrhists
     pub pawn_corrhist: Box<CorrectionHistoryTable>,
     pub nonpawn_corrhist: [Box<CorrectionHistoryTable>; 2],
     pub major_corrhist: Box<CorrectionHistoryTable>,

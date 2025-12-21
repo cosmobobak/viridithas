@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicI16, Ordering};
+
 use crate::{
     chess::{
         chessmove::Move,
@@ -174,7 +176,7 @@ impl ThreadData<'_> {
     }
 
     /// Update the correction history for a pawn pattern.
-    pub fn update_correction_history(&mut self, depth: i32, tt_complexity: i32, diff: i32) {
+    pub fn update_correction_history(&self, depth: i32, tt_complexity: i32, diff: i32) {
         #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
 
         use Colour::{Black, White};
@@ -194,14 +196,14 @@ impl ThreadData<'_> {
 
         let keys = &self.board.state.keys;
 
-        let pawn = self.pawn_corrhist.get_mut(us, keys.pawn);
-        let [nonpawn_white, nonpawn_black] = &mut self.nonpawn_corrhist;
-        let nonpawn_white = nonpawn_white.get_mut(us, keys.non_pawn[White]);
-        let nonpawn_black = nonpawn_black.get_mut(us, keys.non_pawn[Black]);
-        let minor = self.minor_corrhist.get_mut(us, keys.minor);
-        let major = self.major_corrhist.get_mut(us, keys.major);
+        let pawn = self.pawn_corrhist.get_ref(us, keys.pawn);
+        let [nonpawn_white, nonpawn_black] = &self.nonpawn_corrhist;
+        let nonpawn_white = nonpawn_white.get_ref(us, keys.non_pawn[White]);
+        let nonpawn_black = nonpawn_black.get_ref(us, keys.non_pawn[Black]);
+        let minor = self.minor_corrhist.get_ref(us, keys.minor);
+        let major = self.major_corrhist.get_ref(us, keys.major);
 
-        let update = move |entry: &mut i16| {
+        let update = move |entry: &AtomicI16| {
             update_correction(entry, bonus);
         };
 
@@ -216,7 +218,7 @@ impl ThreadData<'_> {
             let ch2 = self.ss[height - 2].ch_idx;
             let pt1 = ch1.piece.piece_type();
             let pt2 = ch2.piece.piece_type();
-            update(&mut self.continuation_corrhist[ch1.to][pt1][ch2.to][pt2][us]);
+            update(&self.continuation_corrhist[ch1.to][pt1][ch2.to][pt2][us]);
         }
     }
 
@@ -241,7 +243,9 @@ impl ThreadData<'_> {
             let ch2 = self.ss[height - 2].ch_idx;
             let pt1 = ch1.piece.piece_type();
             let pt2 = ch2.piece.piece_type();
-            i64::from(self.continuation_corrhist[ch1.to][pt1][ch2.to][pt2][us])
+            i64::from(
+                self.continuation_corrhist[ch1.to][pt1][ch2.to][pt2][us].load(Ordering::Relaxed),
+            )
         } else {
             0
         };
