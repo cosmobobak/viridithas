@@ -12,14 +12,14 @@ use crate::{
 
 const MOVE_OVERHEAD: u64 = 30;
 
-pub const STRONG_FORCED_TM_FRAC: u32 = 354;
-pub const WEAK_FORCED_TM_FRAC: u32 = 650;
-pub const DEFAULT_MOVES_TO_GO: u32 = 27;
-pub const HARD_WINDOW_FRAC: u32 = 53;
-pub const OPTIMAL_WINDOW_FRAC: u32 = 78;
-pub const INCREMENT_FRAC: u32 = 74;
-pub const NODE_TM_SUBTREE_MULTIPLIER: u32 = 148;
-pub const FAIL_LOW_TM_BONUS: u32 = 306;
+pub const STRONG_FORCED_TM_FRAC: u32 = 386;
+pub const WEAK_FORCED_TM_FRAC: u32 = 627;
+pub const DEFAULT_MOVES_TO_GO: u32 = 24;
+pub const HARD_WINDOW_FRAC: u32 = 46;
+pub const OPTIMAL_WINDOW_FRAC: u32 = 73;
+pub const INCREMENT_FRAC: u32 = 94;
+pub const NODE_TM_SUBTREE_MULTIPLIER: u32 = 140;
+pub const FAIL_LOW_TM_BONUS: u32 = 340;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum ForcedMoveType {
