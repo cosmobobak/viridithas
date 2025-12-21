@@ -422,9 +422,9 @@ impl ContinuationCorrectionHistoryTable {
         }
     }
 
-    pub fn clear(&mut self) {
+    pub fn clear(&self) {
         self.table
-            .iter_mut()
+            .iter()
             .flatten()
             .flatten()
             .flatten()
