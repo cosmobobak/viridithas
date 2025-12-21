@@ -64,12 +64,12 @@ pub const fn is_decisive(score: i32) -> bool {
     score.abs() >= MINIMUM_TB_WIN_SCORE
 }
 
-pub const SEE_PAWN_VALUE: i32 = 254;
-pub const SEE_KNIGHT_VALUE: i32 = 453;
-pub const SEE_BISHOP_VALUE: i32 = 458;
-pub const SEE_ROOK_VALUE: i32 = 712;
-pub const SEE_QUEEN_VALUE: i32 = 1278;
-pub const MATERIAL_SCALE_BASE: i32 = 825;
+pub const SEE_PAWN_VALUE: i32 = 233;
+pub const SEE_KNIGHT_VALUE: i32 = 446;
+pub const SEE_BISHOP_VALUE: i32 = 446;
+pub const SEE_ROOK_VALUE: i32 = 716;
+pub const SEE_QUEEN_VALUE: i32 = 1253;
+pub const MATERIAL_SCALE_BASE: i32 = 856;
 
 impl Board {
     pub fn material(&self, info: &SearchInfo) -> i32 {
