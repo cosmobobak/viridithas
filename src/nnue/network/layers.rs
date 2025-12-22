@@ -380,6 +380,8 @@ mod simd {
         biases: &Align64<[f32; L2_SIZE]>,
         output: &mut Align64<[f32; L2_SIZE]>,
     ) {
+        const NUM_ACCS: usize = L2_SIZE / F32_CHUNK;
+        // const NUM_REGS: usize = if SPLIT_ACCS { 2 * NUM_ACCS } else { NUM_ACCS };
         // SAFETY: Breaking it down by unsafe operations:
         // 1. get_unchecked[_mut] / .as[_mut]_ptr().add(): We only ever index at most
         // div_ceil(L1_PAIR_COUNT - 1, I16_CHUNK * 2) + I16_CHUNK + L1_PAIR_COUNT
@@ -390,7 +392,8 @@ mod simd {
         unsafe {
             // &Align64<[MaybeUninit<u8>; L1_SIZE]>) -> &Align64<[i32; L1_SIZE / 4]>
             let input32 = reinterpret_as_i32s(ft_outputs);
-            let mut sums = Align64([0; L2_SIZE]);
+            let mut acc = Align64([0; L2_SIZE]);
+            let mut aux = Align64([0; L2_SIZE]);
             let nnz_count = nnz_slice.len();
 
             #[cfg(feature = "nnz-counts")]
@@ -422,15 +425,17 @@ mod simd {
                 // for each SIMD-block in the row, compute the product
                 // of the non-zero activation with the corresponding
                 // weight, and add it to the accumulator.
-                for k in 0..L2_SIZE / F32_CHUNK {
-                    let sum = simd::load_i32(sums.as_ptr().add(k * F32_CHUNK));
-                    let weight_a = simd::load_i8(weights.as_ptr().add(w_offset_a + k * U8_CHUNK));
-                    let weight_b = simd::load_i8(weights.as_ptr().add(w_offset_b + k * U8_CHUNK));
-                    let weight_c = simd::load_i8(weights.as_ptr().add(w_offset_c + k * U8_CHUNK));
-                    let weight_d = simd::load_i8(weights.as_ptr().add(w_offset_d + k * U8_CHUNK));
-                    let res = simd::madd_2xu8_to_i32(sum, input32_a, weight_a, input32_b, weight_b);
-                    let res = simd::madd_2xu8_to_i32(res, input32_c, weight_c, input32_d, weight_d);
-                    simd::store_i32(sums.as_mut_ptr().add(k * F32_CHUNK), res);
+                for k in 0..NUM_ACCS {
+                    let sum1 = simd::load_i32(acc.as_ptr().add(k * F32_CHUNK));
+                    let sum2 = simd::load_i32(aux.as_ptr().add(k * F32_CHUNK));
+                    let w_a = simd::load_i8(weights.as_ptr().add(w_offset_a + k * U8_CHUNK));
+                    let w_b = simd::load_i8(weights.as_ptr().add(w_offset_b + k * U8_CHUNK));
+                    let w_c = simd::load_i8(weights.as_ptr().add(w_offset_c + k * U8_CHUNK));
+                    let w_d = simd::load_i8(weights.as_ptr().add(w_offset_d + k * U8_CHUNK));
+                    let res1 = simd::madd_2xu8_to_i32(sum1, input32_a, w_a, input32_b, w_b);
+                    let res2 = simd::madd_2xu8_to_i32(sum2, input32_c, w_c, input32_d, w_d);
+                    simd::store_i32(acc.as_mut_ptr().add(k * F32_CHUNK), res1);
+                    simd::store_i32(aux.as_mut_ptr().add(k * F32_CHUNK), res2);
                 }
             }
 
@@ -445,12 +450,20 @@ mod simd {
                 // for each SIMD-block in the row, compute the product
                 // of the non-zero activation with the corresponding
                 // weight, and add it to the accumulator.
-                for k in 0..L2_SIZE / F32_CHUNK {
-                    let sum = simd::load_i32(sums.as_ptr().add(k * F32_CHUNK));
+                for k in 0..NUM_ACCS {
+                    let sum = simd::load_i32(acc.as_ptr().add(k * F32_CHUNK));
                     let weight = simd::load_i8(weights.as_ptr().add(w_offset + k * U8_CHUNK));
                     let res = simd::madd_u8_to_i32(sum, input32, weight);
-                    simd::store_i32(sums.as_mut_ptr().add(k * F32_CHUNK), res);
+                    simd::store_i32(acc.as_mut_ptr().add(k * F32_CHUNK), res);
                 }
+            }
+
+            // fold in the aux accumulators
+            for k in 0..NUM_ACCS {
+                let sum1 = simd::load_i32(acc.as_ptr().add(k * F32_CHUNK));
+                let sum2 = simd::load_i32(aux.as_ptr().add(k * F32_CHUNK));
+                let res = simd::add_i32(sum1, sum2);
+                simd::store_i32(acc.as_mut_ptr().add(k * F32_CHUNK), res);
             }
 
             // squared clipped ReLU activation
@@ -460,7 +473,7 @@ mod simd {
             for i in 0..L2_SIZE / F32_CHUNK {
                 // convert i32 to f32, multiplying by the quantisation constant
                 let bias = simd::load_f32(biases.as_ptr().add(i * F32_CHUNK));
-                let unscaled = simd::i32_to_f32(simd::load_i32(sums.as_ptr().add(i * F32_CHUNK)));
+                let unscaled = simd::i32_to_f32(simd::load_i32(acc.as_ptr().add(i * F32_CHUNK)));
                 let preact = simd::madd_f32(unscaled, sum_mul, bias);
                 // activate
                 let clipped = simd::min_f32(simd::max_f32(preact, zero), one);
