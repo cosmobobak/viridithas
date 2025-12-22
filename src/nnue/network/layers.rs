@@ -312,7 +312,7 @@ mod simd {
                     let clipped1c = simd::min_i16(input1c, ft_one);
                     let clipped1d = simd::min_i16(input1d, ft_one);
 
-                    // shift and mulhi such that the high bits we get are equal to crelu(x1) * crelu(x2)
+                    // shift and mulhi such that the high bits we get are equal to crelu(x1) × crelu(x2)
                     let producta = simd::shift_mul_high_i16::<SHIFT>(clipped0a, clipped1a);
                     let productb = simd::shift_mul_high_i16::<SHIFT>(clipped0b, clipped1b);
                     let productc = simd::shift_mul_high_i16::<SHIFT>(clipped0c, clipped1c);
@@ -391,8 +391,16 @@ mod simd {
         unsafe {
             // &Align64<[MaybeUninit<u8>; L1_SIZE]>) -> &Align64<[i32; L1_SIZE / 4]>
             let input32 = reinterpret_as_i32s(ft_outputs);
+
+            // note to a future cosmonaut: the auxiliary accumulator helps
+            // with the latency of the VNNI instructions we use, but slightly
+            // harms performance on weaker architectures, which do not suffer
+            // from the same issues. If you feel like conditionally compiling
+            // this based on target CPU, past-cosmonaut would not object.
+            // c.f. https://github.com/official-stockfish/Stockfish/pull/6336.
             let mut acc = Align64([0; L2_SIZE]);
             let mut aux = Align64([0; L2_SIZE]);
+
             let nnz_count = nnz_slice.len();
 
             #[cfg(feature = "nnz-counts")]
