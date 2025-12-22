@@ -381,7 +381,6 @@ mod simd {
         output: &mut Align64<[f32; L2_SIZE]>,
     ) {
         const NUM_ACCS: usize = L2_SIZE / F32_CHUNK;
-        // const NUM_REGS: usize = if SPLIT_ACCS { 2 * NUM_ACCS } else { NUM_ACCS };
         // SAFETY: Breaking it down by unsafe operations:
         // 1. get_unchecked[_mut] / .as[_mut]_ptr().add(): We only ever index at most
         // div_ceil(L1_PAIR_COUNT - 1, I16_CHUNK * 2) + I16_CHUNK + L1_PAIR_COUNT
