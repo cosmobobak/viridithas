@@ -1,4 +1,7 @@
-use std::ops::{Deref, DerefMut};
+use std::{
+    ops::{Deref, DerefMut},
+    sync::atomic::{AtomicI16, Ordering},
+};
 
 use crate::{
     chess::{
@@ -115,13 +118,23 @@ pub fn update_cont_history(val: &mut i16, sum: i32, delta: i32) {
 }
 
 #[inline]
-pub fn update_correction(val: &mut i16, delta: i32) {
-    gravity_update::<CORRECTION_HISTORY_MAX>(val, delta);
+pub fn update_correction(val: &AtomicI16, delta: i32) {
+    atomic_gravity_update::<CORRECTION_HISTORY_MAX>(val, delta);
 }
 
 #[inline]
 fn gravity_update<const MAX: i32>(val: &mut i16, delta: i32) {
     gravity_update_with_modulator::<MAX>(val, i32::from(*val), delta);
+}
+
+#[inline]
+fn atomic_gravity_update<const MAX: i32>(val: &AtomicI16, delta: i32) {
+    #![allow(clippy::cast_possible_truncation)]
+    const { assert!(MAX < i16::MAX as i32 * 3 / 4) }
+    let loaded = val.load(Ordering::Relaxed);
+    let new = i32::from(loaded) + delta - i32::from(loaded) * delta.abs() / MAX;
+    let new = i32::clamp(new, -MAX, MAX) as i16;
+    val.store(new, Ordering::Relaxed);
 }
 
 #[inline]
@@ -340,7 +353,7 @@ impl DerefMut for HashHistoryTable {
 
 #[repr(transparent)]
 pub struct CorrectionHistoryTable {
-    table: [[i16; 2]; CORRECTION_HISTORY_SIZE],
+    table: [[AtomicI16; 2]; CORRECTION_HISTORY_SIZE],
 }
 
 impl CorrectionHistoryTable {
@@ -359,38 +372,38 @@ impl CorrectionHistoryTable {
         }
     }
 
-    pub fn clear(&mut self) {
-        self.table.iter_mut().for_each(|t| t.fill(0));
+    pub fn clear(&self) {
+        for entry in &self.table {
+            entry[0].store(0, Ordering::Relaxed);
+            entry[1].store(0, Ordering::Relaxed);
+        }
     }
 
     #[allow(clippy::cast_possible_truncation)]
     pub fn get(&self, side: Colour, key: u64) -> i64 {
-        i64::from(self.table[(key % CORRECTION_HISTORY_SIZE as u64) as usize][side])
+        i64::from(
+            self.table[(key % CORRECTION_HISTORY_SIZE as u64) as usize][side]
+                .load(Ordering::Relaxed),
+        )
     }
 
     #[allow(clippy::cast_possible_truncation)]
-    pub fn get_mut(&mut self, side: Colour, key: u64) -> &mut i16 {
-        &mut self.table[(key % CORRECTION_HISTORY_SIZE as u64) as usize][side]
+    pub fn get_ref(&self, side: Colour, key: u64) -> &AtomicI16 {
+        &self.table[(key % CORRECTION_HISTORY_SIZE as u64) as usize][side]
     }
 }
 
 impl Deref for CorrectionHistoryTable {
-    type Target = [[i16; 2]; CORRECTION_HISTORY_SIZE];
+    type Target = [[AtomicI16; 2]; CORRECTION_HISTORY_SIZE];
 
     fn deref(&self) -> &Self::Target {
         &self.table
     }
 }
 
-impl DerefMut for CorrectionHistoryTable {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.table
-    }
-}
-
 #[repr(transparent)]
 pub struct ContinuationCorrectionHistoryTable {
-    table: [[[[[i16; 2]; 6]; 64]; 6]; 64],
+    table: [[[[[AtomicI16; 2]; 6]; 64]; 6]; 64],
 }
 
 impl ContinuationCorrectionHistoryTable {
@@ -409,26 +422,23 @@ impl ContinuationCorrectionHistoryTable {
         }
     }
 
-    pub fn clear(&mut self) {
+    pub fn clear(&self) {
         self.table
-            .iter_mut()
+            .iter()
             .flatten()
             .flatten()
             .flatten()
-            .for_each(|t| t.fill(0));
+            .for_each(|entry| {
+                entry[0].store(0, Ordering::Relaxed);
+                entry[1].store(0, Ordering::Relaxed);
+            });
     }
 }
 
 impl Deref for ContinuationCorrectionHistoryTable {
-    type Target = [[[[[i16; 2]; 6]; 64]; 6]; 64];
+    type Target = [[[[[AtomicI16; 2]; 6]; 64]; 6]; 64];
 
     fn deref(&self) -> &Self::Target {
         &self.table
-    }
-}
-
-impl DerefMut for ContinuationCorrectionHistoryTable {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.table
     }
 }

@@ -1,24 +1,144 @@
 use std::{
     array,
-    sync::atomic::{AtomicBool, AtomicU64},
+    sync::atomic::{AtomicBool, AtomicI16, AtomicU64, Ordering},
 };
 
 use anyhow::Context;
 
 use crate::{
-    chess::{board::Board, chessmove::Move, piece::Colour},
+    chess::{
+        board::Board,
+        chessmove::Move,
+        piece::Colour,
+        types::{ContHistIndex, Keys},
+    },
     historytable::{
-        CaptureHistoryTable, ContinuationCorrectionHistoryTable, CorrectionHistoryTable,
-        DoubleHistoryTable, HashHistoryTable, ThreatsHistoryTable,
+        CORRECTION_HISTORY_MAX, CaptureHistoryTable, ContinuationCorrectionHistoryTable,
+        CorrectionHistoryTable, DoubleHistoryTable, HashHistoryTable, ThreatsHistoryTable,
+        update_correction,
     },
     nnue::{self, network::NNUEParams},
-    search::pv::PVariation,
+    search::{parameters::Config, pv::PVariation},
     searchinfo::SearchInfo,
     stack::StackEntry,
     threadpool::{self, ScopeExt},
     transpositiontable::TTView,
     util::MAX_DEPTH,
 };
+
+pub struct Corrhists {
+    pub pawn: Box<CorrectionHistoryTable>,
+    pub nonpawn: [Box<CorrectionHistoryTable>; 2],
+    pub major: Box<CorrectionHistoryTable>,
+    pub minor: Box<CorrectionHistoryTable>,
+    pub continuation: Box<ContinuationCorrectionHistoryTable>,
+}
+
+impl Corrhists {
+    pub fn new() -> Self {
+        Self {
+            pawn: CorrectionHistoryTable::boxed(),
+            nonpawn: [
+                CorrectionHistoryTable::boxed(),
+                CorrectionHistoryTable::boxed(),
+            ],
+            major: CorrectionHistoryTable::boxed(),
+            minor: CorrectionHistoryTable::boxed(),
+            continuation: ContinuationCorrectionHistoryTable::boxed(),
+        }
+    }
+
+    pub fn clear(&self) {
+        self.pawn.clear();
+        self.nonpawn[Colour::White].clear();
+        self.nonpawn[Colour::Black].clear();
+        self.major.clear();
+        self.minor.clear();
+        self.continuation.clear();
+    }
+
+    /// Update the correction history for a position.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+    pub fn update(
+        &self,
+        keys: &Keys,
+        us: Colour,
+        cont_indices: Option<(ContHistIndex, ContHistIndex)>,
+        depth: i32,
+        tt_complexity: i32,
+        diff: i32,
+    ) {
+        use Colour::{Black, White};
+
+        // wow! floating point in a chess engine!
+        let tt_complexity_factor =
+            ((1.0 + (tt_complexity as f32 + 1.0).log2() / 10.0) * 8.0) as i32;
+
+        let bonus = i32::clamp(
+            diff * depth * tt_complexity_factor / 64,
+            -CORRECTION_HISTORY_MAX / 4,
+            CORRECTION_HISTORY_MAX / 4,
+        );
+
+        let pawn = self.pawn.get_ref(us, keys.pawn);
+        let [nonpawn_white, nonpawn_black] = &self.nonpawn;
+        let nonpawn_white = nonpawn_white.get_ref(us, keys.non_pawn[White]);
+        let nonpawn_black = nonpawn_black.get_ref(us, keys.non_pawn[Black]);
+        let minor = self.minor.get_ref(us, keys.minor);
+        let major = self.major.get_ref(us, keys.major);
+
+        let update = move |entry: &AtomicI16| {
+            update_correction(entry, bonus);
+        };
+
+        update(pawn);
+        update(nonpawn_white);
+        update(nonpawn_black);
+        update(minor);
+        update(major);
+
+        if let Some((ch1, ch2)) = cont_indices {
+            let pt1 = ch1.piece.piece_type();
+            let pt2 = ch2.piece.piece_type();
+            update(&self.continuation[ch1.to][pt1][ch2.to][pt2][us]);
+        }
+    }
+
+    /// Compute the correction history adjustment for a position.
+    #[expect(clippy::cast_possible_truncation, clippy::similar_names)]
+    pub fn correction(
+        &self,
+        keys: &Keys,
+        us: Colour,
+        cont_indices: Option<(ContHistIndex, ContHistIndex)>,
+        conf: &Config,
+    ) -> i32 {
+        use Colour::{Black, White};
+
+        let pawn = self.pawn.get(us, keys.pawn);
+        let [white, black] = &self.nonpawn;
+        let white = white.get(us, keys.non_pawn[White]);
+        let black = black.get(us, keys.non_pawn[Black]);
+        let minor = self.minor.get(us, keys.minor);
+        let major = self.major.get(us, keys.major);
+
+        let cont = if let Some((ch1, ch2)) = cont_indices {
+            let pt1 = ch1.piece.piece_type();
+            let pt2 = ch2.piece.piece_type();
+            i64::from(self.continuation[ch1.to][pt1][ch2.to][pt2][us].load(Ordering::Relaxed))
+        } else {
+            0
+        };
+
+        let adjustment = pawn * i64::from(conf.pawn_corrhist_weight)
+            + major * i64::from(conf.major_corrhist_weight)
+            + minor * i64::from(conf.minor_corrhist_weight)
+            + (white + black) * i64::from(conf.nonpawn_corrhist_weight)
+            + cont * i64::from(conf.continuation_corrhist_weight);
+
+        (adjustment * 12 / 0x40000) as i32
+    }
+}
 
 #[repr(align(64))]
 pub struct ThreadData<'a> {
@@ -34,11 +154,8 @@ pub struct ThreadData<'a> {
     pub cont_hist: Box<DoubleHistoryTable>,
     pub pawn_hist: Box<HashHistoryTable>,
     pub killer_move_table: [Option<Move>; MAX_DEPTH + 1],
-    pub pawn_corrhist: Box<CorrectionHistoryTable>,
-    pub nonpawn_corrhist: [Box<CorrectionHistoryTable>; 2],
-    pub major_corrhist: Box<CorrectionHistoryTable>,
-    pub minor_corrhist: Box<CorrectionHistoryTable>,
-    pub continuation_corrhist: Box<ContinuationCorrectionHistoryTable>,
+
+    pub corrhists: &'a Corrhists,
 
     pub thread_id: usize,
 
@@ -64,10 +181,12 @@ impl<'a> ThreadData<'a> {
     const BLACK_BANNED_NMP: u8 = 0b10;
     const ARRAY_REPEAT_VALUE: PVariation = PVariation::default_const();
 
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         thread_id: usize,
         board: Board,
         tt: TTView<'a>,
+        corrhists: &'a Corrhists,
         nnue_params: &'static NNUEParams,
         stopped: &'a AtomicBool,
         nodes: &'a AtomicU64,
@@ -83,14 +202,7 @@ impl<'a> ThreadData<'a> {
             cont_hist: DoubleHistoryTable::boxed(),
             pawn_hist: HashHistoryTable::boxed(),
             killer_move_table: [None; MAX_DEPTH + 1],
-            pawn_corrhist: CorrectionHistoryTable::boxed(),
-            nonpawn_corrhist: [
-                CorrectionHistoryTable::boxed(),
-                CorrectionHistoryTable::boxed(),
-            ],
-            major_corrhist: CorrectionHistoryTable::boxed(),
-            minor_corrhist: CorrectionHistoryTable::boxed(),
-            continuation_corrhist: ContinuationCorrectionHistoryTable::boxed(),
+            corrhists,
             thread_id,
             #[allow(clippy::large_stack_arrays)]
             pvs: [Self::ARRAY_REPEAT_VALUE; MAX_DEPTH],
@@ -140,12 +252,7 @@ impl<'a> ThreadData<'a> {
         self.tactical_hist.clear();
         self.cont_hist.clear();
         self.pawn_hist.clear();
-        self.pawn_corrhist.clear();
-        self.nonpawn_corrhist[Colour::White].clear();
-        self.nonpawn_corrhist[Colour::Black].clear();
-        self.major_corrhist.clear();
-        self.minor_corrhist.clear();
-        self.continuation_corrhist.clear();
+        self.corrhists.clear();
         self.killer_move_table.fill(None);
         self.root_depth = 0;
         self.completed = 0;
@@ -179,9 +286,11 @@ impl<'a> ThreadData<'a> {
     }
 }
 
+#[expect(clippy::too_many_arguments)]
 pub fn make_thread_data<'a>(
     pos: &Board,
     tt: TTView<'a>,
+    corrhists: &'a Corrhists,
     nnue_params: &'static NNUEParams,
     stopped: &'a AtomicBool,
     nodes: &'a AtomicU64,
@@ -201,6 +310,7 @@ pub fn make_thread_data<'a>(
                             thread_id,
                             pos.clone(),
                             tt,
+                            corrhists,
                             nnue_params,
                             stopped,
                             nodes,
