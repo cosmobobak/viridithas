@@ -1,6 +1,6 @@
 use std::{
     ops::{Deref, DerefMut},
-    sync::atomic::AtomicI16,
+    sync::atomic::{AtomicI16, Ordering},
 };
 
 use crate::{
@@ -131,10 +131,10 @@ fn gravity_update<const MAX: i32>(val: &mut i16, delta: i32) {
 fn atomic_gravity_update<const MAX: i32>(val: &AtomicI16, delta: i32) {
     #![allow(clippy::cast_possible_truncation)]
     const { assert!(MAX < i16::MAX as i32 * 3 / 4) }
-    let loaded = val.load(std::sync::atomic::Ordering::Relaxed);
+    let loaded = val.load(Ordering::Relaxed);
     let new = i32::from(loaded) + delta - i32::from(loaded) * delta.abs() / MAX;
     let new = i32::clamp(new, -MAX, MAX) as i16;
-    val.store(new, std::sync::atomic::Ordering::Relaxed);
+    val.store(new, Ordering::Relaxed);
 }
 
 #[inline]
@@ -374,8 +374,8 @@ impl CorrectionHistoryTable {
 
     pub fn clear(&self) {
         for entry in &self.table {
-            entry[0].store(0, std::sync::atomic::Ordering::Relaxed);
-            entry[1].store(0, std::sync::atomic::Ordering::Relaxed);
+            entry[0].store(0, Ordering::Relaxed);
+            entry[1].store(0, Ordering::Relaxed);
         }
     }
 
@@ -383,7 +383,7 @@ impl CorrectionHistoryTable {
     pub fn get(&self, side: Colour, key: u64) -> i64 {
         i64::from(
             self.table[(key % CORRECTION_HISTORY_SIZE as u64) as usize][side]
-                .load(std::sync::atomic::Ordering::Relaxed),
+                .load(Ordering::Relaxed),
         )
     }
 
@@ -429,8 +429,8 @@ impl ContinuationCorrectionHistoryTable {
             .flatten()
             .flatten()
             .for_each(|entry| {
-                entry[0].store(0, std::sync::atomic::Ordering::Relaxed);
-                entry[1].store(0, std::sync::atomic::Ordering::Relaxed);
+                entry[0].store(0, Ordering::Relaxed);
+                entry[1].store(0, Ordering::Relaxed);
             });
     }
 }

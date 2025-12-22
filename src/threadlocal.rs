@@ -1,6 +1,6 @@
 use std::{
     array,
-    sync::atomic::{AtomicBool, AtomicU64, Ordering},
+    sync::atomic::{AtomicBool, AtomicI16, AtomicU64, Ordering},
 };
 
 use anyhow::Context;
@@ -87,7 +87,7 @@ impl Corrhists {
         let minor = self.minor.get_ref(us, keys.minor);
         let major = self.major.get_ref(us, keys.major);
 
-        let update = move |entry: &std::sync::atomic::AtomicI16| {
+        let update = move |entry: &AtomicI16| {
             update_correction(entry, bonus);
         };
 
