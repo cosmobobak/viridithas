@@ -1087,30 +1087,42 @@ fn relabel_binpacks(
         dataformat::Game::deserialise_from(&mut input_buffer, std::mem::take(&mut move_buffer))
     {
         let mut rollout = game.initial_position();
-        nnue_state.reinit_from(&rollout, nnue_params);
         for (mv, slot) in game.buffer_mut() {
+            // why reïnitialise every time?
+            // we cannot use efficient incremental updates,
+            // as games can run for >1000 ply, which is much
+            // beyond the 128 ply limit that we have at time of writing.
+            nnue_state.reinit_from(&rollout, nnue_params);
             let value = i32::from(slot.get());
+            // we preserve decisive evaluations.
+            // the ×2 is because we have changed the mate value
+            // a couple times over course of development, and
+            // so we behave conservatively. Filtering uses the
+            // same heuristic, so we just toss data that is too
+            // extreme.
             let new_value = if is_decisive(value * 2) {
                 value
             } else {
-                nnue_state.force(&rollout, nnue_params);
                 let pov_eval = nnue_state.evaluate(nnue_params, &rollout);
+                // viriformat uses white-relative evaluations throughout.
                 if rollout.turn() == Colour::Black {
                     -pov_eval
                 } else {
                     pov_eval
                 }
             };
+
+            // some little debug info if something goes wrong:
             if is_decisive(new_value) && !is_decisive(value) {
                 eprintln!("[!] a network evaluation became decisive ({value} -> {new_value})");
             }
             let new_value: i16 = new_value.try_into().with_context(|| {
-                format!("Failed to convert rescaled evaluation into i16: {new_value}.")
+                format!("Failed to convert network evaluation into i16: {new_value}.")
             })?;
 
             slot.set(new_value);
 
-            rollout.make_move_nnue(*mv, &mut nnue_state);
+            rollout.make_move_simple(*mv);
         }
 
         game.serialise_into(&mut output_buffer)
