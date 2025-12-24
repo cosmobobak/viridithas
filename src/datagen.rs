@@ -35,10 +35,12 @@ use crate::{
     },
     datagen::dataformat::Game,
     evaluation::{is_decisive, is_mate_score},
-    nnue::network::NNUEParams,
+    nnue::network::{NNUEParams, NNUEState},
     search::{parameters::Config, search_position, static_exchange_eval},
-    tablebases::probe::SYZYGY_ENABLED,
-    tablebases::{self, probe::WDL},
+    tablebases::{
+        self,
+        probe::{SYZYGY_ENABLED, WDL},
+    },
     threadlocal::{Corrhists, make_thread_data},
     threadpool,
     timemgmt::{SearchLimit, TimeManager},
@@ -873,7 +875,12 @@ pub fn run_splat(
 }
 
 /// Unpacks the variable-length game format into a PGN file.
-pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) -> anyhow::Result<()> {
+pub fn run_topgn(
+    input: &Path,
+    output: &Path,
+    limit: Option<usize>,
+    annotate: bool,
+) -> anyhow::Result<()> {
     // check that the input file exists
     if !input.try_exists()? {
         bail!("Input file does not exist.");
@@ -925,7 +932,7 @@ pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) -> anyhow::R
         let header = make_header(outcome, board.to_string());
         writeln!(output_buffer, "{header}").unwrap();
         let mut fullmoves = 0;
-        for mv in game.moves() {
+        for &(mv, eval) in game.buffer() {
             if fullmoves % 12 == 0 && board.turn() == Colour::White {
                 writeln!(output_buffer).unwrap();
             }
@@ -940,7 +947,11 @@ pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) -> anyhow::R
             } else {
                 fullmoves += 1;
             }
-            write!(output_buffer, "{san} ").unwrap();
+            if annotate {
+                write!(output_buffer, "{san} {{{eval}}} ", eval = eval.get()).unwrap();
+            } else {
+                write!(output_buffer, "{san} ").unwrap();
+            }
             board.make_move_simple(mv);
         }
 
@@ -1021,6 +1032,85 @@ fn rescale_binpacks(
             })?;
 
             slot.set(new_value);
+        }
+
+        game.serialise_into(&mut output_buffer)
+            .context("Failed to serialise game into output buffer.")?;
+
+        move_buffer = game.into_move_buffer();
+    }
+
+    output_buffer
+        .flush()
+        .with_context(|| "Failed to flush output buffer to file.")?;
+
+    Ok(())
+}
+
+/// Take a binpack, and write a new binpack with identical data but relabelling evaluations using the static NNUE evaluation.
+pub fn run_relabel(input: &Path, output: &Path) -> anyhow::Result<()> {
+    // check that the input file exists
+    if !input.try_exists()? {
+        bail!("Input file does not exist.");
+    }
+    // check that the output does not exist
+    if output.try_exists()? {
+        bail!("Output file already exists.");
+    }
+
+    // open the input file
+    let input_file = File::open(input)
+        .with_context(|| format!("Failed to create input file: {}", input.display()))?;
+    let input_buffer = BufReader::new(input_file);
+
+    // open the output file
+    let output_file = File::create(output)
+        .with_context(|| format!("Failed to create output file: {}", output.display()))?;
+    let output_buffer = BufWriter::new(output_file);
+
+    println!("Relabelling evaluations...");
+    relabel_binpacks(input_buffer, output_buffer)?;
+
+    Ok(())
+}
+
+#[allow(clippy::cast_possible_truncation)]
+fn relabel_binpacks(
+    mut input_buffer: impl BufRead,
+    mut output_buffer: impl Write,
+) -> Result<(), anyhow::Error> {
+    let nnue_params = NNUEParams::decompress_and_alloc()?;
+    let mut nnue_state = NNUEState::new(&Board::default(), nnue_params);
+
+    let mut move_buffer = Vec::new();
+    while let Ok(mut game) =
+        dataformat::Game::deserialise_from(&mut input_buffer, std::mem::take(&mut move_buffer))
+    {
+        let mut rollout = game.initial_position();
+        nnue_state.reinit_from(&rollout, nnue_params);
+        for (mv, slot) in game.buffer_mut() {
+            let value = i32::from(slot.get());
+            let new_value = if is_decisive(value * 2) {
+                value
+            } else {
+                nnue_state.force(&rollout, nnue_params);
+                let pov_eval = nnue_state.evaluate(nnue_params, &rollout);
+                if rollout.turn() == Colour::Black {
+                    -pov_eval
+                } else {
+                    pov_eval
+                }
+            };
+            if is_decisive(new_value) && !is_decisive(value) {
+                eprintln!("[!] a network evaluation became decisive ({value} -> {new_value})");
+            }
+            let new_value: i16 = new_value.try_into().with_context(|| {
+                format!("Failed to convert rescaled evaluation into i16: {new_value}.")
+            })?;
+
+            slot.set(new_value);
+
+            rollout.make_move_nnue(*mv, &mut nnue_state);
         }
 
         game.serialise_into(&mut output_buffer)
