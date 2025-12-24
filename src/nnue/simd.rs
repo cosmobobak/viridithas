@@ -52,7 +52,7 @@ macro_rules! wrap_simd_register {
     };
 }
 
-#[cfg(target_feature = "avx512f")]
+#[cfg(false)]
 mod avx512 {
     #![allow(non_camel_case_types)]
     use std::arch::x86_64::*;
@@ -399,7 +399,7 @@ mod avx512 {
     pub const F32_CHUNK: usize = std::mem::size_of::<VecF32>() / std::mem::size_of::<f32>();
 }
 
-#[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
+#[cfg(target_feature = "avx2")]
 mod avx2 {
     #![allow(non_camel_case_types)]
     use std::arch::x86_64::*;
@@ -1472,10 +1472,10 @@ mod neon {
     pub const F32_CHUNK: usize = std::mem::size_of::<VecF32>() / std::mem::size_of::<f32>();
 }
 
-#[cfg(target_feature = "avx512f")]
-pub use avx512::*;
+// #[cfg(target_feature = "avx512f")]
+// pub use avx512::*;
 
-#[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
+#[cfg(target_feature = "avx2")]
 pub use avx2::*;
 
 #[cfg(all(
