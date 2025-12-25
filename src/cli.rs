@@ -82,6 +82,14 @@ pub enum Subcommands {
         /// Path to output packed game record.
         output: PathBuf,
     },
+    /// Relabel evaluations in a packed game record
+    #[cfg(feature = "datagen")]
+    Relabel {
+        /// Path to input packed game record.
+        input: PathBuf,
+        /// Path to output packed game record.
+        output: PathBuf,
+    },
     /// Splat a packed game record into bulletformat records (or other format)
     #[cfg(feature = "datagen")]
     Splat {
@@ -111,6 +119,9 @@ pub enum Subcommands {
         /// ```
         #[clap(long, verbatim_doc_comment)]
         cfg_path: Option<PathBuf>,
+        /// Annotate moves with evaluations in PGN output.
+        #[clap(long)]
+        annotate: bool,
     },
     /// Generate self-play data
     #[cfg(feature = "datagen")]
