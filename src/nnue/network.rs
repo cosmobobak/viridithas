@@ -54,6 +54,8 @@ pub const L1_SIZE: usize = 2560;
 pub const L2_SIZE: usize = 16;
 /// The size of the third layer of the network.
 pub const L3_SIZE: usize = 32;
+/// The number of output heads.
+pub const HEADS: usize = 1;
 /// The quantisation factor for the feature transformer weights.
 const QA: i16 = 255;
 /// The quantisation factor for the L1 weights.
@@ -122,10 +124,10 @@ struct UnquantisedNetwork {
     l2f_weights:  [[f32; L3_SIZE]; L2_SIZE],
     l2x_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
     l2f_biases:    [f32; L3_SIZE],
-    l3x_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
-    l3f_weights:   [f32; L3_SIZE],
-    l3x_biases:    [f32; OUTPUT_BUCKETS],
-    l3f_biases:    [f32; 1],
+    l3x_weights: [[[f32;   HEADS]; OUTPUT_BUCKETS]; L3_SIZE],
+    l3f_weights:  [[f32;   HEADS]; L3_SIZE],
+    l3x_biases:   [[f32;   HEADS]; OUTPUT_BUCKETS],
+    l3f_biases:    [f32;   HEADS],
 }
 
 /// The floating-point parameters of the network, after de-factorisation.
@@ -138,8 +140,8 @@ struct MergedNetwork {
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
     l2_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
     l2_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
-    l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
-    l3_biases:    [f32; OUTPUT_BUCKETS],
+    l3_weights: [[[f32;   HEADS]; OUTPUT_BUCKETS]; L3_SIZE],
+    l3_biases:   [[f32;   HEADS]; OUTPUT_BUCKETS],
 }
 
 /// A quantised network file, for compressed embedding.
@@ -153,8 +155,8 @@ struct QuantisedNetwork {
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
     l2_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
     l2_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
-    l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
-    l3_biases:    [f32; OUTPUT_BUCKETS],
+    l3_weights: [[[f32;   HEADS]; OUTPUT_BUCKETS]; L3_SIZE],
+    l3_biases:   [[f32;   HEADS]; OUTPUT_BUCKETS],
 }
 
 /// The parameters of viri's neural network, quantised and permuted
@@ -162,14 +164,14 @@ struct QuantisedNetwork {
 #[rustfmt::skip]
 #[repr(C)]
 pub struct NNUEParams {
-    pub l0_weights:  Align64<[i16; INPUT * L1_SIZE * BUCKETS]>,
-    pub l0_biases:   Align64<[i16; L1_SIZE]>,
-    pub l1_weights: [Align64<[ i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
-    pub l1_bias:    [Align64<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
-    pub l2_weights: [Align64<[f32; L2_SIZE * L3_SIZE]>; OUTPUT_BUCKETS],
-    pub l2_bias:    [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
-    pub l3_weights: [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
-    pub l3_bias:    [f32; OUTPUT_BUCKETS],
+    pub l0_weights:   Align64<[i16; INPUT * L1_SIZE * BUCKETS]>,
+    pub l0_biases:    Align64<[i16; L1_SIZE]>,
+    pub l1_weights:  [Align64<[ i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
+    pub l1_bias:     [Align64<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
+    pub l2_weights:  [Align64<[f32; L2_SIZE * L3_SIZE]>; OUTPUT_BUCKETS],
+    pub l2_bias:     [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
+    pub l3_weights: [[Align64<[f32; L3_SIZE]>; HEADS]; OUTPUT_BUCKETS],
+    pub l3_bias:             [[f32; HEADS]; OUTPUT_BUCKETS],
 }
 
 // const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = {
@@ -322,12 +324,17 @@ impl UnquantisedNetwork {
         // copy the L3 weights
         for i in 0..L3_SIZE {
             for bucket in 0..OUTPUT_BUCKETS {
-                net.l3_weights[i][bucket] = self.l3x_weights[i][bucket] + self.l3f_weights[i];
+                for head in 0..HEADS {
+                    net.l3_weights[i][bucket][head] =
+                        self.l3x_weights[i][bucket][head] + self.l3f_weights[i][head];
+                }
             }
         }
         // copy the L3 biases
-        for i in 0..OUTPUT_BUCKETS {
-            net.l3_biases[i] = self.l3x_biases[i] + self.l3f_biases[0];
+        for head in 0..HEADS {
+            for i in 0..OUTPUT_BUCKETS {
+                net.l3_biases[i][head] = self.l3x_biases[i][head] + self.l3f_biases[head];
+            }
         }
 
         net
@@ -613,7 +620,9 @@ impl QuantisedNetwork {
 
             // transfer the L3 weights
             for i in 0..L3_SIZE {
-                net.l3_weights[bucket][i] = self.l3_weights[i][bucket];
+                for head in 0..HEADS {
+                    net.l3_weights[bucket][head][i] = self.l3_weights[i][bucket][head];
+                }
             }
 
             // transfer the L3 biases
@@ -1467,6 +1476,8 @@ impl NNUEState {
     /// Evaluate the final layer on the partial activations.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     pub fn evaluate(&self, nn: &NNUEParams, board: &Board) -> i32 {
+        const K: f32 = SCALE as f32;
+
         let stm = board.turn();
         let out = output_bucket(board);
 
@@ -1482,7 +1493,6 @@ impl NNUEState {
 
         let mut l1_outputs = Align64([0.0; L2_SIZE]);
         let mut l2_outputs = Align64([0.0; L3_SIZE]);
-        let mut l3_output = 0.0;
 
         layers::activate_ft_and_propagate_l1(
             us,
@@ -1497,14 +1507,52 @@ impl NNUEState {
             &nn.l2_bias[out],
             &mut l2_outputs,
         );
-        layers::propagate_l3(
-            &l2_outputs,
-            &nn.l3_weights[out],
-            nn.l3_bias[out],
-            &mut l3_output,
-        );
 
-        (l3_output * SCALE as f32) as i32
+        if HEADS == 1 {
+            let mut l3_output = 0.0;
+
+            layers::propagate_l3(
+                &l2_outputs,
+                &nn.l3_weights[out][0],
+                nn.l3_bias[out][0],
+                &mut l3_output,
+            );
+
+            (l3_output * SCALE as f32) as i32
+        } else if HEADS == 3 {
+            let mut l3_output_logits = [0.0; 3];
+
+            for ((w, b), o) in nn.l3_weights[out]
+                .iter()
+                .zip(nn.l3_bias[out])
+                .zip(&mut l3_output_logits)
+            {
+                layers::propagate_l3(&l2_outputs, w, b, o);
+            }
+
+            // softmax
+            let mut win = l3_output_logits[2];
+            let mut draw = l3_output_logits[1];
+            let mut loss = l3_output_logits[0];
+
+            let max = win.max(draw).max(loss);
+
+            win = (win - max).exp();
+            draw = (draw - max).exp();
+            loss = (loss - max).exp();
+
+            let sum = win + draw + loss;
+
+            win /= sum;
+            draw /= sum;
+            // loss /= sum;
+
+            let score = draw.mul_add(0.5, win).clamp(0.0, 1.0);
+
+            (-K * (1.0 / score - 1.0).ln()) as i32
+        } else {
+            panic!("Unsupported number of heads: {HEADS}");
+        }
     }
 }
 
