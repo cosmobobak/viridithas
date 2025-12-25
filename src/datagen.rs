@@ -1092,6 +1092,8 @@ fn relabel_binpacks(
             // we cannot use efficient incremental updates,
             // as games can run for >1000 ply, which is much
             // beyond the 128 ply limit that we have at time of writing.
+            // this *is* needlessly slow. converting a whole master-quality
+            // dataset will take small double-digit hours because of this.
             nnue_state.reinit_from(&rollout, nnue_params);
             let value = i32::from(slot.get());
             // we preserve decisive evaluations.
