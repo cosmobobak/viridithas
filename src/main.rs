@@ -37,7 +37,7 @@ mod uci;
 mod util;
 
 #[cfg(feature = "datagen")]
-use cli::Subcommands::{Analyse, CountPositions, Datagen, Rescale, Splat};
+use cli::Subcommands::{Analyse, CountPositions, Datagen, Relabel, Rescale, Splat};
 use cli::Subcommands::{
     Bench, EvalStats, Merge, NNUEDryRun, Perft, Quantise, Spsa, Verbatim, VisNNUE,
 };
@@ -97,6 +97,8 @@ fn main() -> anyhow::Result<()> {
             output,
         }) => datagen::run_rescale(&input, &output, scale),
         #[cfg(feature = "datagen")]
+        Some(Relabel { input, output }) => datagen::run_relabel(&input, &output),
+        #[cfg(feature = "datagen")]
         Some(Splat {
             input,
             marlinformat,
@@ -104,9 +106,10 @@ fn main() -> anyhow::Result<()> {
             output,
             limit,
             cfg_path,
+            annotate,
         }) => {
             if pgn {
-                datagen::run_topgn(&input, &output, limit)
+                datagen::run_topgn(&input, &output, limit, annotate)
             } else {
                 datagen::run_splat(&input, &output, cfg_path.as_deref(), marlinformat, limit)
             }
