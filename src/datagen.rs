@@ -39,7 +39,7 @@ use crate::{
     search::{parameters::Config, search_position, static_exchange_eval},
     tablebases::probe::SYZYGY_ENABLED,
     tablebases::{self, probe::WDL},
-    threadlocal::make_thread_data,
+    threadlocal::{Corrhists, make_thread_data},
     threadpool,
     timemgmt::{SearchLimit, TimeManager},
     transpositiontable::TT,
@@ -427,6 +427,7 @@ fn generate_on_thread<'a>(
     let mut tts = [TT::new(), TT::new()];
     tts[Colour::White].resize(4 * MEGABYTE, from_ref(&worker_thread));
     tts[Colour::Black].resize(4 * MEGABYTE, from_ref(&worker_thread));
+    let corrhists = [Corrhists::new(), Corrhists::new()];
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
     let tbhits = AtomicU64::new(0);
@@ -434,6 +435,7 @@ fn generate_on_thread<'a>(
         make_thread_data(
             &Board::default(),
             tts[colour].view(),
+            &corrhists[colour],
             nnue_params,
             &stopped,
             &nodes,
@@ -1083,8 +1085,7 @@ impl From<&Board> for MaterialConfiguration {
             let highest_piece = subslice
                 .iter()
                 .enumerate()
-                .filter(|(_, v)| **v > 0)
-                .next_back()
+                .rfind(|(_, v)| **v > 0)
                 .unwrap_or((0, &0))
                 .0;
             count * 10 + highest_piece as u64
