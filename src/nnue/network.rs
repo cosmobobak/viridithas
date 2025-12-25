@@ -55,7 +55,7 @@ pub const L2_SIZE: usize = 16;
 /// The size of the third layer of the network.
 pub const L3_SIZE: usize = 32;
 /// The number of output heads.
-pub const HEADS: usize = 3;
+pub const HEADS: usize = 1;
 /// The quantisation factor for the feature transformer weights.
 const QA: i16 = 255;
 /// The quantisation factor for the L1 weights.
@@ -1493,7 +1493,6 @@ impl NNUEState {
 
         let mut l1_outputs = Align64([0.0; L2_SIZE]);
         let mut l2_outputs = Align64([0.0; L3_SIZE]);
-        let mut l3_output_logits = [0.0; 3];
 
         layers::activate_ft_and_propagate_l1(
             us,
@@ -1509,34 +1508,51 @@ impl NNUEState {
             &mut l2_outputs,
         );
 
-        for ((w, b), o) in nn.l3_weights[out]
-            .iter()
-            .zip(nn.l3_bias[out])
-            .zip(&mut l3_output_logits)
-        {
-            layers::propagate_l3(&l2_outputs, w, b, o);
+        if HEADS == 1 {
+            let mut l3_output = 0.0;
+
+            layers::propagate_l3(
+                &l2_outputs,
+                &nn.l3_weights[out][0],
+                nn.l3_bias[out][0],
+                &mut l3_output,
+            );
+
+            (l3_output * SCALE as f32) as i32
+        } else if HEADS == 3 {
+            let mut l3_output_logits = [0.0; 3];
+
+            for ((w, b), o) in nn.l3_weights[out]
+                .iter()
+                .zip(nn.l3_bias[out])
+                .zip(&mut l3_output_logits)
+            {
+                layers::propagate_l3(&l2_outputs, w, b, o);
+            }
+
+            // softmax
+            let mut win = l3_output_logits[2];
+            let mut draw = l3_output_logits[1];
+            let mut loss = l3_output_logits[0];
+
+            let max = win.max(draw).max(loss);
+
+            win = (win - max).exp();
+            draw = (draw - max).exp();
+            loss = (loss - max).exp();
+
+            let sum = win + draw + loss;
+
+            win /= sum;
+            draw /= sum;
+            // loss /= sum;
+
+            let score = draw.mul_add(0.5, win).clamp(0.0, 1.0);
+
+            (-K * (1.0 / score - 1.0).ln()) as i32
+        } else {
+            panic!("Unsupported number of heads: {HEADS}");
         }
-
-        // softmax
-        let mut win = l3_output_logits[2];
-        let mut draw = l3_output_logits[1];
-        let mut loss = l3_output_logits[0];
-
-        let max = win.max(draw).max(loss);
-
-        win = (win - max).exp();
-        draw = (draw - max).exp();
-        loss = (loss - max).exp();
-
-        let sum = win + draw + loss;
-
-        win /= sum;
-        draw /= sum;
-        // loss /= sum;
-
-        let score = draw.mul_add(0.5, win).clamp(0.0, 1.0);
-
-        (-K * (1.0 / score - 1.0).ln()) as i32
     }
 }
 
