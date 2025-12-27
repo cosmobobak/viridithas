@@ -1193,10 +1193,10 @@ pub fn alpha_beta<NT: NodeType>(
     // as usual, don't probcut in PV / check / singular verification / if there are GT truth scores in flight.
     // additionally, if we have a TT hit that's sufficiently deep, we skip trying probcut if the TT value indicates
     // that it's not going to be helpful.
-    if !NT::PV
+    if cut_node
         && !in_check
         && excluded.is_none()
-        && depth >= 3
+        && depth >= 1
         && !is_decisive(beta)
         // don't probcut if we have a tthit with value < pcbeta
         && tt_hit.is_none_or(|tte| tte.value >= pc_beta)
