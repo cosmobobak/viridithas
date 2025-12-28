@@ -1094,7 +1094,7 @@ pub fn alpha_beta<NT: NodeType>(
         // if the static eval is too high, we can prune the node.
         // this is a generalisation of stand_pat in quiescence search.
         if !t.ss[height].ttpv
-            && depth < 9
+            && depth < 14
             && beta > -MINIMUM_TB_WIN_SCORE
             && eval < MINIMUM_TB_WIN_SCORE
             && eval >= beta
