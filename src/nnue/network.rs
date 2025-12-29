@@ -41,17 +41,17 @@ const _: () = assert!(!EMBEDDED_NNUE_VERBATIM || EMBEDDED_NNUE.len() == size_of:
 /// Whether to perform the king-plane merging optimisation.
 pub const MERGE_KING_PLANES: bool = true;
 /// Whether the unquantised network has a feature factoriser.
-pub const UNQUANTISED_HAS_FACTORISER: bool = false;
+pub const UNQUANTISED_HAS_FACTORISER: bool = true;
 /// The size of the input layer of the network.
 pub const INPUT: usize = (12 - MERGE_KING_PLANES as usize) * 64;
 /// The amount to scale the output of the network by.
 /// This is to allow for the sigmoid activation to differentiate positions with
 /// a small difference in evaluation.
-pub const SCALE: i32 = 235;
+pub const SCALE: i32 = 362;
 /// The size of one-half of the hidden layer of the network.
-pub const L1_SIZE: usize = 4096;
+pub const L1_SIZE: usize = 1536;
 /// The size of the second layer of the network.
-pub const L2_SIZE: usize = 32;
+pub const L2_SIZE: usize = 16;
 /// The size of the third layer of the network.
 pub const L3_SIZE: usize = 32;
 /// The number of output heads.
@@ -97,9 +97,8 @@ const BUCKET_MAP: [usize; 64] = {
 
 /// Get index into the output layer given a board state.
 pub fn output_bucket(pos: &Board) -> usize {
-    #![allow(clippy::cast_possible_truncation)]
-    const DIVISOR: usize = usize::div_ceil(32, OUTPUT_BUCKETS);
-    (pos.state.bbs.occupied().count() as usize - 2) / DIVISOR
+    let pc_count = pos.state.bbs.occupied().count() as usize;
+    ((63 - pc_count) * (32 - pc_count) / 225).min(7)
 }
 
 pub fn nnue_checksum() -> u64 {
@@ -121,13 +120,13 @@ struct UnquantisedNetwork {
     l1_weights:  [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:    [[f32; L2_SIZE]; OUTPUT_BUCKETS],
     l2x_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
-    l2f_weights:  [[f32; L3_SIZE]; L2_SIZE],
+    // l2f_weights:  [[f32; L3_SIZE]; L2_SIZE],
     l2x_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
-    l2f_biases:    [f32; L3_SIZE],
+    // l2f_biases:    [f32; L3_SIZE],
     l3x_weights: [[[f32;   HEADS]; OUTPUT_BUCKETS]; L3_SIZE],
-    l3f_weights:  [[f32;   HEADS]; L3_SIZE],
+    // l3f_weights:  [[f32;   HEADS]; L3_SIZE],
     l3x_biases:   [[f32;   HEADS]; OUTPUT_BUCKETS],
-    l3f_biases:    [f32;   HEADS],
+    // l3f_biases:    [f32;   HEADS],
 }
 
 /// The floating-point parameters of the network, after de-factorisation.
@@ -310,30 +309,28 @@ impl UnquantisedNetwork {
         for i in 0..L2_SIZE {
             for bucket in 0..OUTPUT_BUCKETS {
                 for j in 0..L3_SIZE {
-                    net.l2_weights[i][bucket][j] =
-                        self.l2x_weights[i][bucket][j] + self.l2f_weights[i][j];
+                    net.l2_weights[i][bucket][j] = self.l2x_weights[i][bucket][j]; // + self.l2f_weights[i][j];
                 }
             }
         }
         // copy the L2 biases
         for i in 0..L3_SIZE {
             for bucket in 0..OUTPUT_BUCKETS {
-                net.l2_biases[bucket][i] = self.l2x_biases[bucket][i] + self.l2f_biases[i];
+                net.l2_biases[bucket][i] = self.l2x_biases[bucket][i]; // + self.l2f_biases[i];
             }
         }
         // copy the L3 weights
         for i in 0..L3_SIZE {
             for bucket in 0..OUTPUT_BUCKETS {
                 for head in 0..HEADS {
-                    net.l3_weights[i][bucket][head] =
-                        self.l3x_weights[i][bucket][head] + self.l3f_weights[i][head];
+                    net.l3_weights[i][bucket][head] = self.l3x_weights[i][bucket][head]; // + self.l3f_weights[i][head];
                 }
             }
         }
         // copy the L3 biases
         for head in 0..HEADS {
             for i in 0..OUTPUT_BUCKETS {
-                net.l3_biases[i][head] = self.l3x_biases[i][head] + self.l3f_biases[head];
+                net.l3_biases[i][head] = self.l3x_biases[i][head]; // + self.l3f_biases[head];
             }
         }
 
