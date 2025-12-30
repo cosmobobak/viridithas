@@ -147,7 +147,7 @@ pub enum SetOptionParseError {
 /// Errors that can occur when parsing a `go perft` command.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum PerftParseError {
-    #[error("missing depth after `go perft`")]
+    #[error("missing depth after `perft`")]
     MissingDepth,
     #[error("failed to parse perft depth \"{text}\": {source}")]
     InvalidDepth { text: String, source: ParseIntError },

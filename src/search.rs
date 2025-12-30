@@ -1969,13 +1969,13 @@ fn readout_info(
             "info depth {iteration} seldepth {} nodes {nodes} time {} nps {nps} hashfull {hashfull} tbhits {tbhits} score {sstr}{bound_string} wdl {wdl} {pv}",
             info.seldepth as usize,
             info.clock.elapsed().as_millis(),
-            sstr = uci::format_score(pv.score),
+            sstr = uci::fmt::format_score(pv.score),
             hashfull = tt.hashfull(),
             tbhits = t.info.tbhits.get_global(),
-            wdl = uci::format_wdl(pv.score, board.ply()),
+            wdl = uci::fmt::format_wdl(pv.score, board.ply()),
         );
     } else {
-        let value = uci::pretty_format_score(pv.score, board.turn());
+        let value = uci::fmt::pretty_format_score(pv.score, board.turn());
         let mut pv_string = board.pv_san(pv).unwrap();
         let pv_string_len = pv_string.len();
         // truncate the pv string if it's too long
@@ -2012,10 +2012,10 @@ fn readout_info(
         eprint!(
             " {iteration:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}n\u{001b}[0m {value} {wdl} \u{001b}[38;5;243m{knps:5}kn/s\u{001b}[0m {pv_string}{endchr}",
             info.seldepth as usize,
-            t = uci::format_time(info.clock.elapsed().as_millis()),
+            t = uci::fmt::format_time(info.clock.elapsed().as_millis()),
             knps = nps / 1_000,
-            knodes = uci::pretty_format_counter(nodes),
-            wdl = uci::pretty_format_wdl(pv.score, board.ply()),
+            knodes = uci::fmt::pretty_format_counter(nodes),
+            wdl = uci::fmt::pretty_format_wdl(pv.score, board.ply()),
         );
     }
 }

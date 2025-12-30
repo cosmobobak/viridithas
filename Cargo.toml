@@ -63,6 +63,7 @@ fxhash = "0.2.1"
 
 # what it says on the tin
 term_size = "0.3.2"
+vec1 = "1.12.1"
 
 # for coloured terminal output
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]

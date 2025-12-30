@@ -2,6 +2,8 @@ use std::sync::mpsc::{Receiver, SyncSender};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::Scope;
 
+use vec1::Vec1;
+
 // Handle for communicating with a worker thread.
 // Contains a sender for sending messages to the worker thread,
 // and a receiver for receiving messages from the worker thread.
@@ -124,8 +126,13 @@ fn make_worker_thread() -> WorkerThread {
     }
 }
 
-pub fn make_worker_threads(num_threads: usize) -> Vec<WorkerThread> {
-    (0..num_threads).map(|_| make_worker_thread()).collect()
+/// Create some number of worker threads. Panics if `num_threads` is zero.
+pub fn make_worker_threads(num_threads: usize) -> Vec1<WorkerThread> {
+    (0..num_threads)
+        .map(|_| make_worker_thread())
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap()
 }
 
 pub struct WorkerThread {

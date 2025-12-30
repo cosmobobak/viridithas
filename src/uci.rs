@@ -6,8 +6,9 @@
     clippy::unimplemented
 )]
 
+pub mod fmt;
+
 use std::{
-    fmt::{self, Display},
     io::Write,
     sync::{
         Mutex, Once,
@@ -30,7 +31,7 @@ use crate::{
     },
     cuckoo,
     errors::{GoParseError, PerftParseError, PositionParseError, SetOptionParseError, UciError},
-    evaluation::{MATE_SCORE, TB_WIN_SCORE, evaluate, is_decisive, is_mate_score},
+    evaluation::evaluate,
     nnue::{self, network::NNUEParams},
     perft,
     search::{LMTable, adj_shuffle, parameters::Config, search_position},
@@ -49,12 +50,10 @@ use crate::nnue::network::layers::{NNZ_COUNT, NNZ_DENOM};
 const UCI_DEFAULT_HASH_MEGABYTES: usize = 16;
 const UCI_MAX_HASH_MEGABYTES: usize = 1_048_576;
 const UCI_MAX_THREADS: usize = 512;
+const BENCH_DEPTH: usize = 14;
+const BENCH_THREADS: usize = 1;
 
-/// Check if `input` is the command `cmd` itself, or starts with `cmd` followed by a space.
-fn is_cmd(input: &str, cmd: &str) -> bool {
-    input == cmd || (input.starts_with(cmd) && input.as_bytes().get(cmd.len()) == Some(&b' '))
-}
-
+static SET_TERM: Once = Once::new();
 static STDIN_READER_THREAD_KEEP_RUNNING: AtomicBool = AtomicBool::new(true);
 pub static QUIT: AtomicBool = AtomicBool::new(false);
 pub static GO_MATE_MAX_DEPTH: AtomicUsize = AtomicUsize::new(MAX_DEPTH);
@@ -62,6 +61,252 @@ pub static PRETTY_PRINT: AtomicBool = AtomicBool::new(true);
 pub static SYZYGY_PROBE_LIMIT: AtomicU8 = AtomicU8::new(7);
 pub static SYZYGY_PROBE_DEPTH: AtomicI32 = AtomicI32::new(1);
 pub static CONTEMPT: AtomicI32 = AtomicI32::new(0);
+
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+pub fn main_loop() -> Result<(), UciError> {
+    let version_extension = if cfg!(feature = "final-release") {
+        ""
+    } else {
+        "-dev"
+    };
+    println!("{NAME} {VERSION}{version_extension} by Cosmo");
+
+    let mut worker_threads = threadpool::make_worker_threads(1);
+
+    let mut tt = TT::new();
+    tt.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE, &worker_threads); // default hash size
+    let corrhists = Corrhists::new();
+
+    let nnue_params =
+        NNUEParams::decompress_and_alloc().map_err(|e| UciError::NnueInit(e.to_string()))?;
+
+    let (stdin, stdin_reader_handle) = stdin_reader()?;
+    let stdin = Mutex::new(stdin);
+    let stopped = AtomicBool::new(false);
+    let nodes = AtomicU64::new(0);
+    let tbhits = AtomicU64::new(0);
+    let mut thread_data = make_thread_data(
+        &Board::default(),
+        tt.view(),
+        &corrhists,
+        nnue_params,
+        &stopped,
+        &nodes,
+        &tbhits,
+        &worker_threads,
+    )
+    .map_err(|e| UciError::NnueInit(e.to_string()))?;
+    thread_data[0].info.set_stdin(&stdin);
+
+    loop {
+        std::io::stdout().flush()?;
+        let Ok(line) = stdin
+            .lock()
+            .map_err(|_| UciError::Internal("failed to take lock on stdin"))?
+            .recv()
+        else {
+            break;
+        };
+        let input = line.trim();
+
+        let res: Result<(), UciError> = match input {
+            "\n" => continue,
+            "uci" => {
+                #[cfg(feature = "tuning")]
+                print_uci_response(&thread_data[0].info, true);
+                #[cfg(not(feature = "tuning"))]
+                print_uci_response(&thread_data[0].info, false);
+                PRETTY_PRINT.store(false, Ordering::SeqCst);
+                Ok(())
+            }
+            "ucifull" => {
+                print_uci_response(&thread_data[0].info, true);
+                PRETTY_PRINT.store(false, Ordering::SeqCst);
+                Ok(())
+            }
+            arg @ ("ucidump" | "ucidumpfull") => {
+                // dump the values of the current UCI options
+                println!("Hash: {}", tt.size() / MEGABYTE);
+                println!("Threads: {}", thread_data.len());
+                println!("PrettyPrint: {}", PRETTY_PRINT.load(Ordering::SeqCst));
+                println!(
+                    "SyzygyProbeLimit: {}",
+                    SYZYGY_PROBE_LIMIT.load(Ordering::SeqCst)
+                );
+                println!(
+                    "SyzygyProbeDepth: {}",
+                    SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst)
+                );
+                println!("Contempt: {}", CONTEMPT.load(Ordering::SeqCst));
+                if arg == "ucidumpfull" {
+                    for (id, default) in Config::default().ids_with_values() {
+                        println!("{id}: {default}");
+                    }
+                }
+                Ok(())
+            }
+            "isready" => {
+                println!("readyok");
+                Ok(())
+            }
+            "quit" => {
+                QUIT.store(true, Ordering::SeqCst);
+                break;
+            }
+            "ucinewgame" => do_newgame(&tt, &mut thread_data, &worker_threads),
+            "eval" => {
+                let t = thread_data.first_mut();
+                let eval = if t.board.in_check() {
+                    0
+                } else {
+                    let eval = evaluate(t, 0);
+                    adj_shuffle(t, eval, t.board.fifty_move_counter())
+                };
+                println!("{eval}");
+                Ok(())
+            }
+            "raweval" => {
+                let t = thread_data.first_mut();
+                let eval = if t.board.in_check() {
+                    0
+                } else {
+                    t.nnue.evaluate(t.nnue_params, &t.board)
+                };
+                println!("{eval}");
+                Ok(())
+            }
+            "show" => {
+                let t = thread_data.first_mut();
+                println!("{:X}", t.board);
+                Ok(())
+            }
+            "debug" => {
+                let t = thread_data.first_mut();
+                println!("{:?}", t.board);
+                Ok(())
+            }
+            "nnuebench" => {
+                nnue::network::inference_benchmark(
+                    &thread_data[0].nnue,
+                    thread_data[0].nnue_params,
+                );
+                Ok(())
+            }
+            "gobench" => go_benchmark(nnue_params),
+            "initcuckoo" => Ok(cuckoo::init()?),
+            "initattacks" => Ok(movegen::init_sliders_attacks()?),
+            input if is_cmd(input, "setoption") => {
+                let pre_config = SetOptions {
+                    search_config: thread_data[0].info.conf.clone(),
+                    hash_mb: tt.size() / MEGABYTE,
+                    threads: thread_data.len(),
+                };
+                let threads_before = thread_data.len();
+                match parse_setoption(input, pre_config) {
+                    Ok(conf) => {
+                        if threads_before != conf.threads {
+                            println!(
+                                "info string changing threads from {threads_before} to {}",
+                                conf.threads
+                            );
+                            worker_threads
+                                .into_iter()
+                                .for_each(threadpool::WorkerThread::join);
+                            worker_threads = threadpool::make_worker_threads(conf.threads);
+                        }
+                        let new_size = conf.hash_mb * MEGABYTE;
+                        let pos = thread_data[0].board.clone();
+                        // drop all the thread_data, as they are borrowing the old tt
+                        std::mem::drop(thread_data);
+                        tt.resize(new_size, &worker_threads);
+                        // recreate the thread_data with the new tt
+                        thread_data = make_thread_data(
+                            &pos,
+                            tt.view(),
+                            &corrhists,
+                            nnue_params,
+                            &stopped,
+                            &nodes,
+                            &tbhits,
+                            &worker_threads,
+                        )
+                        .map_err(|e| UciError::NnueInit(e.to_string()))?;
+
+                        for t in &mut thread_data {
+                            t.info.conf = conf.search_config.clone();
+                            t.info.lm_table = LMTable::new(&t.info.conf);
+                            t.info.set_stdin(&stdin);
+                        }
+
+                        Ok(())
+                    }
+                    Err(e) => Err(e.into()),
+                }
+            }
+            input if is_cmd(input, "position") => thread_data
+                .iter_mut()
+                .try_for_each(|t| {
+                    parse_position(input, &mut t.board)?;
+                    t.nnue.reinit_from(&t.board, t.nnue_params);
+                    Ok::<_, PositionParseError>(())
+                })
+                .map_err(Into::into),
+            input if is_cmd(input, "go perft") || is_cmd(input, "perft") => {
+                parse_perft(thread_data.first_mut(), input)
+            }
+            input if is_cmd(input, "go") => {
+                // start the clock *immediately*
+                thread_data[0].info.clock.start();
+
+                // if we're in pretty-printing mode, set the terminal properly:
+                if PRETTY_PRINT.load(Ordering::SeqCst) {
+                    SET_TERM.call_once(|| {
+                        term::set_mode_uci();
+                    });
+                }
+
+                match parse_go(input, thread_data[0].board.turn()) {
+                    Ok(search_limit) => {
+                        thread_data[0].info.clock.set_limit(search_limit);
+                        tt.increase_age();
+                        search_position(&worker_threads, &mut thread_data);
+                        Ok(())
+                    }
+                    Err(e) => Err(e.into()),
+                }
+            }
+            "ponderhit" => {
+                println!("info error ponderhit given while not searching.");
+                Ok(())
+            }
+            benchcmd @ ("bench" | "benchfull") => {
+                bench(benchcmd, &thread_data[0].info.conf, nnue_params, None, None)
+            }
+            _ => Err(UciError::UnknownCommand(input.to_string())),
+        };
+
+        if let Err(e) = res {
+            eprintln!("info string {e}");
+        }
+
+        if QUIT.load(Ordering::SeqCst) {
+            // quit can be set true in parse_go
+            break;
+        }
+    }
+    STDIN_READER_THREAD_KEEP_RUNNING.store(false, atomic::Ordering::SeqCst);
+    if stdin_reader_handle.is_finished() {
+        stdin_reader_handle
+            .join()
+            .map_err(|_| UciError::Thread("stdin reader thread panicked".to_string()))??;
+    }
+    Ok(())
+}
+
+/// Check if `input` is the command `cmd` itself, or starts with `cmd` followed by a space.
+fn is_cmd(input: &str, cmd: &str) -> bool {
+    input == cmd || (input.starts_with(cmd) && input.as_bytes().get(cmd.len()) == Some(&b' '))
+}
 
 // position fen
 // position startpos
@@ -219,6 +464,45 @@ where
     next_part
         .parse()
         .map_err(|e| GoParseError::InvalidValue { param, source: e })
+}
+
+fn parse_perft(t: &mut ThreadData<'_>, input: &str) -> Result<(), UciError> {
+    let tail = input
+        .strip_prefix("go perft")
+        .or_else(|| input.strip_prefix("perft"))
+        .unwrap_or("")
+        .trim_start();
+    match tail.split_whitespace().next() {
+        Some("divide" | "split") => {
+            let depth_str = tail
+                .strip_prefix("divide")
+                .or_else(|| tail.strip_prefix("split"))
+                .unwrap_or("")
+                .trim_start();
+            if depth_str.is_empty() {
+                return Err(PerftParseError::MissingDepth.into());
+            }
+            let depth: usize = depth_str
+                .parse()
+                .map_err(|e| PerftParseError::InvalidDepth {
+                    text: depth_str.to_string(),
+                    source: e,
+                })?;
+            divide_perft(depth, &mut t.board);
+            Ok(())
+        }
+        Some(depth_str) => {
+            let depth: usize = depth_str
+                .parse()
+                .map_err(|e| PerftParseError::InvalidDepth {
+                    text: depth_str.to_string(),
+                    source: e,
+                })?;
+            block_perft(depth, &mut t.board);
+            Ok(())
+        }
+        None => Err(PerftParseError::MissingDepth.into()),
+    }
 }
 
 struct SetOptions {
@@ -440,109 +724,6 @@ fn stdin_reader_worker(sender: mpsc::Sender<String>) -> Result<(), UciError> {
     Ok(())
 }
 
-pub struct ScoreFormatWrapper(i32);
-impl Display for ScoreFormatWrapper {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if is_mate_score(self.0) {
-            let plies_to_mate = MATE_SCORE - self.0.abs();
-            let moves_to_mate = (plies_to_mate + 1) / 2;
-            if self.0 > 0 {
-                write!(f, "mate {moves_to_mate}")
-            } else {
-                write!(f, "mate -{moves_to_mate}")
-            }
-        } else if is_decisive(self.0) {
-            write!(f, "cp {}", self.0)
-        } else {
-            write!(f, "cp {}", self.0 * 100 / NORMALISE_TO_PAWN_VALUE)
-        }
-    }
-}
-pub const fn format_score(score: i32) -> ScoreFormatWrapper {
-    ScoreFormatWrapper(score)
-}
-pub struct PrettyScoreFormatWrapper(i32, Colour);
-impl Display for PrettyScoreFormatWrapper {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.0 {
-            -20..=20 => write!(f, "\u{001b}[0m")?, // drawish, no colour.
-            21..=100 => write!(f, "\u{001b}[38;5;10m")?, // slightly better for us, light green.
-            -100..=-21 => write!(f, "\u{001b}[38;5;9m")?, // slightly better for them, light red.
-            101..=500 => write!(f, "\u{001b}[38;5;2m")?, // clearly better for us, green.
-            -10000..=-101 => write!(f, "\u{001b}[38;5;1m")?, // clearly/much better for them, red.
-            501..=10000 => write!(f, "\u{001b}[38;5;4m")?, // much better for us, blue.
-            _ => write!(f, "\u{001b}[38;5;219m")?, // probably a mate score, pink.
-        }
-        let white_pov = if self.1 == Colour::White {
-            self.0
-        } else {
-            -self.0
-        };
-        if is_mate_score(white_pov) {
-            let plies_to_mate = MATE_SCORE - white_pov.abs();
-            let moves_to_mate = (plies_to_mate + 1) / 2;
-            if white_pov > 0 {
-                write!(f, "   #{moves_to_mate:<2}")?;
-            } else {
-                write!(f, "  #-{moves_to_mate:<2}")?;
-            }
-        } else if is_decisive(white_pov) {
-            let plies_to_tb = TB_WIN_SCORE - white_pov.abs();
-            if white_pov > 0 {
-                write!(f, " +TB{plies_to_tb:<2}")?;
-            } else {
-                write!(f, " -TB{plies_to_tb:<2}")?;
-            }
-        } else {
-            let white_pov = white_pov * 100 / NORMALISE_TO_PAWN_VALUE;
-            let white_pov = white_pov.clamp(-9999, 9999);
-            if white_pov == 0 {
-                // same as below, but with no sign
-                write!(f, "{:6.2}", f64::from(white_pov) / 100.0)?;
-            } else {
-                // six chars wide: one for the sign, two for the pawn values,
-                // one for the decimal point, and two for the centipawn values
-                write!(f, "{:+6.2}", f64::from(white_pov) / 100.0)?;
-            }
-        }
-        write!(f, "\u{001b}[0m") // reset
-    }
-}
-pub const fn pretty_format_score(v: i32, c: Colour) -> PrettyScoreFormatWrapper {
-    PrettyScoreFormatWrapper(v, c)
-}
-
-pub struct HumanTimeFormatWrapper {
-    millis: u128,
-}
-impl Display for HumanTimeFormatWrapper {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let millis = self.millis;
-        let seconds = millis / 1000;
-        let minutes = seconds / 60;
-        let hours = minutes / 60;
-        let days = hours / 24;
-        if days > 0 {
-            write!(f, "{days:2}d{r_hours:02}h", r_hours = hours % 24)
-        } else if hours > 0 {
-            write!(f, "{hours:2}h{r_minutes:02}m", r_minutes = minutes % 60)
-        } else if minutes > 0 {
-            write!(f, "{minutes:2}m{r_seconds:02}s", r_seconds = seconds % 60)
-        } else if seconds > 0 {
-            write!(
-                f,
-                "{seconds:2}.{r_millis:02}s",
-                r_millis = millis % 1000 / 10
-            )
-        } else {
-            write!(f, "{millis:4}ms")
-        }
-    }
-}
-pub const fn format_time(millis: u128) -> HumanTimeFormatWrapper {
-    HumanTimeFormatWrapper { millis }
-}
-
 fn print_uci_response(info: &SearchInfo, full: bool) {
     let version_extension = if cfg!(feature = "final-release") {
         ""
@@ -570,300 +751,6 @@ fn print_uci_response(info: &SearchInfo, full: bool) {
     println!("uciok");
 }
 
-static SET_TERM: Once = Once::new();
-
-#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-pub fn main_loop() -> Result<(), UciError> {
-    let version_extension = if cfg!(feature = "final-release") {
-        ""
-    } else {
-        "-dev"
-    };
-    println!("{NAME} {VERSION}{version_extension} by Cosmo");
-
-    let mut worker_threads = threadpool::make_worker_threads(1);
-
-    let mut tt = TT::new();
-    tt.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE, &worker_threads); // default hash size
-    let corrhists = Corrhists::new();
-
-    let nnue_params =
-        NNUEParams::decompress_and_alloc().map_err(|e| UciError::NnueInit(e.to_string()))?;
-
-    let (stdin, stdin_reader_handle) = stdin_reader()?;
-    let stdin = Mutex::new(stdin);
-    let stopped = AtomicBool::new(false);
-    let nodes = AtomicU64::new(0);
-    let tbhits = AtomicU64::new(0);
-    let mut thread_data = make_thread_data(
-        &Board::default(),
-        tt.view(),
-        &corrhists,
-        nnue_params,
-        &stopped,
-        &nodes,
-        &tbhits,
-        &worker_threads,
-    )
-    .map_err(|e| UciError::NnueInit(e.to_string()))?;
-    thread_data[0].info.set_stdin(&stdin);
-
-    loop {
-        std::io::stdout().flush()?;
-        let Ok(line) = stdin
-            .lock()
-            .map_err(|_| UciError::Internal("failed to take lock on stdin"))?
-            .recv()
-        else {
-            break;
-        };
-        let input = line.trim();
-
-        let res: Result<(), UciError> = match input {
-            "\n" => continue,
-            "uci" => {
-                #[cfg(feature = "tuning")]
-                print_uci_response(&thread_data[0].info, true);
-                #[cfg(not(feature = "tuning"))]
-                print_uci_response(&thread_data[0].info, false);
-                PRETTY_PRINT.store(false, Ordering::SeqCst);
-                Ok(())
-            }
-            "ucifull" => {
-                print_uci_response(&thread_data[0].info, true);
-                PRETTY_PRINT.store(false, Ordering::SeqCst);
-                Ok(())
-            }
-            arg @ ("ucidump" | "ucidumpfull") => {
-                // dump the values of the current UCI options
-                println!("Hash: {}", tt.size() / MEGABYTE);
-                println!("Threads: {}", thread_data.len());
-                println!("PrettyPrint: {}", PRETTY_PRINT.load(Ordering::SeqCst));
-                println!(
-                    "SyzygyProbeLimit: {}",
-                    SYZYGY_PROBE_LIMIT.load(Ordering::SeqCst)
-                );
-                println!(
-                    "SyzygyProbeDepth: {}",
-                    SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst)
-                );
-                println!("Contempt: {}", CONTEMPT.load(Ordering::SeqCst));
-                if arg == "ucidumpfull" {
-                    for (id, default) in Config::default().ids_with_values() {
-                        println!("{id}: {default}");
-                    }
-                }
-                Ok(())
-            }
-            "isready" => {
-                println!("readyok");
-                Ok(())
-            }
-            "quit" => {
-                QUIT.store(true, Ordering::SeqCst);
-                break;
-            }
-            "ucinewgame" => do_newgame(&tt, &mut thread_data, &worker_threads),
-            "eval" => {
-                let t = thread_data
-                    .first_mut()
-                    .ok_or(UciError::Internal("thread data is empty"))?;
-                let eval = if t.board.in_check() {
-                    0
-                } else {
-                    let eval = evaluate(t, 0);
-                    adj_shuffle(t, eval, t.board.fifty_move_counter())
-                };
-                println!("{eval}");
-                Ok(())
-            }
-            "raweval" => {
-                let t = thread_data
-                    .first_mut()
-                    .ok_or(UciError::Internal("thread data is empty"))?;
-                let eval = if t.board.in_check() {
-                    0
-                } else {
-                    t.nnue.evaluate(t.nnue_params, &t.board)
-                };
-                println!("{eval}");
-                Ok(())
-            }
-            "show" => {
-                let t = thread_data
-                    .first_mut()
-                    .ok_or(UciError::Internal("thread data is empty"))?;
-                println!("{:X}", t.board);
-                Ok(())
-            }
-            "debug" => {
-                let t = thread_data
-                    .first_mut()
-                    .ok_or(UciError::Internal("thread data is empty"))?;
-                println!("{:?}", t.board);
-                Ok(())
-            }
-            "nnuebench" => {
-                nnue::network::inference_benchmark(
-                    &thread_data[0].nnue,
-                    thread_data[0].nnue_params,
-                );
-                Ok(())
-            }
-            "gobench" => go_benchmark(nnue_params),
-            "initcuckoo" => Ok(cuckoo::init()?),
-            "initattacks" => Ok(movegen::init_sliders_attacks()?),
-            input if is_cmd(input, "setoption") => {
-                let pre_config = SetOptions {
-                    search_config: thread_data[0].info.conf.clone(),
-                    hash_mb: tt.size() / MEGABYTE,
-                    threads: thread_data.len(),
-                };
-                let threads_before = thread_data.len();
-                match parse_setoption(input, pre_config) {
-                    Ok(conf) => {
-                        if threads_before != conf.threads {
-                            println!(
-                                "info string changing threads from {threads_before} to {}",
-                                conf.threads
-                            );
-                            worker_threads
-                                .into_iter()
-                                .for_each(threadpool::WorkerThread::join);
-                            worker_threads = threadpool::make_worker_threads(conf.threads);
-                        }
-                        let new_size = conf.hash_mb * MEGABYTE;
-                        let pos = thread_data[0].board.clone();
-                        // drop all the thread_data, as they are borrowing the old tt
-                        std::mem::drop(thread_data);
-                        tt.resize(new_size, &worker_threads);
-                        // recreate the thread_data with the new tt
-                        thread_data = make_thread_data(
-                            &pos,
-                            tt.view(),
-                            &corrhists,
-                            nnue_params,
-                            &stopped,
-                            &nodes,
-                            &tbhits,
-                            &worker_threads,
-                        )
-                        .map_err(|e| UciError::NnueInit(e.to_string()))?;
-
-                        for t in &mut thread_data {
-                            t.info.conf = conf.search_config.clone();
-                            t.info.lm_table = LMTable::new(&t.info.conf);
-                            t.info.set_stdin(&stdin);
-                        }
-
-                        Ok(())
-                    }
-                    Err(e) => Err(e.into()),
-                }
-            }
-            input if is_cmd(input, "position") => (|| {
-                for t in &mut thread_data {
-                    parse_position(input, &mut t.board)?;
-                    t.nnue.reinit_from(&t.board, t.nnue_params);
-                }
-                Ok::<_, PositionParseError>(())
-            })()
-            .map_err(Into::into),
-            input if input.starts_with("go perft") || input.starts_with("perft") => (|| {
-                let t = thread_data
-                    .first_mut()
-                    .ok_or(UciError::Internal("thread data is empty"))?;
-                let tail = input
-                    .strip_prefix("go perft")
-                    .or_else(|| input.strip_prefix("perft"))
-                    .unwrap_or("")
-                    .trim_start();
-                match tail.split_whitespace().next() {
-                    Some("divide" | "split") => {
-                        let depth_str = tail
-                            .strip_prefix("divide")
-                            .or_else(|| tail.strip_prefix("split"))
-                            .unwrap_or("")
-                            .trim_start();
-                        if depth_str.is_empty() {
-                            return Err(PerftParseError::MissingDepth.into());
-                        }
-                        let depth: usize =
-                            depth_str
-                                .parse()
-                                .map_err(|e| PerftParseError::InvalidDepth {
-                                    text: depth_str.to_string(),
-                                    source: e,
-                                })?;
-                        divide_perft(depth, &mut t.board);
-                        Ok(())
-                    }
-                    Some(depth_str) => {
-                        let depth: usize =
-                            depth_str
-                                .parse()
-                                .map_err(|e| PerftParseError::InvalidDepth {
-                                    text: depth_str.to_string(),
-                                    source: e,
-                                })?;
-                        block_perft(depth, &mut t.board);
-                        Ok(())
-                    }
-                    None => Err(PerftParseError::MissingDepth.into()),
-                }
-            })(
-            ),
-            input if is_cmd(input, "go") => {
-                // start the clock *immediately*
-                thread_data[0].info.clock.start();
-
-                // if we're in pretty-printing mode, set the terminal properly:
-                if PRETTY_PRINT.load(Ordering::SeqCst) {
-                    SET_TERM.call_once(|| {
-                        term::set_mode_uci();
-                    });
-                }
-
-                match parse_go(input, thread_data[0].board.turn()) {
-                    Ok(search_limit) => {
-                        thread_data[0].info.clock.set_limit(search_limit);
-                        tt.increase_age();
-                        search_position(&worker_threads, &mut thread_data);
-                        Ok(())
-                    }
-                    Err(e) => Err(e.into()),
-                }
-            }
-            "ponderhit" => {
-                println!("info error ponderhit given while not searching.");
-                Ok(())
-            }
-            benchcmd @ ("bench" | "benchfull") => {
-                bench(benchcmd, &thread_data[0].info.conf, nnue_params, None, None)
-            }
-            _ => Err(UciError::UnknownCommand(input.to_string())),
-        };
-
-        if let Err(e) = res {
-            eprintln!("info string {e}");
-        }
-
-        if QUIT.load(Ordering::SeqCst) {
-            // quit can be set true in parse_go
-            break;
-        }
-    }
-    STDIN_READER_THREAD_KEEP_RUNNING.store(false, atomic::Ordering::SeqCst);
-    if stdin_reader_handle.is_finished() {
-        stdin_reader_handle
-            .join()
-            .map_err(|_| UciError::Thread("stdin reader thread panicked".to_string()))??;
-    }
-    Ok(())
-}
-
-const BENCH_DEPTH: usize = 14;
-const BENCH_THREADS: usize = 1;
 pub fn bench(
     benchcmd: &str,
     search_params: &Config,
@@ -1062,102 +949,4 @@ fn do_newgame(
         t.clear_tables();
     }
     Ok(())
-}
-
-/// Normalizes the internal value as reported by evaluate or search
-/// to the UCI centipawn result used in output. This value is derived from
-/// [the WLD model](https://github.com/vondele/WLD_model) such that Viridithas
-/// outputs an advantage of 100 centipawns for a position if the engine has a
-/// 50% probability to win from this position in selfplay at 16s+0.16s time control.
-const NORMALISE_TO_PAWN_VALUE: i32 = 229;
-
-fn wdl_model(eval: i32, ply: usize) -> (i32, i32, i32) {
-    #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-    const AS: [f64; 4] = [6.871_558_62, -39.652_263_91, 90.684_603_52, 170.669_963_64];
-    const BS: [f64; 4] = [
-        -7.198_907_10,
-        56.139_471_85,
-        -139.910_911_83,
-        182.810_074_27,
-    ];
-    debug_assert_eq!(
-        NORMALISE_TO_PAWN_VALUE,
-        AS.iter().sum::<f64>().round() as i32,
-        "AS sum should be {NORMALISE_TO_PAWN_VALUE} but is {:.2}",
-        AS.iter().sum::<f64>()
-    );
-
-    let m = std::cmp::min(240, ply) as f64 / 64.0;
-
-    let a = AS[0].mul_add(m, AS[1]).mul_add(m, AS[2]).mul_add(m, AS[3]);
-    let b = BS[0].mul_add(m, BS[1]).mul_add(m, BS[2]).mul_add(m, BS[3]);
-
-    let x = f64::clamp(
-        f64::from(100 * eval) / f64::from(NORMALISE_TO_PAWN_VALUE),
-        -2000.0,
-        2000.0,
-    );
-    let win = 1.0 / (1.0 + f64::exp((a - x) / b));
-    let loss = 1.0 / (1.0 + f64::exp((a + x) / b));
-    let draw = 1.0 - win - loss;
-
-    // Round to the nearest integer
-    (
-        (1000.0 * win).round() as i32,
-        (1000.0 * draw).round() as i32,
-        (1000.0 * loss).round() as i32,
-    )
-}
-
-struct UciWdlFormat {
-    eval: i32,
-    ply: usize,
-}
-impl Display for UciWdlFormat {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let (wdl_w, wdl_d, wdl_l) = wdl_model(self.eval, self.ply);
-        write!(f, "{wdl_w} {wdl_d} {wdl_l}")
-    }
-}
-
-struct PrettyUciWdlFormat {
-    eval: i32,
-    ply: usize,
-}
-impl Display for PrettyUciWdlFormat {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        #![allow(clippy::cast_possible_truncation)]
-        let (wdl_w, wdl_d, wdl_l) = wdl_model(self.eval, self.ply);
-        let wdl_w = (f64::from(wdl_w) / 10.0).round() as i32;
-        let wdl_d = (f64::from(wdl_d) / 10.0).round() as i32;
-        let wdl_l = (f64::from(wdl_l) / 10.0).round() as i32;
-        write!(
-            f,
-            "\u{001b}[38;5;243m{wdl_w:3.0}W {wdl_d:3.0}D {wdl_l:3.0}L\u{001b}[0m",
-        )
-    }
-}
-
-pub fn format_wdl(eval: i32, ply: usize) -> impl Display {
-    UciWdlFormat { eval, ply }
-}
-pub fn pretty_format_wdl(eval: i32, ply: usize) -> impl Display {
-    PrettyUciWdlFormat { eval, ply }
-}
-
-struct PrettyCounterFormat(u64);
-impl Display for PrettyCounterFormat {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        #![allow(clippy::match_overlapping_arm)]
-        match self.0 {
-            ..1_000 => write!(f, "{:>4}", self.0),
-            ..1_000_000 => write!(f, "{:>3}K", self.0 / 1_000),
-            ..1_000_000_000 => write!(f, "{:>3}M", self.0 / 1_000_000),
-            ..1_000_000_000_000 => write!(f, "{:>3}G", self.0 / 1_000_000_000),
-            _ => write!(f, "{:>3}T", self.0 / 1_000_000_000_000),
-        }
-    }
-}
-pub const fn pretty_format_counter(v: u64) -> impl Display {
-    PrettyCounterFormat(v)
 }

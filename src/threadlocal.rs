@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::Context;
+use vec1::Vec1;
 
 use crate::{
     chess::{
@@ -296,8 +297,8 @@ pub fn make_thread_data<'a>(
     nodes: &'a AtomicU64,
     tbhits: &'a AtomicU64,
     worker_threads: &[threadpool::WorkerThread],
-) -> anyhow::Result<Vec<Box<ThreadData<'a>>>> {
-    std::thread::scope(|s| -> anyhow::Result<Vec<Box<ThreadData>>> {
+) -> anyhow::Result<Vec1<Box<ThreadData<'a>>>> {
+    std::thread::scope(|s| -> anyhow::Result<Vec1<Box<ThreadData>>> {
         let handles = worker_threads
             .iter()
             .enumerate()
@@ -333,6 +334,6 @@ pub fn make_thread_data<'a>(
             handle.join();
         }
 
-        Ok(thread_data)
+        Ok(thread_data.try_into()?)
     })
 }
