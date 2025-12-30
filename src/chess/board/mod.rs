@@ -408,7 +408,7 @@ impl Board {
 
                 (sources & our_pawns).into_iter().zip(std::iter::repeat(sq))
             })
-            .map(|(from, to)| dbg!(Move::new_with_flags(from, to, MoveFlags::EnPassant)))
+            .map(|(from, to)| Move::new_with_flags(from, to, MoveFlags::EnPassant))
             .any(|mv| self.is_pseudo_legal(mv) && self.is_legal(mv));
 
         if !can_attack {
