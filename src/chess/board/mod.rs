@@ -12,8 +12,8 @@ use movegen::{MAX_POSITION_MOVES, RAY_BETWEEN, RAY_FULL};
 use crate::{
     chess::{
         CHESS960,
-        board::movegen::{MoveList, bishop_attacks, pawn_attacks, rook_attacks},
-        chessmove::Move,
+        board::movegen::{MoveList, bishop_attacks, pawn_attacks, pawn_attacks_by, rook_attacks},
+        chessmove::{Move, MoveFlags},
         piece::{Black, Col, Colour, Piece, PieceType, White},
         squareset::SquareSet,
         types::{CastlingRights, CheckState, File, Rank, Square, State},
@@ -396,6 +396,26 @@ impl Board {
             self.state.bbs.generate_pinned(Colour::Black),
         ];
 
+        // clear illegal en-passant squares:
+        let can_attack = self
+            .state
+            .ep_square
+            .into_iter()
+            .flat_map(|sq| {
+                let sources = pawn_attacks_by(sq.as_set(), !self.side);
+                let our_pawns =
+                    self.state.bbs.colours[self.side] & self.state.bbs.pieces[PieceType::Pawn];
+
+                (sources & our_pawns).into_iter().zip(std::iter::repeat(sq))
+            })
+            .map(|(from, to)| dbg!(Move::new_with_flags(from, to, MoveFlags::EnPassant)))
+            .any(|mv| self.is_pseudo_legal(mv) && self.is_legal(mv));
+
+        if !can_attack {
+            self.state.ep_square = None;
+            self.state.keys = self.state.generate_pos_keys(self.side);
+        }
+
         Ok(())
     }
 
@@ -560,8 +580,6 @@ impl Board {
                 if !(file.is_some() && rank.is_some()) {
                     return Err(FenParseError::InvalidEnPassant(ep_str()));
                 }
-                // check if the ep-square can actually be captured
-                // check if the move would be illegal
                 self.state.ep_square = Some(Square::from_rank_file(rank.unwrap(), file.unwrap()));
             }
         }
@@ -1281,13 +1299,10 @@ impl Board {
             File::from_index(san_bytes[2] - b'a').ok_or(Unknown)?,
         );
 
-        let mut list = MoveList::new();
-        self.generate_moves(&mut list);
-
         let frc_cleanup = !CHESS960.load(Ordering::Relaxed);
 
-        list.iter_moves()
-            .copied()
+        self.legal_moves()
+            .into_iter()
             .find(|&m| {
                 let m_to = if frc_cleanup && m.is_castle() {
                     // if we're in normal UCI mode, we'll rework our castling moves into the
@@ -1989,5 +2004,21 @@ mod tests {
         board.set_from_fen(Board::STARTING_FEN).unwrap();
         let board2 = Board::default();
         assert_eq!(board, board2);
+    }
+
+    #[test]
+    fn illegal_ep_construction() {
+        use super::Board;
+        use crate::chess::types::Square;
+
+        let illegal =
+            Board::from_fen("rnbq1bnr/p1ppkppp/8/4p3/1pP5/BP3PP1/P2PP2P/RN1QKBNR b KQ c3 0 5")
+                .unwrap();
+        assert!(illegal.ep_sq().is_none());
+
+        let legal =
+            Board::from_fen("r1bqkbnr/pppp1p1p/2n5/4pPp1/4P3/8/PPPP2PP/RNBQKBNR w KQkq g6 0 4")
+                .unwrap();
+        assert_eq!(legal.ep_sq(), Some(Square::G6));
     }
 }
