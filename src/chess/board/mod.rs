@@ -6,21 +6,20 @@ use std::{
     sync::atomic::Ordering,
 };
 
-use anyhow::{Context, bail};
-
 use arrayvec::ArrayVec;
 use movegen::{MAX_POSITION_MOVES, RAY_BETWEEN, RAY_FULL};
 
 use crate::{
     chess::{
         CHESS960,
-        board::movegen::{MoveList, bishop_attacks, pawn_attacks, rook_attacks},
-        chessmove::Move,
+        board::movegen::{MoveList, bishop_attacks, pawn_attacks, pawn_attacks_by, rook_attacks},
+        chessmove::{Move, MoveFlags},
         piece::{Black, Col, Colour, Piece, PieceType, White},
         squareset::SquareSet,
         types::{CastlingRights, CheckState, File, Rank, Square, State},
     },
     cuckoo,
+    errors::{FenParseError, MoveParseError},
     lookups::{CASTLE_KEYS, EP_KEYS, HM_CLOCK_KEYS, PIECE_KEYS, SIDE_KEY},
     nnue::network::{FeatureUpdate, MovedPiece, NNUEState, UpdateBuffer},
     search::pv::PVariation,
@@ -325,9 +324,9 @@ impl Board {
         out.map(Option::unwrap)
     }
 
-    pub fn set_from_fen(&mut self, fen: &str) -> anyhow::Result<()> {
+    pub fn set_from_fen(&mut self, fen: &str) -> Result<(), FenParseError> {
         if !fen.is_ascii() {
-            bail!(format!("FEN string is not ASCII: {fen}"));
+            return Err(FenParseError::NotAscii);
         }
 
         let mut rank = Rank::Eight;
@@ -339,7 +338,7 @@ impl Board {
         let split_idx = fen_chars
             .iter()
             .position(|&c| c == b' ')
-            .with_context(|| format!("FEN string is missing space: {fen}"))?;
+            .ok_or(FenParseError::MissingSpace)?;
         let (board_part, info_part) = fen_chars.split_at(split_idx);
 
         for &c in board_part {
@@ -368,10 +367,7 @@ impl Board {
                     continue;
                 }
                 c => {
-                    bail!(
-                        "FEN string is invalid, got unexpected character: \"{}\"",
-                        c as char
-                    );
+                    return Err(FenParseError::UnexpectedCharacter(c as char));
                 }
             }
 
@@ -400,6 +396,26 @@ impl Board {
             self.state.bbs.generate_pinned(Colour::Black),
         ];
 
+        // clear illegal en-passant squares:
+        let can_attack = self
+            .state
+            .ep_square
+            .into_iter()
+            .flat_map(|sq| {
+                let sources = pawn_attacks_by(sq.as_set(), !self.side);
+                let our_pawns =
+                    self.state.bbs.colours[self.side] & self.state.bbs.pieces[PieceType::Pawn];
+
+                (sources & our_pawns).into_iter().zip(std::iter::repeat(sq))
+            })
+            .map(|(from, to)| Move::new_with_flags(from, to, MoveFlags::EnPassant))
+            .any(|mv| self.is_pseudo_legal(mv) && self.is_legal(mv));
+
+        if !can_attack {
+            self.state.ep_square = None;
+            self.state.keys = self.state.generate_pos_keys(self.side);
+        }
+
         Ok(())
     }
 
@@ -414,7 +430,7 @@ impl Board {
     }
 
     #[cfg(test)]
-    pub fn from_fen(fen: &str) -> anyhow::Result<Self> {
+    pub fn from_fen(fen: &str) -> Result<Self, FenParseError> {
         let mut out = Self::empty();
         out.set_from_fen(fen)?;
         Ok(out)
@@ -434,24 +450,22 @@ impl Board {
         out
     }
 
-    fn set_side(&mut self, side_part: Option<&[u8]>) -> anyhow::Result<()> {
+    fn set_side(&mut self, side_part: Option<&[u8]>) -> Result<(), FenParseError> {
         self.side = match side_part {
             Some([b'w']) => Colour::White,
             Some([b'b']) => Colour::Black,
             Some(other) => {
-                bail!(format!(
-                    "FEN string is invalid, expected side to be 'w' or 'b', got \"{}\"",
-                    std::str::from_utf8(other).unwrap_or("<invalid utf8>")
-                ))
+                let s = std::str::from_utf8(other).unwrap_or("<invalid utf8>");
+                return Err(FenParseError::InvalidSide(s.to_string()));
             }
-            None => bail!("FEN string is invalid, expected side part."),
+            None => return Err(FenParseError::MissingSide),
         };
         Ok(())
     }
 
-    fn set_castling(&mut self, castling_part: Option<&[u8]>) -> anyhow::Result<()> {
+    fn set_castling(&mut self, castling_part: Option<&[u8]>) -> Result<(), FenParseError> {
         match castling_part {
-            None => bail!("FEN string is invalid, expected castling part."),
+            None => return Err(FenParseError::MissingCastling),
             Some(b"-") => self.state.castle_perm = CastlingRights::default(),
             Some(castling) if !CHESS960.load(Ordering::SeqCst) => {
                 for &c in castling {
@@ -461,10 +475,8 @@ impl Board {
                         b'k' => self.state.castle_perm.set_kingside(Colour::Black, File::H),
                         b'q' => self.state.castle_perm.set_queenside(Colour::Black, File::A),
                         _ => {
-                            bail!(format!(
-                                "FEN string is invalid, expected castling part to be of the form 'KQkq', got \"{}\"",
-                                std::str::from_utf8(castling).unwrap_or("<invalid utf8>")
-                            ))
+                            let s = std::str::from_utf8(castling).unwrap_or("<invalid utf8>");
+                            return Err(FenParseError::InvalidCastling(s.to_string()));
                         }
                     }
                 }
@@ -478,21 +490,26 @@ impl Board {
                 let black_king = (kings & self.state.bbs.colours[Colour::Black])
                     .first()
                     .unwrap();
+                let castling_str = || {
+                    std::str::from_utf8(shredder_castling)
+                        .unwrap_or("<invalid utf8>")
+                        .to_string()
+                };
                 if white_king.rank() != Rank::One
                     && shredder_castling.iter().any(u8::is_ascii_uppercase)
                 {
-                    bail!(format!(
-                        "FEN string is invalid, white king is not on the back rank, but got uppercase castling characters, implying present castling rights, got \"{}\"",
-                        std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")
-                    ));
+                    return Err(FenParseError::KingNotOnBackRank {
+                        colour: "white",
+                        castling: castling_str(),
+                    });
                 }
                 if black_king.rank() != Rank::Eight
                     && shredder_castling.iter().any(u8::is_ascii_lowercase)
                 {
-                    bail!(format!(
-                        "FEN string is invalid, black king is not on the back rank, but got lowercase castling characters, implying present castling rights, got \"{}\"",
-                        std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")
-                    ));
+                    return Err(FenParseError::KingNotOnBackRank {
+                        colour: "black",
+                        castling: castling_str(),
+                    });
                 }
                 for &c in shredder_castling {
                     match c {
@@ -500,12 +517,11 @@ impl Board {
                             let file = File::from_index(c - b'A').unwrap();
                             let king_file = white_king.file();
                             if file == king_file {
-                                bail!(format!(
-                                    "FEN string is invalid, white king is on file {:?}, but got castling rights on that file - got \"{}\"",
-                                    king_file,
-                                    std::str::from_utf8(shredder_castling)
-                                        .unwrap_or("<invalid utf8>")
-                                ));
+                                return Err(FenParseError::KingOnCastlingFile {
+                                    colour: "white",
+                                    file: format!("{king_file:?}"),
+                                    castling: castling_str(),
+                                });
                             }
                             if file > king_file {
                                 // castling rights are to the right of the king, so it's "kingside" castling rights.
@@ -519,12 +535,11 @@ impl Board {
                             let file = File::from_index(c - b'a').unwrap();
                             let king_file = black_king.file();
                             if file == king_file {
-                                bail!(format!(
-                                    "FEN string is invalid, black king is on file {:?}, but got castling rights on that file - got \"{}\"",
-                                    king_file,
-                                    std::str::from_utf8(shredder_castling)
-                                        .unwrap_or("<invalid utf8>")
-                                ));
+                                return Err(FenParseError::KingOnCastlingFile {
+                                    colour: "black",
+                                    file: format!("{king_file:?}"),
+                                    castling: castling_str(),
+                                });
                             }
                             if file > king_file {
                                 // castling rights are to the right of the king, so it's "kingside" castling rights.
@@ -535,10 +550,7 @@ impl Board {
                             }
                         }
                         _ => {
-                            bail!(format!(
-                                "FEN string is invalid, expected castling part to be of the form 'AHah', 'Bd', or '-', got \"{}\"",
-                                std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")
-                            ));
+                            return Err(FenParseError::InvalidCastling(castling_str()));
                         }
                     }
                 }
@@ -548,26 +560,25 @@ impl Board {
         Ok(())
     }
 
-    fn set_ep(&mut self, ep_part: Option<&[u8]>) -> anyhow::Result<()> {
+    fn set_ep(&mut self, ep_part: Option<&[u8]>) -> Result<(), FenParseError> {
         match ep_part {
-            None => bail!("FEN string is invalid, expected en passant part.".to_string()),
+            None => return Err(FenParseError::MissingEnPassant),
             Some([b'-']) => self.state.ep_square = None,
             Some(ep_sq) => {
+                let ep_str = || {
+                    std::str::from_utf8(ep_sq)
+                        .unwrap_or("<invalid utf8>")
+                        .to_string()
+                };
                 if ep_sq.len() != 2 {
-                    bail!(format!(
-                        "FEN string is invalid, expected en passant part to be of the form 'a1', got \"{}\"",
-                        std::str::from_utf8(ep_sq).unwrap_or("<invalid utf8>")
-                    ));
+                    return Err(FenParseError::InvalidEnPassant(ep_str()));
                 }
                 let file = ep_sq[0] - b'a';
                 let rank = ep_sq[1] - b'1';
                 let file = File::from_index(file);
                 let rank = Rank::from_index(rank);
                 if !(file.is_some() && rank.is_some()) {
-                    bail!(format!(
-                        "FEN string is invalid, expected en passant part to be of the form 'a1', got \"{}\"",
-                        std::str::from_utf8(ep_sq).unwrap_or("<invalid utf8>")
-                    ));
+                    return Err(FenParseError::InvalidEnPassant(ep_str()));
                 }
                 self.state.ep_square = Some(Square::from_rank_file(rank.unwrap(), file.unwrap()));
             }
@@ -576,37 +587,28 @@ impl Board {
         Ok(())
     }
 
-    fn set_halfmove(&mut self, halfmove_part: Option<&[u8]>) -> anyhow::Result<()> {
+    fn set_halfmove(&mut self, halfmove_part: Option<&[u8]>) -> Result<(), FenParseError> {
         match halfmove_part {
-            None => bail!("FEN string is invalid, expected halfmove clock part.".to_string()),
+            None => return Err(FenParseError::MissingHalfmoveClock),
             Some(halfmove_clock) => {
-                self.state.fifty_move_counter = std::str::from_utf8(halfmove_clock)
-                    .with_context(|| "FEN string is invalid, expected halfmove clock part to be valid UTF-8")?
+                let clock_str = std::str::from_utf8(halfmove_clock).unwrap_or("<invalid utf8>");
+                self.state.fifty_move_counter = clock_str
                     .parse::<u8>()
-                    .with_context(|| {
-                        format!(
-                            "FEN string is invalid, expected halfmove clock part to be a number, got \"{}\"",
-                            std::str::from_utf8(halfmove_clock).unwrap_or("<invalid utf8>")
-                        )
-                    })?;
+                    .map_err(|_| FenParseError::InvalidHalfmoveClock(clock_str.to_string()))?;
             }
         }
 
         Ok(())
     }
 
-    fn set_fullmove(&mut self, fullmove_part: Option<&[u8]>) -> anyhow::Result<()> {
+    fn set_fullmove(&mut self, fullmove_part: Option<&[u8]>) -> Result<(), FenParseError> {
         match fullmove_part {
-            None => bail!("FEN string is invalid, expected fullmove number part.".to_string()),
+            None => return Err(FenParseError::MissingFullmoveNumber),
             Some(fullmove_number) => {
-                let fullmove_number = std::str::from_utf8(fullmove_number)
-                    .with_context(
-                        || "FEN string is invalid, expected fullmove number part to be valid UTF-8",
-                    )?
+                let num_str = std::str::from_utf8(fullmove_number).unwrap_or("<invalid utf8>");
+                let fullmove_number = num_str
                     .parse::<usize>()
-                    .with_context(
-                        || "FEN string is invalid, expected fullmove number part to be a number",
-                    )?;
+                    .map_err(|_| FenParseError::InvalidFullmoveNumber(num_str.to_string()))?;
                 self.ply = (fullmove_number - 1) * 2;
                 if self.side == Colour::Black {
                     self.ply += 1;
@@ -633,7 +635,7 @@ impl Board {
         // only do a lot of the make_move work *after* we've
         // determined that the move is legal.
         // #[cfg(debug_assertions)]
-        // self.check_validity().unwrap();
+        // self.check_validity();
 
         if C::WHITE == (self.side == Colour::Black) {
             return self.state.threats.all.contains_square(sq);
@@ -944,7 +946,7 @@ impl Board {
         debug_assert!(self.is_legal(m));
 
         #[cfg(debug_assertions)]
-        self.check_validity().unwrap();
+        self.check_validity();
 
         self.history.push(self.state.clone());
 
@@ -1124,7 +1126,7 @@ impl Board {
         ];
 
         #[cfg(debug_assertions)]
-        self.check_validity().unwrap();
+        self.check_validity();
     }
 
     pub fn unmake_move_base(&mut self) {
@@ -1134,7 +1136,7 @@ impl Board {
         // illegal, and as such the full make_move hasn't been
         // run yet.
         // #[cfg(debug_assertions)]
-        // self.check_validity().unwrap();
+        // self.check_validity();
 
         self.height -= 1;
         self.ply -= 1;
@@ -1142,12 +1144,12 @@ impl Board {
         self.state = self.history.pop().expect("No move to unmake!");
 
         #[cfg(debug_assertions)]
-        self.check_validity().unwrap();
+        self.check_validity();
     }
 
     pub fn make_nullmove(&mut self) {
         #[cfg(debug_assertions)]
-        self.check_validity().unwrap();
+        self.check_validity();
         debug_assert!(!self.in_check());
 
         self.history.push(self.state.clone());
@@ -1167,12 +1169,12 @@ impl Board {
         self.state.threats = self.state.bbs.generate_threats(self.side);
 
         #[cfg(debug_assertions)]
-        self.check_validity().unwrap();
+        self.check_validity();
     }
 
     pub fn unmake_nullmove(&mut self) {
         #[cfg(debug_assertions)]
-        self.check_validity().unwrap();
+        self.check_validity();
 
         self.height -= 1;
         self.ply -= 1;
@@ -1194,7 +1196,7 @@ impl Board {
         self.history.pop();
 
         #[cfg(debug_assertions)]
-        self.check_validity().unwrap();
+        self.check_validity();
     }
 
     pub fn make_move_nnue(&mut self, m: Move, nnue: &mut NNUEState) {
@@ -1263,47 +1265,44 @@ impl Board {
     }
 
     /// Parses a move in the UCI format and returns a move or a reason why it couldn't be parsed.
-    pub fn parse_uci(&self, uci: &str) -> anyhow::Result<Move> {
-        use crate::errors::MoveParseError::{
+    pub fn parse_uci(&self, uci: &str) -> Result<Move, MoveParseError> {
+        use MoveParseError::{
             IllegalMove, InvalidFromSquareFile, InvalidFromSquareRank, InvalidLength,
             InvalidPromotionPiece, InvalidToSquareFile, InvalidToSquareRank, Unknown,
         };
         let san_bytes = uci.as_bytes();
         if !(4..=5).contains(&san_bytes.len()) {
-            bail!(InvalidLength(san_bytes.len()));
+            return Err(InvalidLength(san_bytes.len()));
         }
         if !(b'a'..=b'h').contains(&san_bytes[0]) {
-            bail!(InvalidFromSquareFile(san_bytes[0] as char));
+            return Err(InvalidFromSquareFile(san_bytes[0] as char));
         }
         if !(b'1'..=b'8').contains(&san_bytes[1]) {
-            bail!(InvalidFromSquareRank(san_bytes[1] as char));
+            return Err(InvalidFromSquareRank(san_bytes[1] as char));
         }
         if !(b'a'..=b'h').contains(&san_bytes[2]) {
-            bail!(InvalidToSquareFile(san_bytes[2] as char));
+            return Err(InvalidToSquareFile(san_bytes[2] as char));
         }
         if !(b'1'..=b'8').contains(&san_bytes[3]) {
-            bail!(InvalidToSquareRank(san_bytes[3] as char));
+            return Err(InvalidToSquareRank(san_bytes[3] as char));
         }
         if san_bytes.len() == 5 && ![b'n', b'b', b'r', b'q', b'k'].contains(&san_bytes[4]) {
-            bail!(InvalidPromotionPiece(san_bytes[4] as char));
+            return Err(InvalidPromotionPiece(san_bytes[4] as char));
         }
 
         let from = Square::from_rank_file(
-            Rank::from_index(san_bytes[1] - b'1').with_context(|| Unknown)?,
-            File::from_index(san_bytes[0] - b'a').with_context(|| Unknown)?,
+            Rank::from_index(san_bytes[1] - b'1').ok_or(Unknown)?,
+            File::from_index(san_bytes[0] - b'a').ok_or(Unknown)?,
         );
         let to = Square::from_rank_file(
-            Rank::from_index(san_bytes[3] - b'1').with_context(|| Unknown)?,
-            File::from_index(san_bytes[2] - b'a').with_context(|| Unknown)?,
+            Rank::from_index(san_bytes[3] - b'1').ok_or(Unknown)?,
+            File::from_index(san_bytes[2] - b'a').ok_or(Unknown)?,
         );
-
-        let mut list = MoveList::new();
-        self.generate_moves(&mut list);
 
         let frc_cleanup = !CHESS960.load(Ordering::Relaxed);
 
-        list.iter_moves()
-            .copied()
+        self.legal_moves()
+            .into_iter()
             .find(|&m| {
                 let m_to = if frc_cleanup && m.is_castle() {
                     // if we're in normal UCI mode, we'll rework our castling moves into the
@@ -1324,7 +1323,7 @@ impl Board {
                         || m.promotion_type().and_then(PieceType::promo_char).unwrap()
                             == san_bytes[4] as char)
             })
-            .with_context(|| IllegalMove(uci.to_string()))
+            .ok_or_else(|| IllegalMove(uci.to_string()))
     }
 
     pub fn san(&mut self, m: Move) -> Option<String> {
@@ -1773,10 +1772,10 @@ mod tests {
         board_1
             .set_from_fen(Board::STARTING_FEN)
             .expect("setfen failed.");
-        board_1.check_validity().unwrap();
+        board_1.check_validity();
 
         let board_2 = Board::from_fen(Board::STARTING_FEN).expect("setfen failed.");
-        board_2.check_validity().unwrap();
+        board_2.check_validity();
 
         assert_eq!(board_1, board_2);
     }
@@ -2005,5 +2004,21 @@ mod tests {
         board.set_from_fen(Board::STARTING_FEN).unwrap();
         let board2 = Board::default();
         assert_eq!(board, board2);
+    }
+
+    #[test]
+    fn illegal_ep_construction() {
+        use super::Board;
+        use crate::chess::types::Square;
+
+        let illegal =
+            Board::from_fen("rnbq1bnr/p1ppkppp/8/4p3/1pP5/BP3PP1/P2PP2P/RN1QKBNR b KQ c3 0 5")
+                .unwrap();
+        assert!(illegal.ep_sq().is_none());
+
+        let legal =
+            Board::from_fen("r1bqkbnr/pppp1p1p/2n5/4pPp1/4P3/8/PPPP2PP/RNBQKBNR w KQkq g6 0 4")
+                .unwrap();
+        assert_eq!(legal.ep_sq(), Some(Square::G6));
     }
 }

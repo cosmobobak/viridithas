@@ -49,6 +49,7 @@ bulletformat = { version = "1.2.0", optional = true }
 clap = { version = "4.5.3", features = ["derive"] }
 arrayvec = "0.7.4"
 anyhow = "1.0.86"
+thiserror = "2.0.17"
 ruzstd = "0.8.1"
 
 # full-fat zstd for release builds
@@ -62,6 +63,7 @@ fxhash = "0.2.1"
 
 # what it says on the tin
 term_size = "0.3.2"
+vec1 = "1.12.1"
 
 # for coloured terminal output
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]

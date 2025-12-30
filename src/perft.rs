@@ -17,7 +17,7 @@ use crate::{
 
 pub fn perft(pos: &mut Board, depth: usize) -> u64 {
     #[cfg(debug_assertions)]
-    pos.check_validity().unwrap();
+    pos.check_validity();
 
     if depth == 0 {
         return 1;
@@ -47,7 +47,7 @@ pub fn perft(pos: &mut Board, depth: usize) -> u64 {
 #[cfg(test)]
 pub fn nnue_perft(t: &mut ThreadData, depth: usize) -> u64 {
     #[cfg(debug_assertions)]
-    t.board.check_validity().unwrap();
+    t.board.check_validity();
     // debug_assert!(t.board.check_nnue_coherency(&t.nnue));
 
     if depth == 0 {
@@ -80,7 +80,7 @@ pub fn movepicker_perft(t: &mut ThreadData, depth: usize) -> u64 {
     use crate::movepicker::MovePicker;
 
     #[cfg(debug_assertions)]
-    t.board.check_validity().unwrap();
+    t.board.check_validity();
     // debug_assert!(t.board.check_nnue_coherency(&t.nnue));
 
     if depth == 0 {

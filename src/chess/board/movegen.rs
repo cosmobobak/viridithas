@@ -1,4 +1,3 @@
-use anyhow::Context;
 use arrayvec::ArrayVec;
 
 use std::{
@@ -230,7 +229,7 @@ const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [SquareSet; 64] {
     attacks
 }
 
-pub fn init_sliders_attacks() -> anyhow::Result<()> {
+pub fn init_sliders_attacks() -> Result<(), std::io::Error> {
     #![allow(clippy::large_stack_arrays)]
     let mut bishop_attacks = vec![[SquareSet::EMPTY; 512]; 64];
     for sq in Square::all() {
@@ -278,10 +277,8 @@ pub fn init_sliders_attacks() -> anyhow::Result<()> {
     // SAFETY: SquareSet is POD.
     let rook_bytes = unsafe { rook_attacks.align_to::<u8>().1 };
 
-    std::fs::write("embeds/diagonal_attacks.bin", bishop_bytes)
-        .context("failed to write embeds/diagonal_attacks.bin")?;
-    std::fs::write("embeds/orthogonal_attacks.bin", rook_bytes)
-        .context("failed to write embeds/orthogonal_attacks.bin")?;
+    std::fs::write("embeds/diagonal_attacks.bin", bishop_bytes)?;
+    std::fs::write("embeds/orthogonal_attacks.bin", rook_bytes)?;
 
     Ok(())
 }
@@ -551,7 +548,7 @@ impl Board {
     fn generate_moves_for<C: Col>(&self, move_list: &mut MoveList) {
         use PieceType::{Bishop, King, Knight, Queen, Rook};
         #[cfg(debug_assertions)]
-        self.check_validity().unwrap();
+        self.check_validity();
 
         let bbs = &self.state.bbs;
         let our_pieces = bbs.colours[C::COLOUR];
@@ -632,7 +629,7 @@ impl Board {
     fn generate_captures_for<C: Col, Mode: MoveGenMode>(&self, move_list: &mut MoveList) {
         use PieceType::{Bishop, King, Knight, Queen, Rook};
         #[cfg(debug_assertions)]
-        self.check_validity().unwrap();
+        self.check_validity();
 
         let bbs = &self.state.bbs;
         let our_pieces = bbs.colours[C::COLOUR];
@@ -935,7 +932,7 @@ impl Board {
 pub fn synced_perft(pos: &mut Board, depth: usize) -> u64 {
     #![allow(clippy::to_string_in_format_args)]
     #[cfg(debug_assertions)]
-    pos.check_validity().unwrap();
+    pos.check_validity();
 
     if depth == 0 {
         return 1;

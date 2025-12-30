@@ -204,12 +204,7 @@ impl Game {
         #[cfg(debug_assertions)]
         let (mut real_board, _, _, _) = initial_position.unpack();
         #[cfg(debug_assertions)]
-        if let Err(problem) = real_board.check_validity() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("marlinformat header malformed: {problem}"),
-            ));
-        }
+        real_board.check_validity();
         // we allow the caller to give us a pre-allocated buffer as an optimisation
         let mut moves = buffer;
         moves.clear();
