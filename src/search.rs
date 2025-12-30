@@ -527,7 +527,7 @@ pub fn quiescence<NT: NodeType>(
     beta: i32,
 ) -> i32 {
     #[cfg(debug_assertions)]
-    t.board.check_validity().unwrap();
+    t.board.check_validity();
 
     if t.info.nodes.just_ticked_over() && t.info.check_up() {
         return 0;
@@ -760,7 +760,7 @@ pub fn alpha_beta<NT: NodeType>(
     cut_node: bool,
 ) -> i32 {
     #[cfg(debug_assertions)]
-    t.board.check_validity().unwrap();
+    t.board.check_validity();
 
     let mut local_pv = PVariation::default();
     let l_pv = &mut local_pv;

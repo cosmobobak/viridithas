@@ -50,7 +50,7 @@ pub static VERSION: &str = env!("CARGO_PKG_VERSION");
 fn main() -> anyhow::Result<()> {
     if std::env::args_os().len() == 1 {
         // fast path to UCI:
-        return uci::main_loop();
+        return Ok(uci::main_loop()?);
     }
 
     let cli = <cli::Cli as clap::Parser>::parse();
@@ -62,8 +62,7 @@ fn main() -> anyhow::Result<()> {
             let nodes = std::sync::atomic::AtomicU64::new(0);
             let tbhits = std::sync::atomic::AtomicU64::new(0);
             let info = searchinfo::SearchInfo::new(&stopped, &nodes, &tbhits);
-            uci::bench("openbench", &info.conf, nnue_params, depth, threads)?;
-            Ok(())
+            Ok(uci::bench("openbench", &info.conf, nnue_params, depth, threads)?)
         }
         Some(Perft) => perft::gamut(),
         Some(Quantise { input, output }) => nnue::network::quantise(&input, &output),
@@ -130,6 +129,6 @@ fn main() -> anyhow::Result<()> {
             nodes,
             dfrc,
         }),
-        None => uci::main_loop(),
+        None => Ok(uci::main_loop()?),
     }
 }
