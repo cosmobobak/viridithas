@@ -195,13 +195,17 @@ pub fn pretty_format_wdl(eval: i32, ply: usize) -> impl fmt::Display {
 pub struct PrettyCounterFormat(u64);
 
 impl fmt::Display for PrettyCounterFormat {
+    #[expect(clippy::cast_precision_loss, clippy::match_overlapping_arm)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        #![allow(clippy::match_overlapping_arm)]
         match self.0 {
             ..1_000 => write!(f, "{:>4}", self.0),
+            ..10_000 => write!(f, "{:.1}K", self.0 as f64 / 1_000.0),
             ..1_000_000 => write!(f, "{:>3}K", self.0 / 1_000),
+            ..10_000_000 => write!(f, "{:.1}M", self.0 as f64 / 1_000_000.0),
             ..1_000_000_000 => write!(f, "{:>3}M", self.0 / 1_000_000),
+            ..10_000_000_000 => write!(f, "{:.1}G", self.0 as f64 / 1_000_000_000.0),
             ..1_000_000_000_000 => write!(f, "{:>3}G", self.0 / 1_000_000_000),
+            ..10_000_000_000_000 => write!(f, "{:.1}T", self.0 as f64 / 1_000_000_000_000.0),
             _ => write!(f, "{:>3}T", self.0 / 1_000_000_000_000),
         }
     }
