@@ -1201,9 +1201,9 @@ pub fn alpha_beta<NT: NodeType>(
         // don't probcut if we have a tthit with value < pcbeta
         && tt_hit.is_none_or(|tte| tte.value >= pc_beta)
     {
-        let see_threshold = (pc_beta - static_eval) * t.info.conf.probcut_see_scale / 256;
-        let eval_reduction = (static_eval - beta) / t.info.conf.probcut_eval_div;
-        let mut move_picker = MovePicker::new(tt_capture, None, see_threshold);
+        let see_pivot = (pc_beta - static_eval) * t.info.conf.probcut_see_scale / 256;
+        let depth_base = depth - 3 - (static_eval - beta) / t.info.conf.probcut_eval_div;
+        let mut move_picker = MovePicker::new(tt_capture, None, see_pivot);
         move_picker.skip_quiets = true;
         while let Some(m) = move_picker.next(t) {
             t.tt.prefetch(t.board.key_after(m));
@@ -1221,13 +1221,11 @@ pub fn alpha_beta<NT: NodeType>(
 
             let mut value = -quiescence::<OffPV>(l_pv, t, -pc_beta, -pc_beta + 1);
 
-            let mut pc_depth = i32::clamp(
-                depth - 3 - eval_reduction - ((value - pc_beta - 50) / 300).clamp(0, 3),
-                0,
-                depth - 1,
-            );
-            let base_pc_depth = i32::clamp(depth - 3 - eval_reduction, 0, depth - 1);
-            let ada_beta = (pc_beta + (base_pc_depth - pc_depth) * 300).clamp(-INFINITY, INFINITY);
+            let mut pc_depth =
+                (depth_base - ((value - pc_beta - 50) / 300).clamp(0, 3)).clamp(0, depth - 1);
+            let base_pc_depth = depth_base.clamp(0, depth - 1);
+            let ada_beta = (pc_beta + (base_pc_depth - pc_depth) * 300)
+                .clamp(-MINIMUM_TB_WIN_SCORE + 1, MINIMUM_TB_WIN_SCORE - 1);
 
             if value >= pc_beta && pc_depth > 0 {
                 value =
