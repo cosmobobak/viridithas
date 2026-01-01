@@ -1610,3 +1610,137 @@ inquisition | same as legion/iridescent with standard  | fixed-nodes:
             |                                          | PENTA 5⁺² 890⁺¹ 1800⁰ 712⁻¹ 3⁻²
             |                                          | vs. delenda
 ------------|------------------------------------------|-----------------------------------------------
+   anaphora | WDL outputs trained excl. on hard WDL.   | fixed-nodes:
+            |                                          | https://test.expositor.dev/test/380/
+            |                                          |   LLR −3.42 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −15.41 ± 5.99 ELO = −21.40 LO −9.43 HI ELO
+            |                                          |  CONF 25 KNODE 1 THREAD 16 MB CACHE
+            |                                          | GAMES 5482 = 1523W 2193D 1766L = 27.8%W 40.0%D 32.2%L
+            |                                          | PENTA 95⁺² 610⁺¹ 1143⁰ 743⁻¹ 150⁻²
+            |                                          | vs. eleison
+            |                                          | 
+            |                                          | LTC:
+            |                                          | https://test.expositor.dev/test/378/
+            |                                          |   LLR −2.99 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −18.49 ± 6.03 ELO = −24.52 LO −12.48 HI ELO
+            |                                          |  CONF 40+0.4 SEC 1 THREAD 128 MB CACHE
+            |                                          | GAMES 3122 = 665W 1626D 831L = 21.3%W 52.1%D 26.6%L
+            |                                          | PENTA 3⁺² 289⁺¹ 814⁰ 449⁻¹ 6⁻²
+            |                                          | vs. eleison
+------------|------------------------------------------|-----------------------------------------------
+    mnestic | 16×(758→3072×2)→8×(16→128→3) WDL net.    | fixed-nodes:
+            |                                          | https://test.expositor.dev/test/392/
+            |                                          |   LLR −3.22 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −1.19 ± 2.22 ELO = −3.41 LO +1.03 HI ELO
+            |                                          |  CONF 25 KNODE 1 THREAD 16 MB CACHE
+            |                                          | GAMES 38568 = 11282W 15872D 11414L = 29.3%W 41.2%D 29.6%L
+            |                                          | PENTA 804⁺² 4578⁺¹ 8425⁰ 4636⁻¹ 841⁻²
+            |                                          | vs. eleison
+            |                                          |
+            |                                          | LTC:
+            |                                          | https://test.expositor.dev/test/398/
+            |                                          |  PERF −32.59 ± 3.37 ELO = −35.96 LO −29.24 HI ELO
+            |                                          |  CONF 40+0.4 SEC 1 THREAD 128 MB CACHE
+            |                                          | GAMES 10188 = 1962W 5311D 2915L = 19.3%W 52.1%D 28.6%L
+            |                                          | PENTA 10⁺² 794⁺¹ 2554⁰ 1705⁻¹ 31⁻²
+            |                                          | vs. eleison
+------------|------------------------------------------|-----------------------------------------------
+   sentinel | eleison scaled up to L0_out = 2560.      | fixed-nodes:
+            |                                          | https://test.expositor.dev/test/410/
+            |                                          |   LLR +3.09 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF +19.04 ± 6.60 ELO = +12.46 LO +25.63 HI ELO
+            |                                          |  CONF 25 KNODE 1 THREAD 16 MB CACHE
+            |                                          | GAMES 4494 = 1431W 1878D 1185L = 31.8%W 41.8%D 26.4%L
+            |                                          | PENTA 118⁺² 639⁺¹ 943⁰ 465⁻¹ 82⁻²
+            |                                          | vs. eleison
+            |                                          |
+            |                                          | VLTC:
+            |                                          | https://test.expositor.dev/test/413/
+            |                                          |   LLR −2.97 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −0.21 ± 1.33 ELO = −1.54 LO +1.13 HI ELO
+            |                                          |  CONF 80+0.8 SEC 1 THREAD 128 MB CACHE
+            |                                          | GAMES 61980 = 14505W 32933D 14542L = 23.4%W 53.1%D 23.5%L
+            |                                          | PENTA 38⁺² 7191⁺¹ 16513⁰ 7192⁻¹ 56⁻²
+            |                                          | vs. eleison
+------------|------------------------------------------|-----------------------------------------------
+   inimical | sentinel with more high-quality data.    | fixed-nodes:
+            |                                          | https://test.expositor.dev/test/426/
+            |                                          |   LLR +3.47 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF +22.50 ± 6.76 ELO = +15.76 LO +29.26 HI ELO
+            |                                          |  CONF 25 KNODE 1 THREAD 16 MB CACHE
+            |                                          | GAMES 4160 = 1334W 1761D 1065L = 32.1%W 42.3%D 25.6%L
+            |                                          | PENTA 124⁺² 562⁺¹ 913⁰ 421⁻¹ 60⁻²
+            |                                          | vs. eleison
+            |                                          |
+            |                                          | LTC:
+            |                                          | https://test.expositor.dev/test/427/
+            |                                          |   LLR +2.95 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF +2.90 ± 2.04 ELO = +0.86 LO +4.94 HI ELO
+            |                                          |  CONF 40+0.4 SEC 1 THREAD 128 MB CACHE
+            |                                          | GAMES 27094 = 6558W 14204D 6332L = 24.2%W 52.4%D 23.4%L
+            |                                          | PENTA 41⁺² 3249⁺¹ 7181⁰ 3047⁻¹ 29⁻²
+            |                                          | vs. eleison
+------------|------------------------------------------|-----------------------------------------------
+     kismet | use material count to scale between WDL  | fixed-nodes:
+            | and search.                              | https://test.expositor.dev/test/431/
+            |                                          |   LLR −3.11 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −4.28 ± 3.51 ELO = −7.80 LO −0.77 HI ELO
+            |                                          |  CONF 25 KNODE 1 THREAD 16 MB CACHE
+            |                                          | GAMES 15170 = 4369W 6245D 4556L = 28.8%W 41.2%D 30.0%L
+            |                                          | PENTA 301⁺² 1737⁺¹ 3351⁰ 1866⁻¹ 330⁻²
+            |                                          | vs. inimical
+            |                                          |
+            |                                          | LTC:
+            |                                          | https://test.expositor.dev/test/433/
+            |                                          |   LLR −2.98 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −20.89 ± 6.41 ELO = −27.30 LO −14.49 HI ELO
+            |                                          |  CONF 40+0.4 SEC 1 THREAD 128 MB CACHE
+            |                                          | GAMES 2798 = 588W 1454D 756L = 21.0%W 52.0%D 27.0%L
+            |                                          | PENTA 5⁺² 247⁺¹ 729⁰ 411⁻¹ 7⁻²
+            |                                          | vs. inimical
+------------|------------------------------------------|-----------------------------------------------
+equilibrium | replace search scores in dataset with    | fixed-nodes:
+            | output of inimical.                      | https://test.expositor.dev/test/441/
+            |                                          |   LLR −3.47 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −2.72 ± 2.78 ELO = −5.51 LO +0.06 HI ELO
+            |                                          |  CONF 25 KNODE 1 THREAD 16 MB CACHE
+            |                                          | GAMES 24108 = 6847W 10225D 7036L = 28.4%W 42.4%D 29.2%L
+            |                                          | PENTA 456⁺² 2860⁺¹ 5301⁰ 2913⁻¹ 524⁻²
+            |                                          | vs. inimical
+            |                                          |
+            |                                          | LTC:
+            |                                          | https://test.expositor.dev/test/444/
+            |                                          |   LLR −2.97 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −3.12 ± 2.73 ELO = −5.85 LO −0.40 HI ELO
+            |                                          |  CONF 40+0.4 SEC 1 THREAD 128 MB CACHE
+            |                                          | GAMES 15350 = 3635W 7942D 3773L = 23.7%W 51.7%D 24.6%L
+            |                                          | PENTA 21⁺² 1748⁺¹ 3990⁰ 1904⁻¹ 12⁻²
+            |                                          | vs. inimical
+------------|------------------------------------------|-----------------------------------------------
+  preceptor | 16×(768→4096×2)→8×(32→32→1) teacher.     | fixed-nodes:
+            |                                          | https://test.expositor.dev/test/447/
+            |                                          |   LLR +3.15 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF +19.92 ± 6.55 ELO = +13.38 LO +26.47 HI ELO
+            |                                          |  CONF 25 KNODE 1 THREAD 16 MB CACHE
+            |                                          | GAMES 4156 = 1342W 1710D 1104L = 32.3%W 41.1%D 26.6%L
+            |                                          | PENTA 97⁺² 579⁺¹ 921⁰ 427⁻¹ 54⁻²
+            |                                          | vs. inimical
+------------|------------------------------------------|-----------------------------------------------
+  voltarine | replace search scores in dataset with    | fixed-nodes:
+            | output of preceptor.                     | https://test.expositor.dev/test/452/
+            |                                          |   LLR −2.98 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −2.44 ± 2.88 ELO = −5.32 LO +0.44 HI ELO
+            |                                          |  CONF 25 KNODE 1 THREAD 16 MB CACHE
+            |                                          | GAMES 22360 = 6420W 9363D 6577L = 28.7%W 41.9%D 29.4%L
+            |                                          | PENTA 425⁺² 2666⁺¹ 4858⁰ 2789⁻¹ 442⁻²
+            |                                          | vs. inimical
+            |                                          |
+            |                                          | STC:
+            |                                          | https://test.expositor.dev/test/453/
+            |                                          |   LLR −3.02 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −3.19 ± 2.85 ELO = −6.05 LO −0.34 HI ELO
+            |                                          |  CONF 8+0.08 SEC 1 THREAD 16 MB CACHE
+            |                                          | GAMES 16218 = 3936W 8197D 4085L = 24.3%W 50.5%D 25.2%L
+            |                                          | PENTA 81⁺² 1902⁺¹ 4003⁰ 2033⁻¹ 90⁻²
+            |                                          | vs. inimical
+------------|------------------------------------------|-----------------------------------------------
