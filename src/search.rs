@@ -1185,7 +1185,7 @@ pub fn alpha_beta<NT: NodeType>(
     ];
 
     // probcut:
-    let pc_beta = std::cmp::min(
+    let mut pc_beta = std::cmp::min(
         beta + t.info.conf.probcut_margin
             - i32::from(improving) * t.info.conf.probcut_improving_margin,
         MINIMUM_TB_WIN_SCORE - 1,
@@ -1202,8 +1202,7 @@ pub fn alpha_beta<NT: NodeType>(
         && tt_hit.is_none_or(|tte| tte.value >= pc_beta)
     {
         let see_threshold = (pc_beta - static_eval) * t.info.conf.probcut_see_scale / 256;
-        let pc_eval_reduction = (static_eval - beta) / t.info.conf.probcut_eval_div;
-        let pc_depth = i32::clamp(depth - 3 - pc_eval_reduction, 0, depth - 1);
+        let eval_reduction = (static_eval - beta) / t.info.conf.probcut_eval_div;
         let mut move_picker = MovePicker::new(tt_capture, None, see_threshold);
         move_picker.skip_quiets = true;
         while let Some(m) = move_picker.next(t) {
@@ -1222,8 +1221,25 @@ pub fn alpha_beta<NT: NodeType>(
 
             let mut value = -quiescence::<OffPV>(l_pv, t, -pc_beta, -pc_beta + 1);
 
+            let mut pc_depth = i32::clamp(
+                depth - 3 - eval_reduction - ((value - pc_beta - 50) / 300).clamp(0, 3),
+                0,
+                depth - 1,
+            );
+            let base_pc_depth = i32::clamp(depth - 3 - eval_reduction, 0, depth - 1);
+            let ada_beta = (pc_beta + (base_pc_depth - pc_depth) * 300).clamp(-INFINITY, INFINITY);
+
             if value >= pc_beta && pc_depth > 0 {
-                value = -alpha_beta::<OffPV>(l_pv, t, pc_depth, -pc_beta, -pc_beta + 1, !cut_node);
+                value =
+                    -alpha_beta::<OffPV>(l_pv, t, pc_depth, -ada_beta, -ada_beta + 1, !cut_node);
+
+                if value < ada_beta && pc_beta < ada_beta {
+                    pc_depth = base_pc_depth;
+                    value =
+                        -alpha_beta::<OffPV>(l_pv, t, pc_depth, -pc_beta, -pc_beta + 1, !cut_node);
+                } else {
+                    pc_beta = ada_beta;
+                }
             }
 
             t.board.unmake_move(&mut t.nnue);
