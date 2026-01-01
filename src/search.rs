@@ -2010,10 +2010,10 @@ fn readout_info(
 
         let endchr = if bound == Bound::Exact { "\n" } else { "\r" };
         eprint!(
-            " {iteration:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}n\u{001b}[0m {value} {wdl} \u{001b}[38;5;243m{knps:5}kn/s\u{001b}[0m {pv_string}{endchr}",
+            " {iteration:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}n\u{001b}[0m {value} {wdl} \u{001b}[38;5;243m{nps_fmt}n/s\u{001b}[0m {pv_string}{endchr}",
             info.seldepth as usize,
             t = uci::fmt::format_time(info.clock.elapsed().as_millis()),
-            knps = nps / 1_000,
+            nps_fmt = uci::fmt::pretty_format_counter(nps),
             knodes = uci::fmt::pretty_format_counter(nodes),
             wdl = uci::fmt::pretty_format_wdl(pv.score, board.ply()),
         );
