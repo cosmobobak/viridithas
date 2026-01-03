@@ -177,10 +177,19 @@ impl fmt::Display for PrettyUciWdlFormat {
         let wdl_w = (f64::from(wdl_w) / 10.0).round() as i32;
         let wdl_d = (f64::from(wdl_d) / 10.0).round() as i32;
         let wdl_l = (f64::from(wdl_l) / 10.0).round() as i32;
-        write!(
-            f,
-            "\u{001b}[38;5;243m{wdl_w:3.0}W {wdl_d:3.0}D {wdl_l:3.0}L\u{001b}[0m",
-        )
+
+        if wdl_w == 100 {
+            write!(f, "    WIN    ")
+        } else if wdl_l == 100 {
+            write!(f, "   LOSS    ")
+        } else if wdl_d == 100 {
+            write!(f, "   DRAW    ")
+        } else {
+            write!(
+                f,
+                "\u{001b}[38;5;243m{wdl_w:2.0}W {wdl_d:2.0}D {wdl_l:2.0}L\u{001b}[0m",
+            )
+        }
     }
 }
 
