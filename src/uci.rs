@@ -300,6 +300,10 @@ pub fn main_loop() -> Result<(), UciError> {
             .join()
             .map_err(|_| UciError::Thread("stdin reader thread panicked".to_string()))??;
     }
+
+    #[cfg(feature = "stats")]
+    crate::stats::dump_and_plot();
+
     Ok(())
 }
 
@@ -828,6 +832,9 @@ pub fn bench(
         );
     }
     thread_data[0].info.print_to_stdout = true;
+
+    #[cfg(feature = "stats")]
+    crate::stats::dump_and_plot();
 
     // logging for permutation
     #[cfg(feature = "nnz-counts")]

@@ -1529,12 +1529,6 @@ pub fn alpha_beta<NT: NodeType>(
         // record subtree size for TimeManager
         if NT::ROOT && t.thread_id == 0 {
             let subtree_size = t.info.nodes.get_local() - nodes_before_search;
-            #[cfg(feature = "stats")]
-            println!(
-                "info string subtree {} size {}",
-                m.display(CHESS960.load(Ordering::Relaxed)),
-                subtree_size
-            );
             t.info.root_move_nodes[from][hist_to] += subtree_size;
         }
 

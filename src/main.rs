@@ -10,6 +10,9 @@ mod macros;
 #[cfg(feature = "datagen")]
 mod datagen;
 
+#[cfg(feature = "stats")]
+pub mod stats;
+
 mod bench;
 mod chess;
 mod cli;
