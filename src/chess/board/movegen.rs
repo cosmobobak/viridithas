@@ -285,7 +285,7 @@ pub fn init_sliders_attacks() -> Result<(), std::io::Error> {
 
 #[allow(clippy::cast_possible_truncation)]
 pub fn bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-    // const _INDEX_LEGAL: () = assert!(1 << BISHOP_REL_BITS == BISHOP_ATTACKS[0].len());
+    const _INDEX_LEGAL: () = assert!(1 << BISHOP_REL_BITS == BISHOP_ATTACKS[0].len());
     let entry = &BISHOP_TABLE[sq];
     let relevant_blockers = blockers & entry.mask;
     let data = relevant_blockers.inner().wrapping_mul(entry.magic);
@@ -298,7 +298,7 @@ pub fn bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
 }
 #[allow(clippy::cast_possible_truncation)]
 pub fn rook_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-    // const _INDEX_LEGAL: () = assert!(1 << ROOK_REL_BITS == ROOK_ATTACKS[0].len());
+    const _INDEX_LEGAL: () = assert!(1 << ROOK_REL_BITS == ROOK_ATTACKS[0].len());
     let entry = &ROOK_TABLE[sq];
     let relevant_blockers = blockers & entry.mask;
     let data = relevant_blockers.inner().wrapping_mul(entry.magic);
