@@ -8,6 +8,7 @@ use crate::{
 pub struct ScoreFormatWrapper(i32);
 impl fmt::Display for ScoreFormatWrapper {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        const FAKE_TB_WIN_SCORE: i32 = 30_000;
         if is_mate_score(self.0) {
             let plies_to_mate = MATE_SCORE - self.0.abs();
             let moves_to_mate = (plies_to_mate + 1) / 2;
@@ -17,9 +18,13 @@ impl fmt::Display for ScoreFormatWrapper {
                 write!(f, "mate -{moves_to_mate}")
             }
         } else if is_decisive(self.0) {
-            write!(f, "cp {}", self.0)
+            let adjustment = TB_WIN_SCORE - FAKE_TB_WIN_SCORE;
+            let cp = self.0 - (self.0.signum() * adjustment);
+            write!(f, "cp {cp}")
         } else {
-            write!(f, "cp {}", self.0 * 100 / NORMALISE_TO_PAWN_VALUE)
+            let cp = (self.0 * 100 / NORMALISE_TO_PAWN_VALUE)
+                .clamp(-FAKE_TB_WIN_SCORE + 1, FAKE_TB_WIN_SCORE - 1);
+            write!(f, "cp {cp}")
         }
     }
 }
