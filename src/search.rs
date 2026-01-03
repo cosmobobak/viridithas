@@ -149,6 +149,8 @@ const OPTIMISM_OFFSET: i32 = 196;
 const OPTIMISM_MATERIAL_BASE: i32 = 1869;
 const EVAL_POLICY_UPDATE_MAX: i32 = 94;
 const PROBCUT_SEE_SCALE: i32 = 266;
+const PROBCUT_ADA_OFFSET: i32 = 50;
+const PROBCUT_ADA_DIV: i32 = 300;
 
 pub trait NodeType {
     /// Whether this node is on the principal variation.
@@ -1227,12 +1229,12 @@ pub fn alpha_beta<NT: NodeType>(
             // more of the tree. the idea of adaptive probcut comes from
             // https://github.com/cj5716.
             let mut pc_depth =
-                (depth_base - ((value - pc_beta - 50) / 300).clamp(0, 3)).clamp(0, depth - 1);
+                (depth_base - ((value - pc_beta - t.info.conf.probcut_ada_offset) / t.info.conf.probcut_ada_div).clamp(0, 3)).clamp(0, depth - 1);
             // the base probcut depth we'd use if we weren't adapting to
             // the QS result.
             let base_pc_depth = depth_base.clamp(0, depth - 1);
             // we compute a higher beta if we're going shallow:
-            let ada_beta = (pc_beta + (base_pc_depth - pc_depth) * 300)
+            let ada_beta = (pc_beta + (base_pc_depth - pc_depth) * t.info.conf.probcut_ada_div)
                 .clamp(-MINIMUM_TB_WIN_SCORE + 1, MINIMUM_TB_WIN_SCORE - 1);
 
             if value >= pc_beta && pc_depth > 0 {
