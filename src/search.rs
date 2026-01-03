@@ -1193,7 +1193,7 @@ pub fn alpha_beta<NT: NodeType>(
     // as usual, don't probcut in PV / check / singular verification / if there are GT truth scores in flight.
     // additionally, if we have a TT hit that's sufficiently deep, we skip trying probcut if the TT value indicates
     // that it's not going to be helpful.
-    if !NT::PV
+    if cut_node
         && !in_check
         && excluded.is_none()
         && depth >= 3
@@ -1236,16 +1236,14 @@ pub fn alpha_beta<NT: NodeType>(
                 .clamp(-MINIMUM_TB_WIN_SCORE + 1, MINIMUM_TB_WIN_SCORE - 1);
 
             if value >= pc_beta && pc_depth > 0 {
-                value =
-                    -alpha_beta::<OffPV>(l_pv, t, pc_depth, -ada_beta, -ada_beta + 1, !cut_node);
+                value = -alpha_beta::<OffPV>(l_pv, t, pc_depth, -ada_beta, -ada_beta + 1, false);
 
                 // if we beat pc_beta, but not ada_beta, and we reduced,
                 // then we have a chance of still being able to cut via
                 // a full-fat probcut search, so kick one off:
                 if value < ada_beta && pc_beta < ada_beta {
                     pc_depth = base_pc_depth;
-                    value =
-                        -alpha_beta::<OffPV>(l_pv, t, pc_depth, -pc_beta, -pc_beta + 1, !cut_node);
+                    value = -alpha_beta::<OffPV>(l_pv, t, pc_depth, -pc_beta, -pc_beta + 1, false);
                 } else {
                     // this persists over to the next loop.
                     pc_beta = ada_beta;
@@ -1268,9 +1266,12 @@ pub fn alpha_beta<NT: NodeType>(
                     t.ss[height].ttpv,
                 );
 
-                if !is_decisive(value) {
-                    return value - (pc_beta - beta);
+                if is_decisive(value) {
+                    // it's totally sound to return mates as cutoffs here.
+                    return value;
                 }
+
+                return value - (pc_beta - beta);
             }
         }
 
