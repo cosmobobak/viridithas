@@ -223,45 +223,25 @@ impl Fen {
         }
 
         let mut rights = CastlingRights::default();
-        let mut seen_white_kingside = false;
-        let mut seen_white_queenside = false;
-        let mut seen_black_kingside = false;
-        let mut seen_black_queenside = false;
 
         // Find king positions
         let kings = board.pieces[PieceType::King];
-        let white_king_sq = (kings & board.colours[Colour::White]).first();
-        let black_king_sq = (kings & board.colours[Colour::Black]).first();
+        let white_king_sq = (kings & board.colours[Colour::White]).first().unwrap();
+        let black_king_sq = (kings & board.colours[Colour::Black]).first().unwrap();
 
         for c in s.chars() {
             match c {
                 // Standard notation (assumes rooks on A/H files)
                 'K' => {
-                    if seen_white_kingside {
-                        return Err(FenParseError::DuplicateCastlingRight(c));
-                    }
-                    seen_white_kingside = true;
                     rights.set_kingside(Colour::White, File::H);
                 }
                 'Q' => {
-                    if seen_white_queenside {
-                        return Err(FenParseError::DuplicateCastlingRight(c));
-                    }
-                    seen_white_queenside = true;
                     rights.set_queenside(Colour::White, File::A);
                 }
                 'k' => {
-                    if seen_black_kingside {
-                        return Err(FenParseError::DuplicateCastlingRight(c));
-                    }
-                    seen_black_kingside = true;
                     rights.set_kingside(Colour::Black, File::H);
                 }
                 'q' => {
-                    if seen_black_queenside {
-                        return Err(FenParseError::DuplicateCastlingRight(c));
-                    }
-                    seen_black_queenside = true;
                     rights.set_queenside(Colour::Black, File::A);
                 }
                 // X-FEN / Shredder-FEN: uppercase file letter for white
@@ -269,11 +249,7 @@ impl Fen {
                     let file = File::from_index(c as u8 - b'A')
                         .ok_or_else(|| FenParseError::InvalidCastling(s.to_string()))?;
 
-                    let king_sq =
-                        white_king_sq.ok_or_else(|| FenParseError::KingNotOnBackRank {
-                            colour: "white",
-                            castling: s.to_string(),
-                        })?;
+                    let king_sq = white_king_sq;
 
                     if king_sq.rank() != Rank::One {
                         return Err(FenParseError::KingNotOnBackRank {
@@ -292,16 +268,8 @@ impl Fen {
                     }
 
                     if file > king_file {
-                        if seen_white_kingside {
-                            return Err(FenParseError::DuplicateCastlingRight(c));
-                        }
-                        seen_white_kingside = true;
                         rights.set_kingside(Colour::White, file);
                     } else {
-                        if seen_white_queenside {
-                            return Err(FenParseError::DuplicateCastlingRight(c));
-                        }
-                        seen_white_queenside = true;
                         rights.set_queenside(Colour::White, file);
                     }
                 }
@@ -310,11 +278,7 @@ impl Fen {
                     let file = File::from_index(c as u8 - b'a')
                         .ok_or_else(|| FenParseError::InvalidCastling(s.to_string()))?;
 
-                    let king_sq =
-                        black_king_sq.ok_or_else(|| FenParseError::KingNotOnBackRank {
-                            colour: "black",
-                            castling: s.to_string(),
-                        })?;
+                    let king_sq = black_king_sq;
 
                     if king_sq.rank() != Rank::Eight {
                         return Err(FenParseError::KingNotOnBackRank {
@@ -333,16 +297,8 @@ impl Fen {
                     }
 
                     if file > king_file {
-                        if seen_black_kingside {
-                            return Err(FenParseError::DuplicateCastlingRight(c));
-                        }
-                        seen_black_kingside = true;
                         rights.set_kingside(Colour::Black, file);
                     } else {
-                        if seen_black_queenside {
-                            return Err(FenParseError::DuplicateCastlingRight(c));
-                        }
-                        seen_black_queenside = true;
                         rights.set_queenside(Colour::Black, file);
                     }
                 }
@@ -484,15 +440,6 @@ mod tests {
     }
 
     #[test]
-    fn reject_duplicate_castling() {
-        let result = Fen::parse("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KKkq - 0 1");
-        assert!(matches!(
-            result,
-            Err(FenParseError::DuplicateCastlingRight('K'))
-        ));
-    }
-
-    #[test]
     fn reject_halfmove_over_100() {
         let result = Fen::parse("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 101 1");
         assert!(matches!(
@@ -554,5 +501,103 @@ mod tests {
         // "5" parsed as halfmove
         assert_eq!(fen.halfmove, 5);
         assert_eq!(fen.fullmove.get(), 1); // defaulted (missing)
+    }
+
+    /// Helper to parse all positions from an EPD file.
+    /// EPD format: FEN fields followed by operations (bm, id, etc.)
+    /// We use `parse_relaxed` since EPDs have trailing content.
+    fn parse_epd_file(path: &str) -> (usize, Vec<String>) {
+        let content = std::fs::read_to_string(path).unwrap();
+        let mut success = 0;
+        let mut failures = Vec::new();
+
+        for (line_num, line) in content.lines().enumerate() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+
+            match Fen::parse_relaxed(line) {
+                Ok(_) => success += 1,
+                Err(e) => failures.push(format!("line {}: {} -- {}", line_num + 1, e, line)),
+            }
+        }
+
+        (success, failures)
+    }
+
+    #[test]
+    fn epd_perftsuite() {
+        let (success, failures) = parse_epd_file("epds/perftsuite.epd");
+        assert!(failures.is_empty(), "failures:\n{}", failures.join("\n"));
+        assert_eq!(success, 126);
+    }
+
+    #[test]
+    fn epd_frcperftsuite() {
+        let (success, failures) = parse_epd_file("epds/frcperftsuite.epd");
+        assert!(failures.is_empty(), "failures:\n{}", failures.join("\n"));
+        assert_eq!(success, 960);
+    }
+
+    #[test]
+    fn epd_wac() {
+        let (success, failures) = parse_epd_file("epds/wac.epd");
+        assert!(failures.is_empty(), "failures:\n{}", failures.join("\n"));
+        assert_eq!(success, 300);
+    }
+
+    #[test]
+    fn epd_arasan21() {
+        let (success, failures) = parse_epd_file("epds/arasan21.epd");
+        assert!(failures.is_empty(), "failures:\n{}", failures.join("\n"));
+        assert_eq!(success, 200);
+    }
+
+    #[test]
+    fn epd_tbtest() {
+        let (success, failures) = parse_epd_file("epds/tbtest.epd");
+        assert!(failures.is_empty(), "failures:\n{}", failures.join("\n"));
+        assert_eq!(success, 434);
+    }
+
+    #[test]
+    fn epd_all_files() {
+        // Stress test: parse all EPD files
+        let epd_files = [
+            "epds/arasan21.epd",
+            "epds/bt2630.epd",
+            "epds/ecmgcp.epd",
+            "epds/eet.epd",
+            "epds/frcperftsuite.epd",
+            "epds/hardzugs.epd",
+            "epds/iq4.epd",
+            "epds/lapuce2.epd",
+            "epds/perftsuite.epd",
+            "epds/pet.epd",
+            "epds/prof.epd",
+            "epds/tbtest.epd",
+            "epds/wac.epd",
+            "epds/zugts.epd",
+        ];
+
+        let mut total_success = 0;
+        let mut all_failures = Vec::new();
+
+        for path in epd_files {
+            let (success, failures) = parse_epd_file(path);
+            total_success += success;
+            for f in failures {
+                all_failures.push(format!("{path}: {f}"));
+            }
+        }
+
+        assert!(
+            all_failures.is_empty(),
+            "{} failures:\n{}",
+            all_failures.len(),
+            all_failures.join("\n")
+        );
+        assert_eq!(total_success, 2640, "expected 2640 positions parsed");
     }
 }

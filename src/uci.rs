@@ -32,6 +32,7 @@ use crate::{
     cuckoo,
     errors::{GoParseError, PerftParseError, PositionParseError, SetOptionParseError, UciError},
     evaluation::evaluate,
+    fen::Fen,
     nnue::{self, network::NNUEParams},
     perft,
     search::{LMTable, adj_shuffle, parameters::Config, search_position},
@@ -284,22 +285,24 @@ pub fn main_loop() -> Result<(), UciError> {
             }
             command => {
                 // before failing outright, try to parse as a fen:
-                let mut try_fen = command.to_string();
-                let affixes = ["bad", " w", " -", " -", " 0", " 1"];
-                for needed_affix in affixes.iter().skip(command.split_whitespace().count()) {
-                    try_fen.push_str(needed_affix);
-                }
-                Board::from_fen(&try_fen).map_or_else(
-                    |_| Err(UciError::UnknownCommand(input.to_string())),
-                    |board| {
-                        for t in &mut thread_data {
-                            t.board = board.clone();
-                            t.board.zero_height();
-                            t.nnue.reinit_from(&t.board, t.nnue_params);
+                if command.contains('/')
+                    && let Ok(fen) = Fen::parse_relaxed(command)
+                {
+                    for t in &mut thread_data {
+                        t.board.set_from_fen(&fen);
+                        for tok in command.split_whitespace() {
+                            if let Ok(mv) = t.board.parse_uci(tok) {
+                                t.board.make_move_simple(mv);
+                                t.board.zero_height();
+                            }
                         }
-                        Ok(())
-                    },
-                )
+                        t.board.zero_height();
+                        t.nnue.reinit_from(&t.board, t.nnue_params);
+                    }
+                    Ok(())
+                } else {
+                    Err(UciError::UnknownCommand(input.to_string()))
+                }
             }
         };
 
@@ -379,15 +382,16 @@ fn parse_position(text: &str, pos: &mut Board) -> Result<(), PositionParseError>
         }
         pos.set_dfrc_idx(index);
     } else if determiner == "fen" {
-        let mut fen = String::new();
+        let mut fen_str = String::new();
         for part in &mut parts {
             if part == "moves" {
                 break;
             }
-            fen.push_str(part);
-            fen.push(' ');
+            fen_str.push_str(part);
+            fen_str.push(' ');
         }
-        pos.set_from_fen(&fen)?;
+        let fen = Fen::parse(&fen_str)?;
+        pos.set_from_fen(&fen);
     } else {
         return Err(PositionParseError::UnknownPositionSpecifier(
             determiner.to_string(),

@@ -28,12 +28,8 @@ pub enum MoveParseError {
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum FenParseError {
-    #[error("FEN string is not ASCII")]
-    NotAscii,
     #[error("FEN string is missing board part")]
     MissingBoard,
-    #[error("FEN string is missing space separator")]
-    MissingSpace,
     #[error("board part of FEN has {0} segments, expected 8")]
     BoardSegments(usize),
     #[error("wrong number of squares in board segment")]
@@ -50,8 +46,6 @@ pub enum FenParseError {
     MissingCastling,
     #[error("invalid castling format: \"{0}\"")]
     InvalidCastling(String),
-    #[error("duplicate castling right: '{0}'")]
-    DuplicateCastlingRight(char),
     #[error("{} king is missing", if *colour == Colour::White { "white "} else { "black" })]
     MissingKing { colour: Colour },
     #[error("more than one {} king", if *colour == Colour::White { "white "} else { "black" })]

@@ -35,6 +35,7 @@ use crate::{
     },
     datagen::dataformat::Game,
     evaluation::{is_decisive, is_mate_score},
+    fen::Fen,
     nnue::network::{NNUEParams, NNUEState},
     search::{parameters::Config, search_position, static_exchange_eval},
     tablebases::{
@@ -237,11 +238,11 @@ impl StartposGenerator for BookStartposGenerator<'_> {
             self.cursor.store(0, Ordering::Relaxed);
             return ControlFlow::Break(());
         }
-        let fen = self.source[idx];
-        board
-            .set_from_fen(fen)
-            .with_context(|| format!("Failed to set board from FEN {fen} at index {idx} in book."))
+        let fen_str = self.source[idx];
+        let fen = Fen::parse(fen_str)
+            .with_context(|| format!("Failed to parse FEN {fen_str} at index {idx} in book."))
             .unwrap();
+        board.set_from_fen(&fen);
 
         #[allow(clippy::reversed_empty_ranges)]
         for _ in 0..RANDOM_MOVES_BOOK {
