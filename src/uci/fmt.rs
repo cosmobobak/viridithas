@@ -118,17 +118,12 @@ pub const fn format_time(millis: u128) -> HumanTimeFormatWrapper {
 /// [the WLD model](https://github.com/vondele/WLD_model) such that Viridithas
 /// outputs an advantage of 100 centipawns for a position if the engine has a
 /// 50% probability to win from this position in selfplay at 16s+0.16s time control.
-pub const NORMALISE_TO_PAWN_VALUE: i32 = 229;
+pub const NORMALISE_TO_PAWN_VALUE: i32 = 222;
 
 pub fn wdl_model(eval: i32, ply: usize) -> (i32, i32, i32) {
     #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-    const AS: [f64; 4] = [6.871_558_62, -39.652_263_91, 90.684_603_52, 170.669_963_64];
-    const BS: [f64; 4] = [
-        -7.198_907_10,
-        56.139_471_85,
-        -139.910_911_83,
-        182.810_074_27,
-    ];
+    const AS: [f64; 4] = [4.440_372_36, -27.440_284_49, 69.365_122_28, 175.987_497_06];
+    const BS: [f64; 4] = [-2.098_382_37, 15.767_655_88, -39.562_991_52, 90.476_245_91];
     debug_assert_eq!(
         NORMALISE_TO_PAWN_VALUE,
         AS.iter().sum::<f64>().round() as i32,
@@ -146,6 +141,7 @@ pub fn wdl_model(eval: i32, ply: usize) -> (i32, i32, i32) {
         -2000.0,
         2000.0,
     );
+
     let win = 1.0 / (1.0 + f64::exp((a - x) / b));
     let loss = 1.0 / (1.0 + f64::exp((a + x) / b));
     let draw = 1.0 - win - loss;
