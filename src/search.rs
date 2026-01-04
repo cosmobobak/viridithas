@@ -149,6 +149,8 @@ const OPTIMISM_OFFSET: i32 = 196;
 const OPTIMISM_MATERIAL_BASE: i32 = 1869;
 const EVAL_POLICY_UPDATE_MAX: i32 = 94;
 const PROBCUT_SEE_SCALE: i32 = 266;
+const PROBCUT_ADA_OFFSET: i32 = 50;
+const PROBCUT_ADA_DIV: i32 = 300;
 
 pub trait NodeType {
     /// Whether this node is on the principal variation.
@@ -527,7 +529,7 @@ pub fn quiescence<NT: NodeType>(
     beta: i32,
 ) -> i32 {
     #[cfg(debug_assertions)]
-    t.board.check_validity().unwrap();
+    t.board.check_validity();
 
     if t.info.nodes.just_ticked_over() && t.info.check_up() {
         return 0;
@@ -760,7 +762,7 @@ pub fn alpha_beta<NT: NodeType>(
     cut_node: bool,
 ) -> i32 {
     #[cfg(debug_assertions)]
-    t.board.check_validity().unwrap();
+    t.board.check_validity();
 
     let mut local_pv = PVariation::default();
     let l_pv = &mut local_pv;
@@ -1185,7 +1187,7 @@ pub fn alpha_beta<NT: NodeType>(
     ];
 
     // probcut:
-    let pc_beta = std::cmp::min(
+    let mut pc_beta = std::cmp::min(
         beta + t.info.conf.probcut_margin
             - i32::from(improving) * t.info.conf.probcut_improving_margin,
         MINIMUM_TB_WIN_SCORE - 1,
@@ -1193,7 +1195,7 @@ pub fn alpha_beta<NT: NodeType>(
     // as usual, don't probcut in PV / check / singular verification / if there are GT truth scores in flight.
     // additionally, if we have a TT hit that's sufficiently deep, we skip trying probcut if the TT value indicates
     // that it's not going to be helpful.
-    if !NT::PV
+    if cut_node
         && !in_check
         && excluded.is_none()
         && depth >= 3
@@ -1201,10 +1203,10 @@ pub fn alpha_beta<NT: NodeType>(
         // don't probcut if we have a tthit with value < pcbeta
         && tt_hit.is_none_or(|tte| tte.value >= pc_beta)
     {
-        let see_threshold = (pc_beta - static_eval) * t.info.conf.probcut_see_scale / 256;
-        let pc_eval_reduction = (static_eval - beta) / t.info.conf.probcut_eval_div;
-        let pc_depth = i32::clamp(depth - 3 - pc_eval_reduction, 0, depth - 1);
-        let mut move_picker = MovePicker::new(tt_capture, None, see_threshold);
+        // base reduced probcut depth
+        let depth_base = depth - 3 - (static_eval - beta) / t.info.conf.probcut_eval_div;
+        let see_pivot = (pc_beta - static_eval) * t.info.conf.probcut_see_scale / 256;
+        let mut move_picker = MovePicker::new(tt_capture, None, see_pivot);
         move_picker.skip_quiets = true;
         while let Some(m) = move_picker.next(t) {
             t.tt.prefetch(t.board.key_after(m));
@@ -1222,8 +1224,35 @@ pub fn alpha_beta<NT: NodeType>(
 
             let mut value = -quiescence::<OffPV>(l_pv, t, -pc_beta, -pc_beta + 1);
 
+            // the full adaptive probcut depth: if QS kicked out a really
+            // high value compared to pc_beta, we assume we can slice off
+            // more of the tree. the idea of adaptive probcut comes from
+            // https://github.com/cj5716.
+            let mut pc_depth = (depth_base
+                - ((value - pc_beta - t.info.conf.probcut_ada_offset)
+                    / t.info.conf.probcut_ada_div)
+                    .clamp(0, 3))
+            .clamp(0, depth - 1);
+            // the base probcut depth we'd use if we weren't adapting to
+            // the QS result.
+            let base_pc_depth = depth_base.clamp(0, depth - 1);
+            // we compute a higher beta if we're going shallow:
+            let ada_beta = (pc_beta + (base_pc_depth - pc_depth) * t.info.conf.probcut_ada_div)
+                .clamp(-MINIMUM_TB_WIN_SCORE + 1, MINIMUM_TB_WIN_SCORE - 1);
+
             if value >= pc_beta && pc_depth > 0 {
-                value = -alpha_beta::<OffPV>(l_pv, t, pc_depth, -pc_beta, -pc_beta + 1, !cut_node);
+                value = -alpha_beta::<OffPV>(l_pv, t, pc_depth, -ada_beta, -ada_beta + 1, false);
+
+                // if we beat pc_beta, but not ada_beta, and we reduced,
+                // then we have a chance of still being able to cut via
+                // a full-fat probcut search, so kick one off:
+                if value < ada_beta && pc_beta < ada_beta {
+                    pc_depth = base_pc_depth;
+                    value = -alpha_beta::<OffPV>(l_pv, t, pc_depth, -pc_beta, -pc_beta + 1, false);
+                } else {
+                    // this persists over to the next loop.
+                    pc_beta = ada_beta;
+                }
             }
 
             t.board.unmake_move(&mut t.nnue);
@@ -1242,9 +1271,12 @@ pub fn alpha_beta<NT: NodeType>(
                     t.ss[height].ttpv,
                 );
 
-                if !is_decisive(value) {
-                    return value - (pc_beta - beta);
+                if is_decisive(value) {
+                    // it's totally sound to return mates as cutoffs here.
+                    return value;
                 }
+
+                return value - (pc_beta - beta);
             }
         }
 
@@ -1503,12 +1535,6 @@ pub fn alpha_beta<NT: NodeType>(
         // record subtree size for TimeManager
         if NT::ROOT && t.thread_id == 0 {
             let subtree_size = t.info.nodes.get_local() - nodes_before_search;
-            #[cfg(feature = "stats")]
-            println!(
-                "info string subtree {} size {}",
-                m.display(CHESS960.load(Ordering::Relaxed)),
-                subtree_size
-            );
             t.info.root_move_nodes[from][hist_to] += subtree_size;
         }
 
@@ -1969,13 +1995,13 @@ fn readout_info(
             "info depth {iteration} seldepth {} nodes {nodes} time {} nps {nps} hashfull {hashfull} tbhits {tbhits} score {sstr}{bound_string} wdl {wdl} {pv}",
             info.seldepth as usize,
             info.clock.elapsed().as_millis(),
-            sstr = uci::format_score(pv.score),
+            sstr = uci::fmt::format_score(pv.score),
             hashfull = tt.hashfull(),
             tbhits = t.info.tbhits.get_global(),
-            wdl = uci::format_wdl(pv.score, board.ply()),
+            wdl = uci::fmt::format_wdl(pv.score, board.ply()),
         );
     } else {
-        let value = uci::pretty_format_score(pv.score, board.turn());
+        let value = uci::fmt::pretty_format_score(pv.score, board.turn());
         let mut pv_string = board.pv_san(pv).unwrap();
         let pv_string_len = pv_string.len();
         // truncate the pv string if it's too long
@@ -2010,12 +2036,12 @@ fn readout_info(
 
         let endchr = if bound == Bound::Exact { "\n" } else { "\r" };
         eprint!(
-            " {iteration:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}n\u{001b}[0m {value} {wdl} \u{001b}[38;5;243m{knps:5}kn/s\u{001b}[0m {pv_string}{endchr}",
+            " {iteration:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}n\u{001b}[0m {value} {wdl} \u{001b}[38;5;243m{nps_fmt}n/s\u{001b}[0m {pv_string}{endchr}",
             info.seldepth as usize,
-            t = uci::format_time(info.clock.elapsed().as_millis()),
-            knps = nps / 1_000,
-            knodes = uci::pretty_format_counter(nodes),
-            wdl = uci::pretty_format_wdl(pv.score, board.ply()),
+            t = uci::fmt::format_time(info.clock.elapsed().as_millis()),
+            nps_fmt = uci::fmt::pretty_format_counter(nps),
+            knodes = uci::fmt::pretty_format_counter(nodes),
+            wdl = uci::fmt::pretty_format_wdl(pv.score, board.ply()),
         );
     }
 }

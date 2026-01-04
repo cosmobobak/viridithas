@@ -26,7 +26,7 @@ pub const fn h2(key: u64) -> usize {
     ((key >> 16) & 0x1FFF) as usize
 }
 
-pub fn init() -> anyhow::Result<()> {
+pub fn init() -> Result<(), std::io::Error> {
     println!("Initialising cuckoo-hash tables.");
     // keep a tally of the table entries to sanity-check the initialisation process.
     let mut count = 0;

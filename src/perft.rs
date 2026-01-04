@@ -8,16 +8,18 @@ use std::{
 
 use anyhow::{Context, bail};
 
+use crate::chess::{
+    CHESS960,
+    board::{Board, movegen::MoveList},
+    fen::Fen,
+};
+
 #[cfg(test)]
 use crate::threadlocal::{Corrhists, ThreadData};
-use crate::{
-    chess::CHESS960,
-    chess::board::{Board, movegen::MoveList},
-};
 
 pub fn perft(pos: &mut Board, depth: usize) -> u64 {
     #[cfg(debug_assertions)]
-    pos.check_validity().unwrap();
+    pos.check_validity();
 
     if depth == 0 {
         return 1;
@@ -47,7 +49,7 @@ pub fn perft(pos: &mut Board, depth: usize) -> u64 {
 #[cfg(test)]
 pub fn nnue_perft(t: &mut ThreadData, depth: usize) -> u64 {
     #[cfg(debug_assertions)]
-    t.board.check_validity().unwrap();
+    t.board.check_validity();
     // debug_assert!(t.board.check_nnue_coherency(&t.nnue));
 
     if depth == 0 {
@@ -80,7 +82,7 @@ pub fn movepicker_perft(t: &mut ThreadData, depth: usize) -> u64 {
     use crate::movepicker::MovePicker;
 
     #[cfg(debug_assertions)]
-    t.board.check_validity().unwrap();
+    t.board.check_validity();
     // debug_assert!(t.board.check_nnue_coherency(&t.nnue));
 
     if depth == 0 {
@@ -115,11 +117,12 @@ pub fn gamut() -> anyhow::Result<()> {
     for line in BufReader::new(f).lines() {
         let line = line?;
         let mut parts = line.split(';');
-        let fen = parts
+        let fen_str = parts
             .next()
             .with_context(|| "Failed to find fen in line.")?
             .trim();
-        pos.set_from_fen(fen)?;
+        let fen = Fen::parse_relaxed(fen_str)?;
+        pos.set_from_fen(&fen);
         for depth_part in parts {
             let depth_part = depth_part.trim();
             let (d, nodes) = depth_part.split_once(' ').unwrap();
@@ -131,9 +134,9 @@ pub fn gamut() -> anyhow::Result<()> {
             }
             let perft_nodes = perft(&mut pos, d as usize);
             if perft_nodes == nodes {
-                println!("PASS: fen {fen}, depth {d}");
+                println!("PASS: fen {fen_str}, depth {d}");
             } else {
-                bail!("FAIL: fen {fen}, depth {d}: expected {nodes}, got {perft_nodes}");
+                bail!("FAIL: fen {fen_str}, depth {d}: expected {nodes}, got {perft_nodes}");
             }
         }
     }
@@ -145,8 +148,9 @@ pub fn gamut() -> anyhow::Result<()> {
     for line in BufReader::new(f).lines() {
         let line = line.unwrap();
         let mut parts = line.split(';');
-        let fen = parts.next().unwrap().trim();
-        pos.set_from_fen(fen).unwrap();
+        let fen_str = parts.next().unwrap().trim();
+        let fen = Fen::parse_relaxed(fen_str).unwrap();
+        pos.set_from_fen(&fen);
         for depth_part in parts {
             let depth_part = depth_part.trim();
             let (d, nodes) = depth_part.split_once(' ').unwrap();
@@ -158,9 +162,9 @@ pub fn gamut() -> anyhow::Result<()> {
             }
             let perft_nodes = perft(&mut pos, d as usize);
             if perft_nodes == nodes {
-                println!("PASS: fen {fen}, depth {d}");
+                println!("PASS: fen {fen_str}, depth {d}");
             } else {
-                bail!("FAIL: fen {fen}, depth {d}: expected {nodes}, got {perft_nodes}");
+                bail!("FAIL: fen {fen_str}, depth {d}: expected {nodes}, got {perft_nodes}");
             }
         }
     }
@@ -186,8 +190,7 @@ mod tests {
         const TEST_FEN: &str =
             "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
 
-        let mut pos = Board::empty();
-        pos.set_from_fen(TEST_FEN).unwrap();
+        let mut pos = Board::from_fen(TEST_FEN).unwrap();
         assert_eq!(perft(&mut pos, 1), 48, "got {}", {
             pos.legal_moves()
                 .into_iter()
@@ -295,8 +298,7 @@ mod tests {
         const TEST_FEN: &str =
             "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
 
-        let mut pos = Board::empty();
-        pos.set_from_fen(TEST_FEN).unwrap();
+        let pos = Board::from_fen(TEST_FEN).unwrap();
         let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
         tt.resize(MEGABYTE * 16, &pool);
@@ -333,8 +335,7 @@ mod tests {
         use super::*;
         const TEST_FEN: &str = "r7/P2r4/7R/8/5p2/5K2/3p2P1/R5k1 b - - 0 1";
 
-        let mut pos = Board::empty();
-        pos.set_from_fen(TEST_FEN).unwrap();
+        let pos = Board::from_fen(TEST_FEN).unwrap();
         let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
         tt.resize(MEGABYTE * 16, &pool);
@@ -370,8 +371,7 @@ mod tests {
         use super::*;
         const TEST_FEN: &str = "r7/P2r4/7R/8/5p2/5K2/3p2P1/2R3k1 b - - 0 1";
 
-        let mut pos = Board::empty();
-        pos.set_from_fen(TEST_FEN).unwrap();
+        let pos = Board::from_fen(TEST_FEN).unwrap();
         let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
         tt.resize(MEGABYTE * 16, &pool);
@@ -406,8 +406,7 @@ mod tests {
     fn perft_krk() {
         use super::*;
 
-        let mut pos = Board::empty();
-        pos.set_from_fen("8/8/8/8/8/8/1k6/R2K4 b - - 1 1").unwrap();
+        let mut pos = Board::from_fen("8/8/8/8/8/8/1k6/R2K4 b - - 1 1").unwrap();
         assert_eq!(perft(&mut pos, 1), 3, "got {}", {
             pos.legal_moves()
                 .into_iter()
@@ -441,9 +440,9 @@ mod tests {
     fn simple_capture_undoability() {
         use super::*;
 
-        let mut pos = Board::empty();
-        pos.set_from_fen("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
-            .unwrap();
+        let mut pos =
+            Board::from_fen("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+                .unwrap();
         let exd5 = Move::new(Square::E4, Square::D5);
         let piece_layout_before = pos.state.bbs;
         println!("{piece_layout_before}");

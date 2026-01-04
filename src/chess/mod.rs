@@ -2,6 +2,7 @@ use std::sync::atomic::AtomicBool;
 
 pub mod board;
 pub mod chessmove;
+pub mod fen;
 mod magic;
 pub mod piece;
 pub mod piecelayout;
