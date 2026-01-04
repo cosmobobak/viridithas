@@ -1228,8 +1228,11 @@ pub fn alpha_beta<NT: NodeType>(
             // high value compared to pc_beta, we assume we can slice off
             // more of the tree. the idea of adaptive probcut comes from
             // https://github.com/cj5716.
-            let mut pc_depth =
-                (depth_base - ((value - pc_beta - t.info.conf.probcut_ada_offset) / t.info.conf.probcut_ada_div).clamp(0, 3)).clamp(0, depth - 1);
+            let mut pc_depth = (depth_base
+                - ((value - pc_beta - t.info.conf.probcut_ada_offset)
+                    / t.info.conf.probcut_ada_div)
+                    .clamp(0, 3))
+            .clamp(0, depth - 1);
             // the base probcut depth we'd use if we weren't adapting to
             // the QS result.
             let base_pc_depth = depth_base.clamp(0, depth - 1);

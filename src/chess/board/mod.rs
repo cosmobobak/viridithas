@@ -341,6 +341,13 @@ impl Board {
             .ok_or(FenParseError::MissingSpace)?;
         let (board_part, info_part) = fen_chars.split_at(split_idx);
 
+        let segments = board_part.split(|b| *b == b'/').count();
+        if segments != 8 {
+            return Err(FenParseError::BoardSegments(segments));
+        }
+
+        let mut squares = 0;
+
         for &c in board_part {
             let mut count = 1;
             let piece;
@@ -362,8 +369,12 @@ impl Board {
                     count = c - b'0';
                 }
                 b'/' => {
+                    if squares != 8 {
+                        return Err(FenParseError::BadSquaresInSegment);
+                    }
                     rank = rank.sub(1).unwrap();
                     file = File::A;
+                    squares = 0;
                     continue;
                 }
                 c => {
@@ -377,7 +388,8 @@ impl Board {
                     // this is only ever run once, as count is 1 for non-empty pieces.
                     self.add_piece(sq, piece);
                 }
-                file = file.add(1).unwrap_or(File::H);
+                file = file.add(1).unwrap_or(File::A);
+                squares += 1;
             }
         }
 
@@ -388,6 +400,8 @@ impl Board {
         self.set_ep(info_parts.next())?;
         self.set_halfmove(info_parts.next())?;
         self.set_fullmove(info_parts.next())?;
+
+        // note, below here will remain the same.
 
         self.state.keys = self.state.generate_pos_keys(self.side);
         self.state.threats = self.state.bbs.generate_threats(self.side);
@@ -429,7 +443,6 @@ impl Board {
             .expect("for some reason, STARTING_FEN is now broken.");
     }
 
-    #[cfg(test)]
     pub fn from_fen(fen: &str) -> Result<Self, FenParseError> {
         let mut out = Self::empty();
         out.set_from_fen(fen)?;
@@ -628,7 +641,6 @@ impl Board {
     }
 
     pub fn sq_attacked_by<C: Col>(&self, sq: Square) -> bool {
-        use PieceType::{Bishop, King, Knight, Pawn, Queen, Rook};
         // we remove this check because the board actually *can*
         // be in an inconsistent state when we call this, as it's
         // used to determine if a move is legal, and we'd like to
@@ -641,39 +653,9 @@ impl Board {
             return self.state.threats.all.contains_square(sq);
         }
 
-        let attackers = self.state.bbs.colours[C::COLOUR];
         let bbs = &self.state.bbs;
 
-        // pawns
-        if pawn_attacks::<C>(bbs.pieces[Pawn] & attackers).contains_square(sq) {
-            return true;
-        }
-
-        // knights
-        if (attackers & bbs.pieces[Knight]) & movegen::knight_attacks(sq) != SquareSet::EMPTY {
-            return true;
-        }
-
-        let blockers = attackers | bbs.colours[!C::COLOUR];
-
-        // bishops, queens
-        let diags = attackers & (bbs.pieces[Queen] | bbs.pieces[Bishop]);
-        if diags & movegen::bishop_attacks(sq, blockers) != SquareSet::EMPTY {
-            return true;
-        }
-
-        // rooks, queens
-        let orthos = attackers & (bbs.pieces[Queen] | bbs.pieces[Rook]);
-        if orthos & movegen::rook_attacks(sq, blockers) != SquareSet::EMPTY {
-            return true;
-        }
-
-        // king
-        if (attackers & bbs.pieces[King]) & movegen::king_attacks(sq) != SquareSet::EMPTY {
-            return true;
-        }
-
-        false
+        bbs.sq_attacked_by::<C>(sq)
     }
 
     /// Checks whether a move is pseudo-legal.

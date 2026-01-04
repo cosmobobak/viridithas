@@ -9,7 +9,7 @@
 pub mod fmt;
 
 use std::{
-    io::Write,
+    io::Write as _,
     sync::{
         Mutex, Once,
         atomic::{self, AtomicBool, AtomicI32, AtomicU8, AtomicU64, AtomicUsize, Ordering},
@@ -282,7 +282,25 @@ pub fn main_loop() -> Result<(), UciError> {
             benchcmd @ ("bench" | "benchfull") => {
                 bench(benchcmd, &thread_data[0].info.conf, nnue_params, None, None)
             }
-            _ => Err(UciError::UnknownCommand(input.to_string())),
+            command => {
+                // before failing outright, try to parse as a fen:
+                let mut try_fen = command.to_string();
+                let affixes = ["bad", " w", " -", " -", " 0", " 1"];
+                for needed_affix in affixes.iter().skip(command.split_whitespace().count()) {
+                    try_fen.push_str(needed_affix);
+                }
+                Board::from_fen(&try_fen).map_or_else(
+                    |_| Err(UciError::UnknownCommand(input.to_string())),
+                    |board| {
+                        for t in &mut thread_data {
+                            t.board = board.clone();
+                            t.board.zero_height();
+                            t.nnue.reinit_from(&t.board, t.nnue_params);
+                        }
+                        Ok(())
+                    },
+                )
+            }
         };
 
         if let Err(e) = res {

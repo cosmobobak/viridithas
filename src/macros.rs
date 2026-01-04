@@ -42,9 +42,13 @@ macro_rules! track {
         #[allow(clippy::cast_possible_wrap)]
         {
             #[linkme::distributed_slice($crate::stats::TRACKED_VALUES)]
-            static ENTRY: $crate::stats::TrackedValue = $crate::stats::TrackedValue::new(
-                concat!(file!(), ":", line!(), " ", stringify!($v)),
-            );
+            static ENTRY: $crate::stats::TrackedValue = $crate::stats::TrackedValue::new(concat!(
+                file!(),
+                ":",
+                line!(),
+                " ",
+                stringify!($v)
+            ));
             let value = $v;
             ENTRY.record(value as i64);
             value

@@ -3,6 +3,9 @@ use std::str::ParseBoolError;
 
 use thiserror::Error;
 
+use crate::chess::piece::Colour;
+use crate::chess::types::Rank;
+
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum MoveParseError {
     #[error("invalid move length {0}")]
@@ -27,8 +30,16 @@ pub enum MoveParseError {
 pub enum FenParseError {
     #[error("FEN string is not ASCII")]
     NotAscii,
+    #[error("FEN string is missing board part")]
+    MissingBoard,
     #[error("FEN string is missing space separator")]
     MissingSpace,
+    #[error("board part of FEN has {0} segments, expected 8")]
+    BoardSegments(usize),
+    #[error("wrong number of squares in board segment")]
+    BadSquaresInSegment,
+    #[error("adjacent digits in board segment are not allowed")]
+    AdjacentDigits,
     #[error("unexpected character in piece placement: '{0}'")]
     UnexpectedCharacter(char),
     #[error("expected side to be 'w' or 'b', got \"{0}\"")]
@@ -39,6 +50,16 @@ pub enum FenParseError {
     MissingCastling,
     #[error("invalid castling format: \"{0}\"")]
     InvalidCastling(String),
+    #[error("duplicate castling right: '{0}'")]
+    DuplicateCastlingRight(char),
+    #[error("{} king is missing", if *colour == Colour::White { "white "} else { "black" })]
+    MissingKing { colour: Colour },
+    #[error("more than one {} king", if *colour == Colour::White { "white "} else { "black" })]
+    DuplicateKings { colour: Colour },
+    #[error("pawns present on backranks")]
+    PawnsOnBackranks,
+    #[error("waiting player's king in check")]
+    WaitingInCheck,
     #[error(
         "{colour} king is not on the back rank, but castling rights \"{castling}\" imply present castling rights"
     )]
@@ -58,14 +79,26 @@ pub enum FenParseError {
     MissingEnPassant,
     #[error("invalid en passant square: \"{0}\"")]
     InvalidEnPassant(String),
+    #[error("invalid en passant rank for square \"{square}\": expected {expected:?}, got {got:?}")]
+    InvalidEnPassantRank {
+        square: String,
+        expected: Rank,
+        got: Rank,
+    },
     #[error("expected halfmove clock part")]
     MissingHalfmoveClock,
     #[error("invalid halfmove clock: \"{0}\"")]
     InvalidHalfmoveClock(String),
+    #[error("halfmove clock {0} exceeds maximum of 100")]
+    HalfmoveClockTooLarge(u8),
     #[error("expected fullmove number part")]
     MissingFullmoveNumber,
     #[error("invalid fullmove number: \"{0}\"")]
     InvalidFullmoveNumber(String),
+    #[error("fullmove number must be at least 1")]
+    FullmoveNumberZero,
+    #[error("unexpected extra tokens after fullmove number")]
+    ExtraTokens,
 }
 
 /// Errors that can occur when parsing the `position` command.
