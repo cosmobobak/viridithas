@@ -51,7 +51,7 @@ impl Fen {
         let board_str = tokens.next().ok_or(FenParseError::MissingBoard)?;
         let board = Self::parse_board(board_str)?;
 
-        // Field #2: Active color
+        // Field #2: Active colour
         let turn = match tokens.next() {
             Some(s) if strict => Self::parse_turn(s)?,
             Some(s) => Self::parse_turn(s).unwrap_or(Colour::White),

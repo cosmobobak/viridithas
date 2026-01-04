@@ -425,9 +425,7 @@ impl Board {
             return self.state.threats.all.contains_square(sq);
         }
 
-        let bbs = &self.state.bbs;
-
-        bbs.sq_attacked_by::<C>(sq)
+        self.state.bbs.sq_attacked_by::<C>(sq)
     }
 
     /// Checks whether a move is pseudo-legal.
