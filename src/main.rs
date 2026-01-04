@@ -19,7 +19,6 @@ mod cli;
 mod cuckoo;
 mod errors;
 mod evaluation;
-mod fen;
 mod history;
 mod historytable;
 mod image;

@@ -30,12 +30,12 @@ use crate::{
         CHESS960,
         board::{Board, DrawType, GameOutcome, WinType},
         chessmove::Move,
+        fen::Fen,
         piece::{Colour, PieceType},
         types::Square,
     },
     datagen::dataformat::Game,
     evaluation::{is_decisive, is_mate_score},
-    fen::Fen,
     nnue::network::{NNUEParams, NNUEState},
     search::{parameters::Config, search_position, static_exchange_eval},
     tablebases::{

@@ -13,10 +13,10 @@ use crate::{
     chess::{
         board::Board,
         chessmove::Move,
+        fen::Fen,
         piece::{Colour, PieceType},
         squareset::SquareSet,
     },
-    fen::Fen,
     nnue::network::{self, NNUEParams, NNUEState},
     search::{draw_score, parameters::Config},
     searchinfo::SearchInfo,

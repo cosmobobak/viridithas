@@ -8,13 +8,14 @@ use std::{
 
 use anyhow::{Context, bail};
 
-#[cfg(test)]
-use crate::threadlocal::{Corrhists, ThreadData};
-use crate::{
-    chess::CHESS960,
-    chess::board::{Board, movegen::MoveList},
+use crate::chess::{
+    CHESS960,
+    board::{Board, movegen::MoveList},
     fen::Fen,
 };
+
+#[cfg(test)]
+use crate::threadlocal::{Corrhists, ThreadData};
 
 pub fn perft(pos: &mut Board, depth: usize) -> u64 {
     #[cfg(debug_assertions)]
