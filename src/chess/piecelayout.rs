@@ -2,9 +2,9 @@ use std::fmt::Display;
 
 use crate::chess::{
     board::movegen::{
-        RAY_BETWEEN, bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks,
+        self, RAY_BETWEEN, bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks,
     },
-    piece::{Black, Colour, Piece, PieceType, White},
+    piece::{Black, Col, Colour, Piece, PieceType, White},
     squareset::SquareSet,
     types::{File, Rank, Square},
 };
@@ -69,6 +69,51 @@ impl PieceLayout {
             | diag_attackers
             | orth_attackers
             | king_attackers
+    }
+
+    /// Determines if `sq` is attacked by `side`
+    pub fn sq_attacked(&self, sq: Square, side: Colour) -> bool {
+        match side {
+            Colour::White => self.sq_attacked_by::<White>(sq),
+            Colour::Black => self.sq_attacked_by::<Black>(sq),
+        }
+    }
+
+    pub fn sq_attacked_by<C: Col>(&self, sq: Square) -> bool {
+        use PieceType::{Bishop, King, Knight, Pawn, Queen, Rook};
+
+        let attackers = self.colours[C::COLOUR];
+
+        // pawns
+        if pawn_attacks::<C>(self.pieces[Pawn] & attackers).contains_square(sq) {
+            return true;
+        }
+
+        // knights
+        if (attackers & self.pieces[Knight]) & movegen::knight_attacks(sq) != SquareSet::EMPTY {
+            return true;
+        }
+
+        let blockers = attackers | self.colours[!C::COLOUR];
+
+        // bishops, queens
+        let diags = attackers & (self.pieces[Queen] | self.pieces[Bishop]);
+        if diags & movegen::bishop_attacks(sq, blockers) != SquareSet::EMPTY {
+            return true;
+        }
+
+        // rooks, queens
+        let orthos = attackers & (self.pieces[Queen] | self.pieces[Rook]);
+        if orthos & movegen::rook_attacks(sq, blockers) != SquareSet::EMPTY {
+            return true;
+        }
+
+        // king
+        if (attackers & self.pieces[King]) & movegen::king_attacks(sq) != SquareSet::EMPTY {
+            return true;
+        }
+
+        false
     }
 
     pub fn piece_at(&self, sq: Square) -> Option<Piece> {

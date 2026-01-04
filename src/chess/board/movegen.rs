@@ -998,14 +998,12 @@ mod tests {
 
     #[test]
     fn staged_matches_full() {
-        let mut pos = Board::default();
-
         let positions = bench::BENCH_POSITIONS
             .into_iter()
             .chain(["r4rk1/2pb1ppQ/2pp1q2/p1n5/2P1B3/PP2P3/3N1PPP/R4RK1 b - - 0 17"]);
 
         for fen in positions {
-            pos.set_from_fen(fen).unwrap();
+            let mut pos = Board::from_fen(fen).unwrap();
             synced_perft(&mut pos, 2);
         }
     }

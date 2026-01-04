@@ -65,7 +65,13 @@ fn main() -> anyhow::Result<()> {
             let nodes = std::sync::atomic::AtomicU64::new(0);
             let tbhits = std::sync::atomic::AtomicU64::new(0);
             let info = searchinfo::SearchInfo::new(&stopped, &nodes, &tbhits);
-            Ok(uci::bench("openbench", &info.conf, nnue_params, depth, threads)?)
+            Ok(uci::bench(
+                "openbench",
+                &info.conf,
+                nnue_params,
+                depth,
+                threads,
+            )?)
         }
         Some(Perft) => perft::gamut(),
         Some(Quantise { input, output }) => nnue::network::quantise(&input, &output),

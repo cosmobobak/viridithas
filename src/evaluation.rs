@@ -13,6 +13,7 @@ use crate::{
     chess::{
         board::Board,
         chessmove::Move,
+        fen::Fen,
         piece::{Colour, PieceType},
         squareset::SquareSet,
     },
@@ -172,15 +173,9 @@ pub fn eval_stats(input: &Path, histogram_output: Option<&Path>) -> anyhow::Resu
     let file_len = lines.len();
 
     for (i, line) in lines.into_iter().enumerate() {
-        // extract the first 6 fields as FEN
-        let end_idx = line
-            .match_indices(' ')
-            .nth(5)
-            .map(|(idx, _)| idx)
+        let parsed = Fen::parse_relaxed(&line)
             .with_context(|| format!("Failed to parse FEN from line {}: {}", i + 1, line))?;
-        let fen = &line[..end_idx];
-
-        board.set_from_fen(fen)?;
+        board.set_from_fen(&parsed);
 
         if board.in_check() {
             continue;
