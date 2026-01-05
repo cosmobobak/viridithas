@@ -1,6 +1,6 @@
 [package]
 name = "viridithas"
-version = "19.0.0"
+version = "20.0.0"
 edition = "2024"
 description = "A superhuman chess engine."
 license = "MIT"
@@ -70,7 +70,7 @@ vec1 = "1.12.1"
 
 # for coloured terminal output
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
-version = "0.60"
+version = "0.61"
 features = [
     "Win32_Foundation",
     "Win32_Security",

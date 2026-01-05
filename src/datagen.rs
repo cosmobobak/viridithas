@@ -38,11 +38,9 @@ use crate::{
     evaluation::{is_decisive, is_mate_score},
     nnue::network::{NNUEParams, NNUEState},
     search::{parameters::Config, search_position, static_exchange_eval},
-    tablebases::{
-        self,
-        probe::{SYZYGY_ENABLED, WDL},
-    },
-    threadlocal::{Corrhists, make_thread_data},
+    tablebases::probe::SYZYGY_ENABLED,
+    tablebases::{self, probe::WDL},
+    threadlocal::make_thread_data,
     threadpool,
     timemgmt::{SearchLimit, TimeManager},
     transpositiontable::TT,
@@ -430,7 +428,6 @@ fn generate_on_thread<'a>(
     let mut tts = [TT::new(), TT::new()];
     tts[Colour::White].resize(4 * MEGABYTE, from_ref(&worker_thread));
     tts[Colour::Black].resize(4 * MEGABYTE, from_ref(&worker_thread));
-    let corrhists = [Corrhists::new(), Corrhists::new()];
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
     let tbhits = AtomicU64::new(0);
@@ -438,7 +435,6 @@ fn generate_on_thread<'a>(
         make_thread_data(
             &Board::default(),
             tts[colour].view(),
-            &corrhists[colour],
             nnue_params,
             &stopped,
             &nodes,
