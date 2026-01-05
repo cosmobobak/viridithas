@@ -38,7 +38,7 @@ use crate::{
     search::{LMTable, adj_shuffle, parameters::Config, search_position},
     searchinfo::SearchInfo,
     tablebases, term,
-    threadlocal::{Corrhists, ThreadData, make_thread_data},
+    threadlocal::{ThreadData, make_thread_data},
     threadpool,
     timemgmt::SearchLimit,
     transpositiontable::TT,
@@ -76,7 +76,6 @@ pub fn main_loop() -> Result<(), UciError> {
 
     let mut tt = TT::new();
     tt.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE, &worker_threads); // default hash size
-    let corrhists = Corrhists::new();
 
     let nnue_params =
         NNUEParams::decompress_and_alloc().map_err(|e| UciError::NnueInit(e.to_string()))?;
@@ -89,7 +88,6 @@ pub fn main_loop() -> Result<(), UciError> {
     let mut thread_data = make_thread_data(
         &Board::default(),
         tt.view(),
-        &corrhists,
         nnue_params,
         &stopped,
         &nodes,
@@ -224,7 +222,6 @@ pub fn main_loop() -> Result<(), UciError> {
                         thread_data = make_thread_data(
                             &pos,
                             tt.view(),
-                            &corrhists,
                             nnue_params,
                             &stopped,
                             &nodes,
@@ -791,11 +788,9 @@ pub fn bench(
     let pool = threadpool::make_worker_threads(threads.unwrap_or(BENCH_THREADS));
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE, &pool);
-    let corrhists = Corrhists::new();
     let mut thread_data = make_thread_data(
         &Board::default(),
         tt.view(),
-        &corrhists,
         nnue_params,
         &stopped,
         &nodes,
@@ -898,11 +893,9 @@ pub fn go_benchmark(nnue_params: &'static NNUEParams) -> Result<(), UciError> {
     let pool = threadpool::make_worker_threads(THREADS);
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE, &pool);
-    let corrhists = Corrhists::new();
     let mut thread_data = make_thread_data(
         &Board::default(),
         tt.view(),
-        &corrhists,
         nnue_params,
         &stopped,
         &nodes,

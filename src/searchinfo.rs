@@ -205,7 +205,7 @@ mod tests {
         nnue::network::NNUEParams,
         search::search_position,
         searchinfo::SearchInfo,
-        threadlocal::{Corrhists, ThreadData},
+        threadlocal::ThreadData,
         threadpool,
         timemgmt::{SearchLimit, TimeManager},
         transpositiontable::TT,
@@ -227,13 +227,11 @@ mod tests {
         let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
         tt.resize(MEGABYTE, &pool);
-        let corrhists = Corrhists::new();
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = Box::new(ThreadData::new(
             0,
             position,
             tt.view(),
-            &corrhists,
             nnue_params,
             &stopped,
             &nodes,
@@ -263,13 +261,11 @@ mod tests {
         let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
         tt.resize(MEGABYTE, &pool);
-        let corrhists = Corrhists::new();
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = Box::new(ThreadData::new(
             0,
             position,
             tt.view(),
-            &corrhists,
             nnue_params,
             &stopped,
             &nodes,
@@ -296,13 +292,11 @@ mod tests {
         let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
         tt.resize(MEGABYTE, &pool);
-        let corrhists = Corrhists::new();
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = Box::new(ThreadData::new(
             0,
             position,
             tt.view(),
-            &corrhists,
             nnue_params,
             &stopped,
             &nodes,
@@ -329,13 +323,11 @@ mod tests {
         let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
         tt.resize(MEGABYTE, &pool);
-        let corrhists = Corrhists::new();
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = Box::new(ThreadData::new(
             0,
             position,
             tt.view(),
-            &corrhists,
             nnue_params,
             &stopped,
             &nodes,
