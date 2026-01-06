@@ -288,7 +288,9 @@ pub fn main_loop() -> Result<(), UciError> {
                     for t in &mut thread_data {
                         t.board.set_from_fen(&fen);
                         for tok in command.split_whitespace() {
-                            if let Ok(mv) = t.board.parse_uci(tok) {
+                            if let Ok(mv) =
+                                t.board.parse_uci(tok).or_else(|_| t.board.parse_san(tok))
+                            {
                                 t.board.make_move_simple(mv);
                                 t.board.zero_height();
                             }

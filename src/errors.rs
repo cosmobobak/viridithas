@@ -6,6 +6,19 @@ use thiserror::Error;
 use crate::chess::piece::Colour;
 use crate::chess::types::Rank;
 
+/// Errors that can occur when parsing SAN (Standard Algebraic Notation) moves.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum SanError {
+    #[error("invalid san: {0:?}")]
+    InvalidSan(String),
+    #[error("illegal san: {0:?}")]
+    IllegalMove(String),
+    #[error("ambiguous san: {0:?}")]
+    AmbiguousMove(String),
+    #[error("missing promotion piece type: {0:?}")]
+    MissingPromotion(String),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum MoveParseError {
     #[error("invalid move length {0}")]
