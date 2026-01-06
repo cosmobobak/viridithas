@@ -13,6 +13,9 @@ mod datagen;
 #[cfg(feature = "stats")]
 pub mod stats;
 
+#[cfg(feature = "numa")]
+mod numa;
+
 mod bench;
 mod chess;
 mod cli;
