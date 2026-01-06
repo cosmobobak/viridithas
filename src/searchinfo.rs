@@ -241,7 +241,11 @@ mod tests {
         let (value, mov) = search_position(&pool, array::from_mut(&mut t));
 
         assert!(matches!(
-            t.board.san(mov.unwrap()).as_deref(),
+            t.board
+                .san(mov.unwrap())
+                .as_ref()
+                .map(ToString::to_string)
+                .as_deref(),
             Some("Bxd5+")
         ));
         assert_eq!(value, mate_in(3)); // 3 ply because we're mating.
@@ -274,7 +278,14 @@ mod tests {
         t.info.clock = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let (value, mov) = search_position(&pool, array::from_mut(&mut t));
 
-        assert!(matches!(t.board.san(mov.unwrap()).as_deref(), Some("Qxd5")));
+        assert!(matches!(
+            t.board
+                .san(mov.unwrap())
+                .as_ref()
+                .map(ToString::to_string)
+                .as_deref(),
+            Some("Qxd5")
+        ));
         assert_eq!(value, mate_in(4)); // 4 ply (and positive) because white mates but it's black's turn.
 
         drop(guard);
@@ -305,7 +316,14 @@ mod tests {
         t.info.clock = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let (value, mov) = search_position(&pool, array::from_mut(&mut t));
 
-        assert!(matches!(t.board.san(mov.unwrap()).as_deref(), Some("Qxd4")));
+        assert!(matches!(
+            t.board
+                .san(mov.unwrap())
+                .as_ref()
+                .map(ToString::to_string)
+                .as_deref(),
+            Some("Qxd4")
+        ));
         assert_eq!(value, -mate_in(4)); // 4 ply (and negative) because black mates but it's white's turn.
 
         drop(guard);
@@ -337,7 +355,11 @@ mod tests {
         let (value, mov) = search_position(&pool, array::from_mut(&mut t));
 
         assert!(matches!(
-            t.board.san(mov.unwrap()).as_deref(),
+            t.board
+                .san(mov.unwrap())
+                .as_ref()
+                .map(ToString::to_string)
+                .as_deref(),
             Some("Bxd4+")
         ));
         assert_eq!(value, -mate_in(3)); // 3 ply because we're mating.
