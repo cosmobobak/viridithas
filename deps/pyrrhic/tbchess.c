@@ -22,6 +22,8 @@
  * SOFTWARE.
  */
 
+#include <stdbool.h>
+#include <stdint.h>
 enum {
 
     PYRRHIC_PAWN    = 1, PYRRHIC_KNIGHT  = 2,
@@ -36,9 +38,9 @@ enum {
     PYRRHIC_WKING   = 6, PYRRHIC_BKING   = 14,
 };
 
-enum {
+enum : uint64_t {
 
-    PYRRHIC_PROMOSQS      = 0XFF000000000000FFULL,
+    PYRRHIC_PROMOSQS      = 0xFF000000000000FFULL,
 
     PYRRHIC_PRIME_WKING   = 00000000000000000000ULL,
     PYRRHIC_PRIME_WQUEEN  = 11811845319353239651ULL,
