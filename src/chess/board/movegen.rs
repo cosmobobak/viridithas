@@ -956,14 +956,14 @@ pub fn synced_perft(pos: &mut Board, depth: usize) -> u64 {
         {
             let mut mvs = Vec::new();
             for m in full_moves_vec {
-                mvs.push(pos.san(m.mov).unwrap());
+                mvs.push(pos.san(m.mov).unwrap().to_string());
             }
             mvs.join(", ")
         },
         {
             let mut mvs = Vec::new();
             for m in staged_moves_vec {
-                mvs.push(pos.san(m.mov).unwrap());
+                mvs.push(pos.san(m.mov).unwrap().to_string());
             }
             mvs.join(", ")
         }

@@ -294,7 +294,14 @@ mod tests {
         t.info.clock = TimeManager::default_with_limit(SearchLimit::Depth(16));
         let (value, mov) = search_position(&pool, std::array::from_mut(&mut t));
 
-        assert!(matches!(t.board.san(mov.unwrap()).as_deref(), Some("Qxb5")));
+        assert!(matches!(
+            t.board
+                .san(mov.unwrap())
+                .as_ref()
+                .map(ToString::to_string)
+                .as_deref(),
+            Some("Qxb5")
+        ));
         assert!(value >= MINIMUM_TB_WIN_SCORE);
     }
 
@@ -326,7 +333,14 @@ mod tests {
         t.info.clock = TimeManager::default_with_limit(SearchLimit::Depth(10));
         let (value, mov) = search_position(&pool, std::array::from_mut(&mut t));
 
-        assert!(matches!(t.board.san(mov.unwrap()).as_deref(), Some("Qxa3")));
+        assert!(matches!(
+            t.board
+                .san(mov.unwrap())
+                .as_ref()
+                .map(ToString::to_string)
+                .as_deref(),
+            Some("Qxa3")
+        ));
         assert!(value >= MINIMUM_TB_WIN_SCORE);
     }
 }
