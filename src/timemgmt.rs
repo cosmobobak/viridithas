@@ -10,7 +10,10 @@ use crate::{
     transpositiontable::Bound,
 };
 
+/// A buffer to account for communication between the engine and the client.
 const MOVE_OVERHEAD: u64 = 30;
+/// The fraction per mille that we are ever allowed to use of the bank.
+const MAX_BANK_USABLE: u64 = 600;
 
 pub const STRONG_FORCED_TM_FRAC: u32 = 386;
 pub const WEAK_FORCED_TM_FRAC: u32 = 627;
@@ -98,7 +101,7 @@ impl SearchLimit {
     ) -> (u64, u64, u64) {
         // The very highest amount of time we are
         // willing to search in a position, ever.
-        let max_time = (our_clock * 95 / 100).saturating_sub(MOVE_OVERHEAD);
+        let max_time = (our_clock * MAX_BANK_USABLE / 1000).saturating_sub(MOVE_OVERHEAD);
 
         // The maximum time we can spend searching before forcibly stopping:
         let hard_time_window = (our_clock * u64::from(conf.hard_window_frac) / 100).min(max_time);

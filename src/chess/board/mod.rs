@@ -1,4 +1,5 @@
 pub mod movegen;
+mod san;
 pub mod validation;
 
 use std::{
@@ -1078,95 +1079,39 @@ impl Board {
             .ok_or_else(|| IllegalMove(uci.to_string()))
     }
 
-    pub fn san(&mut self, m: Move) -> Option<String> {
-        let check_char = match self.gives(m) {
-            CheckState::None => "",
-            CheckState::Check => "+",
-            CheckState::Checkmate => "#",
-        };
-        if m.is_castle() {
-            match () {
-                () if m.to() > m.from() => return Some(format!("O-O{check_char}")),
-                () if m.to() < m.from() => return Some(format!("O-O-O{check_char}")),
-                () => unreachable!(),
-            }
-        }
-        let to_sq = m.to();
-        let moved_piece = self.state.mailbox[m.from()]?;
-        let is_capture = self.is_capture(m)
-            || (moved_piece.piece_type() == PieceType::Pawn && Some(to_sq) == self.state.ep_square);
-        let piece_prefix = match moved_piece.piece_type() {
-            PieceType::Pawn if !is_capture => "",
-            PieceType::Pawn => &"abcdefgh"[m.from().file() as usize..=m.from().file() as usize],
-            PieceType::Knight => "N",
-            PieceType::Bishop => "B",
-            PieceType::Rook => "R",
-            PieceType::Queen => "Q",
-            PieceType::King => "K",
-        };
-        let possible_ambiguous_attackers = if moved_piece.piece_type() == PieceType::Pawn {
-            SquareSet::EMPTY
-        } else {
-            movegen::attacks_by_type(moved_piece.piece_type(), to_sq, self.state.bbs.occupied())
-                & self.state.bbs.piece_bb(moved_piece)
-        };
-        let needs_disambiguation =
-            possible_ambiguous_attackers.count() > 1 && moved_piece.piece_type() != PieceType::Pawn;
-        let from_file = SquareSet::FILES[m.from().file()];
-        let from_rank = SquareSet::RANKS[m.from().rank()];
-        let can_be_disambiguated_by_file = (possible_ambiguous_attackers & from_file).count() == 1;
-        let can_be_disambiguated_by_rank = (possible_ambiguous_attackers & from_rank).count() == 1;
-        let needs_both = !can_be_disambiguated_by_file && !can_be_disambiguated_by_rank;
-        let must_be_disambiguated_by_file = needs_both || can_be_disambiguated_by_file;
-        let must_be_disambiguated_by_rank =
-            needs_both || (can_be_disambiguated_by_rank && !can_be_disambiguated_by_file);
-        let disambiguator1 = if needs_disambiguation && must_be_disambiguated_by_file {
-            &"abcdefgh"[m.from().file() as usize..=m.from().file() as usize]
-        } else {
-            ""
-        };
-        let disambiguator2 = if needs_disambiguation && must_be_disambiguated_by_rank {
-            &"12345678"[m.from().rank() as usize..=m.from().rank() as usize]
-        } else {
-            ""
-        };
-        let capture_sigil = if is_capture { "x" } else { "" };
-        let promo_str = match m.promotion_type() {
-            Some(PieceType::Knight) => "=N",
-            Some(PieceType::Bishop) => "=B",
-            Some(PieceType::Rook) => "=R",
-            Some(PieceType::Queen) => "=Q",
-            None => "",
-            _ => unreachable!(),
-        };
-        let san = format!(
-            "{piece_prefix}{disambiguator1}{disambiguator2}{capture_sigil}{to_sq}{promo_str}{check_char}"
-        );
-        Some(san)
-    }
-
-    pub fn gives(&mut self, m: Move) -> CheckState {
+    pub fn gives(&self, m: Move) -> CheckState {
         debug_assert!(self.is_pseudo_legal(m));
         debug_assert!(self.is_legal(m));
-        self.make_move_simple(m);
-        let gives_check = self.in_check();
+        let Self {
+            state,
+            side,
+            ply,
+            height,
+            ..
+        } = self;
+        let mut playout = Self {
+            state: state.clone(),
+            side: *side,
+            ply: *ply,
+            height: *height,
+            history: Vec::new(),
+        };
+        playout.make_move_simple(m);
+        let gives_check = playout.in_check();
         if gives_check {
             let mut ml = MoveList::new();
-            self.generate_moves(&mut ml);
+            playout.generate_moves(&mut ml);
             for &m in ml.iter_moves() {
-                if !self.is_legal(m) {
+                if !playout.is_legal(m) {
                     continue;
                 }
                 // we found a legal move, so m does not give checkmate.
-                self.unmake_move_base();
                 return CheckState::Check;
             }
             // we didn't return, so there were no legal moves,
             // so m gives checkmate.
-            self.unmake_move_base();
             return CheckState::Checkmate;
         }
-        self.unmake_move_base();
         CheckState::None
     }
 
@@ -1209,7 +1154,7 @@ impl Board {
         let mut playout = self.clone();
         let mut out = String::new();
         for &m in pv.moves() {
-            let san = playout.san(m).unwrap_or_else(|| "???".to_string());
+            let san = playout.san(m).expect("illegal move in PV");
             write!(out, "{san} ")?;
             playout.make_move_simple(m);
         }
