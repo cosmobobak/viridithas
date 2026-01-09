@@ -1454,7 +1454,7 @@ impl std::fmt::UpperHex for Board {
         }
 
         writeln!(f, "  a b c d e f g h")?;
-        writeln!(f, "FEN: {self}")?;
+        write!(f, "FEN: {self}")?;
 
         Ok(())
     }
