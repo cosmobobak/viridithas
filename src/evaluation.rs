@@ -255,5 +255,12 @@ pub fn eval_stats(input: &Path, histogram_output: Option<&Path>) -> anyhow::Resu
         println!("\nHISTOGRAM RECORDED TO {}", output_path.display());
     }
 
+    #[cfg(feature = "ft-record")]
+    crate::nnue::network::layers::FT_OUTPUT_FILE
+        .lock()
+        .unwrap()
+        .flush()
+        .unwrap();
+
     Ok(())
 }

@@ -16,6 +16,15 @@ pub static NNZ_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::Atomic
 #[cfg(feature = "nnz-counts")]
 pub static NNZ_DENOM: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
+#[cfg(feature = "ft-record")]
+pub static FT_OUTPUT_FILE: std::sync::LazyLock<
+    std::sync::Mutex<std::io::BufWriter<std::fs::File>>,
+> = std::sync::LazyLock::new(|| {
+    let f = std::fs::File::create("embeddings.bin").unwrap();
+    let w = std::io::BufWriter::new(f);
+    std::sync::Mutex::new(w)
+});
+
 #[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
 mod generic {
     use super::{
@@ -366,6 +375,20 @@ mod simd {
                         }
                     }
                 }
+            }
+
+            #[cfg(feature = "ft-record")]
+            {
+                use std::io::Write;
+
+                let ptr = util::from_ref(&ft_outputs);
+                let ft_outputs = &*ptr.cast::<[u8; L1_SIZE]>();
+
+                super::FT_OUTPUT_FILE
+                    .lock()
+                    .unwrap()
+                    .write_all(ft_outputs)
+                    .unwrap();
             }
 
             propagate_l1(&ft_outputs, nnz_slice, weights, biases, output);
