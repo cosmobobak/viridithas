@@ -498,7 +498,8 @@ mod simd {
                 simd::store_i32(acc.as_mut_ptr().add(k * F32_CHUNK), res);
             }
 
-            // hard-swish activation
+            // Hard-Swish activation
+            // act(x) = x · clamp(x + k/2, 0, k) / k
             let zero = simd::zero_f32();
             let k = simd::splat_f32(SWISH_K);
             let inv_k = simd::splat_f32(1.0 / SWISH_K);
@@ -548,7 +549,8 @@ mod simd {
                 }
             }
 
-            // squared clipped ReLU activation
+            // Hard-Swish activation
+            // act(x) = x · clamp(x + k/2, 0, k) / k
             let zero = simd::zero_f32();
             let k = simd::splat_f32(SWISH_K);
             let inv_k = simd::splat_f32(1.0 / SWISH_K);
