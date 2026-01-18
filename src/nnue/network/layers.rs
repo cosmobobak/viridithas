@@ -11,6 +11,8 @@ const FT_SHIFT: u32 = 9;
 #[allow(clippy::cast_precision_loss)]
 const L1_MUL: f32 = (1 << FT_SHIFT) as f32 / (QA as i32 * QA as i32 * QB as i32) as f32;
 
+const SWISH_K: f32 = 1.0;
+
 #[cfg(feature = "nnz-counts")]
 pub static NNZ_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 #[cfg(feature = "nnz-counts")]
@@ -185,7 +187,7 @@ mod simd {
         nnue::{
             network::{
                 Align64, L1_CHUNK_PER_32, L1_SIZE, L2_SIZE, L3_SIZE, QA,
-                layers::{AVX512CHUNK, FT_SHIFT, L1_MUL},
+                layers::{AVX512CHUNK, FT_SHIFT, L1_MUL, SWISH_K},
             },
             simd::{self, F32_CHUNK, I16_CHUNK, S, U8_CHUNK, VecI32},
         },
@@ -496,9 +498,11 @@ mod simd {
                 simd::store_i32(acc.as_mut_ptr().add(k * F32_CHUNK), res);
             }
 
-            // squared clipped ReLU activation
+            // hard-swish activation
             let zero = simd::zero_f32();
-            let one = simd::splat_f32(1.0);
+            let k = simd::splat_f32(SWISH_K);
+            let inv_k = simd::splat_f32(1.0 / SWISH_K);
+            let half_k = simd::splat_f32(SWISH_K / 2.0);
             let sum_mul = simd::splat_f32(L1_MUL);
             for i in 0..L2_SIZE / F32_CHUNK {
                 // convert i32 to f32, multiplying by the quantisation constant
@@ -506,9 +510,10 @@ mod simd {
                 let unscaled = simd::i32_to_f32(simd::load_i32(acc.as_ptr().add(i * F32_CHUNK)));
                 let preact = simd::madd_f32(unscaled, sum_mul, bias);
                 // activate
-                let clipped = simd::min_f32(simd::max_f32(preact, zero), one);
-                let squared = simd::mul_f32(clipped, clipped);
-                simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK), squared);
+                let gate = simd::min_f32(simd::max_f32(simd::add_f32(preact, half_k), zero), k);
+                let act = simd::mul_f32(preact, gate);
+                let act = simd::mul_f32(act, inv_k);
+                simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK), act);
             }
         }
     }
@@ -545,12 +550,15 @@ mod simd {
 
             // squared clipped ReLU activation
             let zero = simd::zero_f32();
-            let one = simd::splat_f32(1.0);
+            let k = simd::splat_f32(SWISH_K);
+            let inv_k = simd::splat_f32(1.0 / SWISH_K);
+            let half_k = simd::splat_f32(SWISH_K / 2.0);
             for i in 0..L3_SIZE / F32_CHUNK {
-                let acc = simd::load_f32(sums.as_ptr().add(i * F32_CHUNK));
-                let clipped = simd::min_f32(simd::max_f32(acc, zero), one);
-                let squared = simd::mul_f32(clipped, clipped);
-                simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK), squared);
+                let preact = simd::load_f32(sums.as_ptr().add(i * F32_CHUNK));
+                let gate = simd::min_f32(simd::max_f32(simd::add_f32(preact, half_k), zero), k);
+                let act = simd::mul_f32(preact, gate);
+                let act = simd::mul_f32(act, inv_k);
+                simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK), act);
             }
         }
     }
