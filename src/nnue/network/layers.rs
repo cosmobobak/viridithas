@@ -11,7 +11,7 @@ const FT_SHIFT: u32 = 9;
 #[allow(clippy::cast_precision_loss)]
 const L1_MUL: f32 = (1 << FT_SHIFT) as f32 / (QA as i32 * QA as i32 * QB as i32) as f32;
 
-const SWISH_K: f32 = 1.0;
+const SWISH_K: f32 = 6.0;
 
 #[cfg(feature = "nnz-counts")]
 pub static NNZ_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
