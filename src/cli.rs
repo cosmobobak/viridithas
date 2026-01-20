@@ -58,6 +58,9 @@ pub enum Subcommands {
         /// Optional path to output histogram data.
         #[clap(short, long)]
         output: Option<PathBuf>,
+        /// Only emit data for a particular output bucket index.
+        #[clap(short, long)]
+        bucket: Option<usize>,
     },
     /// Count the number of positions contained within one or more packed game records.
     #[cfg(feature = "datagen")]
