@@ -1636,12 +1636,13 @@ pub fn alpha_beta<NT: NodeType>(
         );
         // if we're not in check, and we don't have a tactical best-move,
         // and the static eval needs moving in a direction, then update corrhist.
+        let fresh_eval = adj_shuffle(t, raw_eval, clock) + t.correction();
         if !(in_check
             || best_move.is_some_and(|m| t.board.is_tactical(m))
-            || flag == Bound::Lower && best_score <= static_eval
-            || flag == Bound::Upper && best_score >= static_eval)
+            || flag == Bound::Lower && best_score <= fresh_eval
+            || flag == Bound::Upper && best_score >= fresh_eval)
         {
-            t.update_correction_history(depth, tt_complexity, best_score - static_eval);
+            t.update_correction_history(depth, tt_complexity, best_score - fresh_eval);
         }
         t.tt.store(
             key,
