@@ -113,12 +113,12 @@ pub fn dump_and_plot() {
 
     // Build JSON output
     let mut json = String::from("[\n");
-    for (i, tv) in TRACKED_VALUES.iter().enumerate() {
+    for (i, tv) in TRACKED_VALUES
+        .iter()
+        .filter(|tv| tv.count.load(Ordering::Relaxed) != 0)
+        .enumerate()
+    {
         let count = tv.count.load(Ordering::Relaxed);
-        if count == 0 {
-            continue;
-        }
-
         let total = tv.total.load(Ordering::Relaxed);
         let total_abs = tv.total_abs.load(Ordering::Relaxed);
         let total_sq = tv.total_sq.load(Ordering::Relaxed);

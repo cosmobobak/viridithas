@@ -30,6 +30,7 @@ datagen = [
 ]
 zstd = ["dep:zstd"]
 final-release = ["zstd", "bindgen", "syzygy"]
+ft-record = []
 
 [build-dependencies]
 cc = { version = "1.2.6", optional = true }
