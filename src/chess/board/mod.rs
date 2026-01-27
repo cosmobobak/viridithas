@@ -430,8 +430,8 @@ impl Board {
     }
 
     #[cfg(test)]
-    pub fn from_quick(record: &str) -> Result<Self, crate::chess::quick::QuickParseError> {
-        let parsed = crate::chess::quick::Quick::parse(record.trim_ascii())?;
+    pub fn from_quick(record: &str) -> Result<Self, crate::errors::QuickParseError> {
+        let parsed = Quick::parse(record.trim_ascii())?;
         let mut out = Self::empty();
         out.set_from_quick(&parsed);
         Ok(out)

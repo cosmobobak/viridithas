@@ -40,6 +40,22 @@ pub enum MoveParseError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum QuickParseError {
+    #[error("invalid length {0}")]
+    InvalidLength(usize),
+    #[error("invalid annotation")]
+    InvalidAnnotation,
+    #[error("invalid outcome")]
+    InvalidOutcome,
+    #[error("invalid miscellania")]
+    InvalidMiscellania,
+    #[error("collision at square {0}")]
+    DuplicateLocation(u8),
+    #[error("invalid variable piece")]
+    InvalidVariable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum FenParseError {
     #[error("FEN string is missing board part")]
     MissingBoard,
