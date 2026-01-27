@@ -9,7 +9,7 @@ keywords = ["chess", "treesearch"]
 categories = ["games"]
 repository = "https://github.com/cosmobobak/viridithas"
 authors = ["Cosmo Bobak (cosmobobak@gmail.com)"]
-rust-version = "1.89.0"
+rust-version = "1.93.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

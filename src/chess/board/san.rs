@@ -108,6 +108,7 @@ impl Board {
     /// variations are also accepted.
     ///
     /// The returned move is guaranteed to be legal.
+    #[expect(clippy::too_many_lines)]
     pub fn parse_san(&self, san: &str) -> Result<Move, SanError> {
         let san = san.trim();
 

@@ -54,7 +54,7 @@ pub fn init(syzygy_path: &str) {
 
 /// Gets maximal pieces count supported by loaded Syzygy tablebases. Returns 0 if the feature is disabled.
 pub fn get_max_pieces_count() -> u8 {
-    #![allow(clippy::cast_possible_truncation)]
+    #![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     #[cfg(feature = "syzygy")]
     {
         let user_limit = uci::SYZYGY_PROBE_LIMIT.load(std::sync::atomic::Ordering::Relaxed);
@@ -80,7 +80,7 @@ pub fn get_wdl(board: &Board) -> Option<WDL> {
     #[cfg(feature = "syzygy")]
     unsafe {
         let b = &board.state.bbs;
-        let ep = board.ep_sq().map_or(0, |sq| sq.index() as u32);
+        let ep = board.ep_sq().map_or(0, |sq| sq as u32);
         let wdl = tb_probe_wdl(
             b.colours[Colour::White].inner(),
             b.colours[Colour::Black].inner(),
@@ -94,14 +94,12 @@ pub fn get_wdl(board: &Board) -> Option<WDL> {
             board.turn() == Colour::White,
         );
 
-        let result = match wdl {
+        match wdl {
             TB_WIN => Some(WDL::Win),
             TB_LOSS => Some(WDL::Loss),
             TB_DRAW | TB_CURSED_WIN | TB_BLESSED_LOSS => Some(WDL::Draw),
             _ => None,
-        };
-
-        result
+        }
     }
     #[cfg(not(feature = "syzygy"))]
     None
@@ -117,7 +115,7 @@ pub fn get_root_wdl_dtz(board: &Board) -> Option<WdlDtzResult> {
     #[cfg(feature = "syzygy")]
     unsafe {
         let b = &board.state.bbs;
-        let ep = board.ep_sq().map_or(0, |sq| sq.index() as u32);
+        let ep = board.ep_sq().map_or(0, |sq| sq as u32);
         let result = tb_probe_root(
             b.colours[Colour::White].inner(),
             b.colours[Colour::Black].inner(),
