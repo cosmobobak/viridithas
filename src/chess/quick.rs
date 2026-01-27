@@ -112,10 +112,10 @@ impl Quick {
         }
 
         let rights = CastlingRights::new(
-            if misc & 1 != 0 { Some(File::H) } else { None }, // white_kingside
-            if misc & 2 != 0 { Some(File::A) } else { None }, // white_queenside
-            if misc & 4 != 0 { Some(File::H) } else { None }, // black_kingside
-            if misc & 8 != 0 { Some(File::A) } else { None }, // black_queenside
+            (misc & 1 != 0).then_some(File::H), // white_kingside
+            (misc & 2 != 0).then_some(File::A), // white_queenside
+            (misc & 4 != 0).then_some(File::H), // black_kingside
+            (misc & 8 != 0).then_some(File::A), // black_queenside
         );
 
         // TODO check that the castling rights are set properly
