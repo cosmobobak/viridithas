@@ -4,7 +4,7 @@ use std::str::ParseBoolError;
 use thiserror::Error;
 
 use crate::chess::piece::Colour;
-use crate::chess::types::Rank;
+use crate::chess::types::{Rank, Square};
 
 /// Errors that can occur when parsing SAN (Standard Algebraic Notation) moves.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -50,7 +50,7 @@ pub enum QuickParseError {
     #[error("invalid miscellania")]
     InvalidMiscellania,
     #[error("collision at square {0}")]
-    DuplicateLocation(u8),
+    DuplicateLocation(Square),
     #[error("invalid variable piece")]
     InvalidVariable,
 }

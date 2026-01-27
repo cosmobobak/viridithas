@@ -9,6 +9,7 @@ use crate::{
     errors::QuickParseError,
 };
 
+/// A successfully-parsed quick format position.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Quick {
     pub board: PieceLayout,
@@ -126,17 +127,17 @@ impl Quick {
 
         let mut layout = PieceLayout::default();
 
-        for side in 0..2 {
-            let colour = [Colour::White, Colour::Black][side];
+        for colour in Colour::all() {
             for offset in 0..16 {
-                let location = decode(ary[4 + side * 16 + offset]);
-                if let Some(square) = Square::new(location) {
-                    if layout.occupied().contains_square(square) {
-                        return Err(QuickParseError::DuplicateLocation(location));
-                    }
-                    let piece = Piece::new(colour, PIECETYPE[offset]);
-                    layout.set_piece_at(square, piece);
+                let location = decode(ary[4 + colour.index() * 16 + offset]);
+                let Some(square) = Square::new(location) else {
+                    continue;
+                };
+                if layout.occupied().contains_square(square) {
+                    return Err(QuickParseError::DuplicateLocation(square));
                 }
+                let piece = Piece::new(colour, PIECETYPE[offset]);
+                layout.set_piece_at(square, piece);
             }
         }
 
@@ -149,7 +150,7 @@ impl Quick {
                 continue;
             };
             if layout.occupied().contains_square(square) {
-                return Err(QuickParseError::DuplicateLocation(location));
+                return Err(QuickParseError::DuplicateLocation(square));
             }
             let colour = match piece_u8 & 8 {
                 0 => Colour::White,
@@ -185,7 +186,7 @@ fn decode(c: u8) -> u8 {
 }
 
 #[rustfmt::skip]
-static DECODE : [u8; 256] = [
+static DECODE: [u8; 256] = [
   255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
   255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
   255, 255, 255, 255,  63, 255,  62, 255, 255, 255, 255, 255, 255, 255, 255, 255,
