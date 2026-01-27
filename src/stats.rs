@@ -5,7 +5,7 @@
 //! Enabled only with the `stats` feature.
 
 use std::{
-    io::Write,
+    fmt::Write,
     process::{Command, Stdio},
     sync::atomic::{AtomicI64, AtomicU64, Ordering},
 };
@@ -40,7 +40,6 @@ impl TrackedValue {
     #[must_use]
     pub const fn new(name: &'static str) -> Self {
         // can't use array::from_fn in const context :(
-        const ZERO: AtomicU64 = AtomicU64::new(0);
         Self {
             name,
             count: AtomicU64::new(0),
@@ -49,7 +48,7 @@ impl TrackedValue {
             total_sq: AtomicU64::new(0),
             min: AtomicI64::new(i64::MAX),
             max: AtomicI64::new(i64::MIN),
-            histogram: [ZERO; NUM_BUCKETS],
+            histogram: [const { AtomicU64::new(0) }; NUM_BUCKETS],
         }
     }
 
@@ -131,7 +130,7 @@ pub fn dump_and_plot() {
         #[allow(clippy::cast_precision_loss)]
         let avg_abs = total_abs as f64 / count as f64;
         #[allow(clippy::cast_precision_loss)]
-        let variance = (total_sq as f64 / count as f64) - (avg * avg);
+        let variance = avg.mul_add(-avg, total_sq as f64 / count as f64);
         let stddev = variance.max(0.0).sqrt();
 
         // collect histogram
@@ -144,7 +143,8 @@ pub fn dump_and_plot() {
         if i > 0 {
             json.push_str(",\n");
         }
-        json.push_str(&format!(
+        write!(
+            json,
             r#"  {{
     "name": {:?},
     "count": {count},
@@ -157,7 +157,8 @@ pub fn dump_and_plot() {
     "histogram": {histogram:?}
   }}"#,
             tv.name
-        ));
+        )
+        .unwrap();
     }
     json.push_str("\n]\n");
 
@@ -171,7 +172,7 @@ pub fn dump_and_plot() {
     match result {
         Ok(mut child) => {
             if let Some(mut stdin) = child.stdin.take() {
-                let _ = stdin.write_all(json.as_bytes());
+                let _ = std::io::Write::write_all(&mut stdin, json.as_bytes());
             }
 
             let _ = child.wait();

@@ -29,6 +29,7 @@ use crate::{
         },
         fen::Fen,
         piece::Colour,
+        quick::Quick,
     },
     cuckoo,
     errors::{GoParseError, PerftParseError, PositionParseError, SetOptionParseError, UciError},
@@ -295,6 +296,13 @@ pub fn main_loop() -> Result<(), UciError> {
                                 t.board.zero_height();
                             }
                         }
+                        t.board.zero_height();
+                        t.nnue.reinit_from(&t.board, t.nnue_params);
+                    }
+                    Ok(())
+                } else if let Ok(quick) = Quick::parse(command) {
+                    for t in &mut thread_data {
+                        t.board.set_from_quick(&quick);
                         t.board.zero_height();
                         t.nnue.reinit_from(&t.board, t.nnue_params);
                     }
