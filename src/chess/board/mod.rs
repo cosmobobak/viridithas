@@ -1736,13 +1736,10 @@ mod tests {
 
     #[test]
     fn quick_sanity_check() {
-        use crate::chess::{board::Board, quick::Quick};
+        use crate::chess::board::Board;
 
-        let text = "RxlGB:R:::::9GK:::::Dk::::::O:::::::::::";
-        let quick = Quick::parse(text).unwrap();
-        let board = Board::from_quick(text).unwrap();
+        let board = Board::from_quick("RxlGB:R:::::9GK:::::Dk::::::O:::::::::::").unwrap();
 
-        drop(quick);
-        drop(board);
+        assert_eq!(board.to_string(), "8/8/6q1/8/p2R4/P3P3/1P1K1k2/8 b - - 0 1");
     }
 }
