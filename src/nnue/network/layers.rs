@@ -91,7 +91,8 @@ mod generic {
             // SAFETY: `sums` is `L2_SIZE` long, and `output` is `L2_SIZE` long.
             // As such, the indices that we construct are valid.
             unsafe {
-                let preact = (*sums.get_unchecked(i) as f32).mul_add(L1_MUL, *biases.get_unchecked(i));
+                let preact =
+                    (*sums.get_unchecked(i) as f32).mul_add(L1_MUL, *biases.get_unchecked(i));
                 let clamped = f32::clamp(preact + SWISH_K / 2.0, 0.0, SWISH_K);
                 *output.get_unchecked_mut(i) = preact * clamped / SWISH_K;
             }
@@ -188,7 +189,7 @@ mod simd {
     use crate::{
         nnue::{
             network::{
-                Align64, L1_CHUNK_PER_32, L1_SIZE, L2_SIZE, L3_SIZE, QA,
+                Align64, L1_CHUNK_PER_32, L1_SIZE, L2_SIZE, L3_SIZE, L4_SIZE, QA,
                 layers::{AVX512CHUNK, FT_SHIFT, L1_MUL, SWISH_K},
             },
             simd::{self, F32_CHUNK, I16_CHUNK, S, U8_CHUNK, VecI32},
@@ -571,7 +572,57 @@ mod simd {
         }
     }
 
+    #[allow(clippy::needless_range_loop, clippy::cast_ptr_alignment)]
     pub fn propagate_l3(
+        inputs: &Align64<[f32; L3_SIZE]>,
+        weights: &Align64<[f32; L3_SIZE * L4_SIZE * 2]>,
+        biases: &Align64<[f32; L4_SIZE * 2]>,
+        output: &mut Align64<[f32; L4_SIZE]>,
+    ) {
+        // SAFETY: Breaking it down by unsafe operations:
+        // 1. get_unchecked[_mut] / .as[_mut]_ptr().add(): We only ever index at most (L4_SIZE * 2 / F32_CHUNK - 1) * F32_CHUNK
+        // into the `sums` and `biases` arrays. This is in bounds, as `sums` has length L4_SIZE * 2 and
+        // `biases` has length L4_SIZE * 2. We only ever index at most
+        // (L3_SIZE - 1) * L4_SIZE * 2 + (L4_SIZE * 2 / F32_CHUNK - 1) * F32_CHUNK
+        // into the `weights` array. This is in bounds, as `weights` has length L3_SIZE * L4_SIZE * 2.
+        // We only ever index at most L3_SIZE - 1 into the `inputs` array. This is in bounds, as `inputs`
+        // has length L3_SIZE. In the activation loop, we index at most (L4_SIZE / F32_CHUNK - 1) * F32_CHUNK + L4_SIZE
+        // into `sums`, which is in bounds as `sums` has length L4_SIZE * 2.
+        // 2. SIMD instructions: All of our loads and stores are aligned.
+        unsafe {
+            let mut sums = biases.clone();
+
+            // affine transform
+            for i in 0..L3_SIZE {
+                let activation = simd::splat_f32(*inputs.get_unchecked(i));
+                for j in 0..L4_SIZE * 2 / F32_CHUNK {
+                    let acc = simd::load_f32(sums.as_ptr().add(j * F32_CHUNK));
+                    let weight =
+                        simd::load_f32(weights.as_ptr().add(i * L4_SIZE * 2 + j * F32_CHUNK));
+                    let res = simd::madd_f32(activation, weight, acc);
+                    simd::store_f32(sums.as_mut_ptr().add(j * F32_CHUNK), res);
+                }
+            }
+
+            // SwiGLU activation
+            // act(x) = HardSwish6(x1) * x2
+            let zero = simd::zero_f32();
+            let k = simd::splat_f32(SWISH_K);
+            let inv_k = simd::splat_f32(1.0 / SWISH_K);
+            let half_k = simd::splat_f32(SWISH_K / 2.0);
+            for i in 0..L4_SIZE / F32_CHUNK {
+                let gate_preact = simd::load_f32(sums.as_ptr().add(i * F32_CHUNK));
+                let id_preact = simd::load_f32(sums.as_ptr().add(i * F32_CHUNK + L4_SIZE));
+                let clamped =
+                    simd::min_f32(simd::max_f32(simd::add_f32(gate_preact, half_k), zero), k);
+                let swish = simd::mul_f32(simd::mul_f32(gate_preact, clamped), inv_k);
+                let act = simd::mul_f32(swish, id_preact);
+                simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK), act);
+            }
+        }
+    }
+
+    pub fn propagate_l4(
         inputs: &Align64<[f32; L3_SIZE]>,
         weights: &Align64<[f32; L3_SIZE]>,
         bias: f32,
