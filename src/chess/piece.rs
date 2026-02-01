@@ -225,10 +225,6 @@ impl Piece {
         unsafe { PieceType::from_index_unchecked(pt_index) }
     }
 
-    pub const fn is_valuable(self) -> bool {
-        self.piece_type().legal_promo()
-    }
-
     pub const fn char(self) -> char {
         match self {
             Self::WP => 'P',
