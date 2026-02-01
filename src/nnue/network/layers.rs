@@ -91,7 +91,8 @@ mod generic {
             // SAFETY: `sums` is `L2_SIZE` long, and `output` is `L2_SIZE` long.
             // As such, the indices that we construct are valid.
             unsafe {
-                let preact = (*sums.get_unchecked(i) as f32).mul_add(L1_MUL, *biases.get_unchecked(i));
+                let preact =
+                    (*sums.get_unchecked(i) as f32).mul_add(L1_MUL, *biases.get_unchecked(i));
                 let clamped = f32::clamp(preact + SWISH_K / 2.0, 0.0, SWISH_K);
                 *output.get_unchecked_mut(i) = preact * clamped / SWISH_K;
             }
@@ -260,7 +261,7 @@ mod simd {
         them: &Align64<[i16; L1_SIZE]>,
         weights: &Align64<[i8; L1_SIZE * L2_SIZE]>,
         biases: &Align64<[f32; L2_SIZE]>,
-        output: &mut Align64<[f32; L2_SIZE]>,
+        output: &mut Align64<[f32; L2_SIZE * 2]>,
     ) {
         const L1_PAIR_COUNT: usize = L1_SIZE / 2;
         const NNZ_INPUT_SIMD_WIDTH: usize =
@@ -405,7 +406,7 @@ mod simd {
         nnz_slice: &[u16],
         weights: &Align64<[i8; L1_SIZE * L2_SIZE]>,
         biases: &Align64<[f32; L2_SIZE]>,
-        output: &mut Align64<[f32; L2_SIZE]>,
+        output: &mut Align64<[f32; L2_SIZE * 2]>,
     ) {
         const NUM_ACCS: usize = L2_SIZE / F32_CHUNK;
         // SAFETY: Breaking it down by unsafe operations:
@@ -517,14 +518,16 @@ mod simd {
                 let act = simd::mul_f32(preact, gate);
                 let act = simd::mul_f32(act, inv_k);
                 simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK), act);
+                // pass through as the identity, too
+                simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK + L2_SIZE), preact);
             }
         }
     }
 
     #[allow(clippy::needless_range_loop, clippy::cast_ptr_alignment)]
     pub fn propagate_l2(
-        inputs: &Align64<[f32; L2_SIZE]>,
-        weights: &Align64<[f32; L2_SIZE * L3_SIZE * 2]>,
+        inputs: &Align64<[f32; L2_SIZE * 2]>,
+        weights: &Align64<[f32; L2_SIZE * 2 * L3_SIZE * 2]>,
         biases: &Align64<[f32; L3_SIZE * 2]>,
         output: &mut Align64<[f32; L3_SIZE]>,
     ) {
@@ -542,7 +545,7 @@ mod simd {
             let mut sums = biases.clone();
 
             // affine transform
-            for i in 0..L2_SIZE {
+            for i in 0..L2_SIZE * 2 {
                 let activation = simd::splat_f32(*inputs.get_unchecked(i));
                 for j in 0..L3_SIZE * 2 / F32_CHUNK {
                     let acc = simd::load_f32(sums.as_ptr().add(j * F32_CHUNK));

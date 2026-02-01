@@ -120,8 +120,8 @@ struct UnquantisedNetwork {
     l0_biases:     [f32; L1_SIZE],
     l1_weights:  [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:    [[f32; L2_SIZE]; OUTPUT_BUCKETS],
-    l2x_weights: [[[f32; L3_SIZE * 2]; OUTPUT_BUCKETS]; L2_SIZE],
-    l2f_weights:  [[f32; L3_SIZE * 2]; L2_SIZE],
+    l2x_weights: [[[f32; L3_SIZE * 2]; OUTPUT_BUCKETS]; L2_SIZE * 2],
+    l2f_weights:  [[f32; L3_SIZE * 2]; L2_SIZE * 2],
     l2x_biases:   [[f32; L3_SIZE * 2]; OUTPUT_BUCKETS],
     l2f_biases:    [f32; L3_SIZE * 2],
     l3x_weights: [[[f32;   HEADS]; OUTPUT_BUCKETS]; L3_SIZE],
@@ -138,7 +138,7 @@ struct MergedNetwork {
     l0_biases:    [f32; L1_SIZE],
     l1_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
-    l2_weights: [[[f32; L3_SIZE * 2]; OUTPUT_BUCKETS]; L2_SIZE],
+    l2_weights: [[[f32; L3_SIZE * 2]; OUTPUT_BUCKETS]; L2_SIZE * 2],
     l2_biases:   [[f32; L3_SIZE * 2]; OUTPUT_BUCKETS],
     l3_weights: [[[f32;   HEADS]; OUTPUT_BUCKETS]; L3_SIZE],
     l3_biases:   [[f32;   HEADS]; OUTPUT_BUCKETS],
@@ -153,7 +153,7 @@ struct QuantisedNetwork {
     l0_biases:    [i16; L1_SIZE],
     l1_weights: [[[ i8; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
-    l2_weights: [[[f32; L3_SIZE * 2]; OUTPUT_BUCKETS]; L2_SIZE],
+    l2_weights: [[[f32; L3_SIZE * 2]; OUTPUT_BUCKETS]; L2_SIZE * 2],
     l2_biases:   [[f32; L3_SIZE * 2]; OUTPUT_BUCKETS],
     l3_weights: [[[f32;   HEADS]; OUTPUT_BUCKETS]; L3_SIZE],
     l3_biases:   [[f32;   HEADS]; OUTPUT_BUCKETS],
@@ -168,7 +168,7 @@ pub struct NNUEParams {
     pub l0_biases:    Align64<[i16; L1_SIZE]>,
     pub l1_weights:  [Align64<[ i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
     pub l1_bias:     [Align64<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
-    pub l2_weights:  [Align64<[f32; L2_SIZE * L3_SIZE * 2]>; OUTPUT_BUCKETS],
+    pub l2_weights:  [Align64<[f32; L2_SIZE * 2 * L3_SIZE * 2]>; OUTPUT_BUCKETS],
     pub l2_bias:     [Align64<[f32; L3_SIZE * 2]>; OUTPUT_BUCKETS],
     pub l3_weights: [[Align64<[f32; L3_SIZE]>; HEADS]; OUTPUT_BUCKETS],
     pub l3_bias:             [[f32; HEADS]; OUTPUT_BUCKETS],
@@ -309,7 +309,7 @@ impl UnquantisedNetwork {
             }
         }
         // copy the L2 weights
-        for i in 0..L2_SIZE {
+        for i in 0..L2_SIZE * 2 {
             for bucket in 0..OUTPUT_BUCKETS {
                 for j in 0..L3_SIZE * 2 {
                     net.l2_weights[i][bucket][j] =
@@ -643,7 +643,7 @@ impl QuantisedNetwork {
             }
 
             // transpose the L2 weights
-            for i in 0..L2_SIZE {
+            for i in 0..L2_SIZE * 2 {
                 for j in 0..L3_SIZE * 2 {
                     net.l2_weights[bucket][i * L3_SIZE * 2 + j] = self.l2_weights[i][bucket][j];
                 }
@@ -1527,7 +1527,7 @@ impl NNUEState {
             (&acc.black, &acc.white)
         };
 
-        let mut l1_outputs = Align64([0.0; L2_SIZE]);
+        let mut l1_outputs = Align64([0.0; L2_SIZE * 2]);
         let mut l2_outputs = Align64([0.0; L3_SIZE]);
 
         layers::activate_ft_and_propagate_l1(
