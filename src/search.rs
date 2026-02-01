@@ -1118,7 +1118,11 @@ pub fn alpha_beta<NT: NodeType>(
                 >= beta
             && !t.nmp_banned_for(t.board.turn())
             && t.board.zugzwang_unlikely()
-            && !matches!(tt_hit, Some(TTHit { value: v, bound: Bound::Upper, .. }) if v < beta)
+            // don't nmp when the tt thinks it’s worthless:
+            && !matches!(tt_hit, Some(TTHit { bound: Bound::Upper, value, .. }) if value < beta)
+            // don't nmp when we have a tt fail-high on an obvious capture:
+            && !matches!(tt_hit, Some(TTHit { bound: Bound::Lower, mov: Some(m), .. })
+                if t.board.estimated_see(&t.info.conf, m) > t.info.conf.see_pawn_value * 2)
         {
             t.tt.prefetch(t.board.key_after_null_move());
             let r = 4
