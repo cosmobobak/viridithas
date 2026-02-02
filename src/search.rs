@@ -91,6 +91,7 @@ const LMR_TTPV_MUL: i32 = 1289;
 const LMR_CUT_NODE_MUL: i32 = 1601;
 const LMR_NON_IMPROVING_MUL: i32 = 613;
 const LMR_TT_CAPTURE_MUL: i32 = 999;
+const LMR_TT_OBVIOUS_CAPTURE_MUL: i32 = 2048;
 const LMR_CHECK_MUL: i32 = 1361;
 const LMR_CORR_MUL: i32 = 448;
 const LMR_BASE_OFFSET: i32 = 226;
@@ -1457,6 +1458,10 @@ pub fn alpha_beta<NT: NodeType>(
             to: m.history_to_square(),
         };
 
+        let tt_capture_obvious = tt_capture.is_some_and(|c| {
+            static_exchange_eval(&t.board, &t.info.conf, c, t.info.conf.see_pawn_value * 4)
+        });
+
         t.board.make_move(m, &mut t.nnue);
 
         let mut score;
@@ -1484,6 +1489,8 @@ pub fn alpha_beta<NT: NodeType>(
                 r += i32::from(!improving) * t.info.conf.lmr_non_improving_mul;
                 // reduce more if the move from the transposition table is tactical
                 r += i32::from(tt_capture.is_some()) * t.info.conf.lmr_tt_capture_mul;
+                // reduce more in case of an obvious tt-capture
+                r += i32::from(tt_capture_obvious) * t.info.conf.lmr_tt_obvious_capture_mul;
                 // reduce less if the move gives check
                 r -= i32::from(t.board.in_check()) * t.info.conf.lmr_check_mul;
                 // reduce less when the static eval is way off-base
