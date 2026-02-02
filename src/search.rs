@@ -1302,6 +1302,10 @@ pub fn alpha_beta<NT: NodeType>(
     let mut quiets_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
     let mut tacticals_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
 
+    let tt_capture_obvious = tt_capture.is_some_and(|c| {
+        static_exchange_eval(&t.board, &t.info.conf, c, t.info.conf.see_pawn_value * 4)
+    });
+
     while let Some(m) = move_picker.next(t) {
         if excluded == Some(m) {
             continue;
@@ -1457,10 +1461,6 @@ pub fn alpha_beta<NT: NodeType>(
             piece: moved,
             to: m.history_to_square(),
         };
-
-        let tt_capture_obvious = tt_capture.is_some_and(|c| {
-            static_exchange_eval(&t.board, &t.info.conf, c, t.info.conf.see_pawn_value * 4)
-        });
 
         t.board.make_move(m, &mut t.nnue);
 
