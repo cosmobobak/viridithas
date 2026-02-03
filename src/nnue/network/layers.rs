@@ -11,8 +11,6 @@ const FT_SHIFT: u32 = 9;
 #[allow(clippy::cast_precision_loss)]
 const L1_MUL: f32 = (1 << FT_SHIFT) as f32 / (QA as i32 * QA as i32 * QB as i32) as f32;
 
-const SWISH_K: f32 = 6.0;
-
 #[cfg(feature = "nnz-counts")]
 pub static NNZ_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 #[cfg(feature = "nnz-counts")]
@@ -31,7 +29,7 @@ pub static FT_OUTPUT_FILE: std::sync::LazyLock<
 mod generic {
     use super::{
         super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA},
-        AVX512CHUNK, FT_SHIFT, L1_MUL, SWISH_K,
+        AVX512CHUNK, FT_SHIFT, L1_MUL,
     };
 
     #[allow(
@@ -65,6 +63,7 @@ mod generic {
         inputs: &Align64<[u8; L1_SIZE]>,
         weights: &Align64<[i8; L1_SIZE * L2_SIZE]>,
         biases: &Align64<[f32; L2_SIZE]>,
+        swish_beta: &Align64<[f32; L2_SIZE]>,
         output: &mut Align64<[f32; L2_SIZE]>,
     ) {
         // this is just autovec'd for the moment.
@@ -85,15 +84,16 @@ mod generic {
             }
         }
 
-        // Hard-Swish activation
-        // act(x) = x · clamp(x + k/2, 0, k) / k
+        // Rescalable Hard-Swish activation
+        // act(x) = x · clamp(x * beta + 0.5, 0, 1)
         for i in 0..L2_SIZE {
             // SAFETY: `sums` is `L2_SIZE` long, and `output` is `L2_SIZE` long.
             // As such, the indices that we construct are valid.
             unsafe {
                 let preact = (*sums.get_unchecked(i) as f32).mul_add(L1_MUL, *biases.get_unchecked(i));
-                let clamped = f32::clamp(preact + SWISH_K / 2.0, 0.0, SWISH_K);
-                *output.get_unchecked_mut(i) = preact * clamped / SWISH_K;
+                let beta = *swish_beta.get_unchecked(i);
+                let gate = f32::clamp(preact * beta + 0.5, 0.0, 1.0);
+                *output.get_unchecked_mut(i) = preact * gate;
             }
         }
     }
@@ -103,11 +103,12 @@ mod generic {
         them: &Align64<[i16; L1_SIZE]>,
         weights: &Align64<[i8; L1_SIZE * L2_SIZE]>,
         biases: &Align64<[f32; L2_SIZE]>,
+        swish_beta: &Align64<[f32; L2_SIZE]>,
         output: &mut Align64<[f32; L2_SIZE]>,
     ) {
         let mut ft_outputs = Align64([0; L1_SIZE]);
         activate_ft(us, them, &mut ft_outputs);
-        propagate_l1(&ft_outputs, weights, biases, output);
+        propagate_l1(&ft_outputs, weights, biases, swish_beta, output);
     }
 
     #[allow(clippy::needless_range_loop)]
@@ -115,6 +116,7 @@ mod generic {
         inputs: &Align64<[f32; L2_SIZE]>,
         weights: &Align64<[f32; L2_SIZE * L3_SIZE * 2]>,
         biases: &Align64<[f32; L3_SIZE * 2]>,
+        swish_beta: &Align64<[f32; L3_SIZE]>,
         output: &mut Align64<[f32; L3_SIZE]>,
     ) {
         // this is just autovec'd for the moment.
@@ -135,16 +137,17 @@ mod generic {
             }
         }
 
-        // SwiGLU activation
-        // act(x) = HardSwish6(gate) * id
+        // SwiGLU activation with rescalable hard swish
+        // act(x) = RescalableHardSwish(gate) * id
         for i in 0..L3_SIZE {
             // SAFETY: `sums` is `L3_SIZE * 2` long, and `output` is `L3_SIZE` long.
             // As such, the indices that we construct are valid.
             unsafe {
                 let gate_preact = *sums.get_unchecked(i);
                 let id_preact = *sums.get_unchecked(i + L3_SIZE);
-                let clamped = f32::clamp(gate_preact + SWISH_K / 2.0, 0.0, SWISH_K);
-                let swish = gate_preact * clamped / SWISH_K;
+                let beta = *swish_beta.get_unchecked(i);
+                let gate = f32::clamp(gate_preact * beta + 0.5, 0.0, 1.0);
+                let swish = gate_preact * gate;
                 *output.get_unchecked_mut(i) = swish * id_preact;
             }
         }
@@ -189,7 +192,7 @@ mod simd {
         nnue::{
             network::{
                 Align64, L1_CHUNK_PER_32, L1_SIZE, L2_SIZE, L3_SIZE, QA,
-                layers::{AVX512CHUNK, FT_SHIFT, L1_MUL, SWISH_K},
+                layers::{AVX512CHUNK, FT_SHIFT, L1_MUL},
             },
             simd::{self, F32_CHUNK, I16_CHUNK, S, U8_CHUNK, VecI32},
         },
@@ -260,6 +263,7 @@ mod simd {
         them: &Align64<[i16; L1_SIZE]>,
         weights: &Align64<[i8; L1_SIZE * L2_SIZE]>,
         biases: &Align64<[f32; L2_SIZE]>,
+        swish_beta: &Align64<[f32; L2_SIZE]>,
         output: &mut Align64<[f32; L2_SIZE]>,
     ) {
         const L1_PAIR_COUNT: usize = L1_SIZE / 2;
@@ -395,7 +399,7 @@ mod simd {
                     .unwrap();
             }
 
-            propagate_l1(&ft_outputs, nnz_slice, weights, biases, output);
+            propagate_l1(&ft_outputs, nnz_slice, weights, biases, swish_beta, output);
         }
     }
 
@@ -405,6 +409,7 @@ mod simd {
         nnz_slice: &[u16],
         weights: &Align64<[i8; L1_SIZE * L2_SIZE]>,
         biases: &Align64<[f32; L2_SIZE]>,
+        swish_beta: &Align64<[f32; L2_SIZE]>,
         output: &mut Align64<[f32; L2_SIZE]>,
     ) {
         const NUM_ACCS: usize = L2_SIZE / F32_CHUNK;
@@ -500,22 +505,21 @@ mod simd {
                 simd::store_i32(acc.as_mut_ptr().add(k * F32_CHUNK), res);
             }
 
-            // Hard-Swish activation
-            // act(x) = x · clamp(x + k/2, 0, k) / k
+            // Rescalable Hard-Swish activation
+            // act(x) = x · clamp(x * beta + 0.5, 0, 1)
             let zero = simd::zero_f32();
-            let k = simd::splat_f32(SWISH_K);
-            let inv_k = simd::splat_f32(1.0 / SWISH_K);
-            let half_k = simd::splat_f32(SWISH_K / 2.0);
+            let one = simd::splat_f32(1.0);
+            let half = simd::splat_f32(0.5);
             let sum_mul = simd::splat_f32(L1_MUL);
             for i in 0..L2_SIZE / F32_CHUNK {
                 // convert i32 to f32, multiplying by the quantisation constant
                 let bias = simd::load_f32(biases.as_ptr().add(i * F32_CHUNK));
+                let beta = simd::load_f32(swish_beta.as_ptr().add(i * F32_CHUNK));
                 let unscaled = simd::i32_to_f32(simd::load_i32(acc.as_ptr().add(i * F32_CHUNK)));
                 let preact = simd::madd_f32(unscaled, sum_mul, bias);
-                // activate
-                let gate = simd::min_f32(simd::max_f32(simd::add_f32(preact, half_k), zero), k);
+                // activate: gate = clamp(x * beta + 0.5, 0, 1)
+                let gate = simd::min_f32(simd::max_f32(simd::madd_f32(preact, beta, half), zero), one);
                 let act = simd::mul_f32(preact, gate);
-                let act = simd::mul_f32(act, inv_k);
                 simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK), act);
             }
         }
@@ -526,6 +530,7 @@ mod simd {
         inputs: &Align64<[f32; L2_SIZE]>,
         weights: &Align64<[f32; L2_SIZE * L3_SIZE * 2]>,
         biases: &Align64<[f32; L3_SIZE * 2]>,
+        swish_beta: &Align64<[f32; L3_SIZE]>,
         output: &mut Align64<[f32; L3_SIZE]>,
     ) {
         // SAFETY: Breaking it down by unsafe operations:
@@ -553,18 +558,19 @@ mod simd {
                 }
             }
 
-            // SwiGLU activation
-            // act(x) = HardSwish6(x1) * x2
+            // SwiGLU activation with rescalable hard swish
+            // act(x) = RescalableHardSwish(x1) * x2
             let zero = simd::zero_f32();
-            let k = simd::splat_f32(SWISH_K);
-            let inv_k = simd::splat_f32(1.0 / SWISH_K);
-            let half_k = simd::splat_f32(SWISH_K / 2.0);
+            let one = simd::splat_f32(1.0);
+            let half = simd::splat_f32(0.5);
             for i in 0..L3_SIZE / F32_CHUNK {
                 let gate_preact = simd::load_f32(sums.as_ptr().add(i * F32_CHUNK));
                 let id_preact = simd::load_f32(sums.as_ptr().add(i * F32_CHUNK + L3_SIZE));
-                let clamped =
-                    simd::min_f32(simd::max_f32(simd::add_f32(gate_preact, half_k), zero), k);
-                let swish = simd::mul_f32(simd::mul_f32(gate_preact, clamped), inv_k);
+                let beta = simd::load_f32(swish_beta.as_ptr().add(i * F32_CHUNK));
+                // gate = clamp(x * beta + 0.5, 0, 1)
+                let gate =
+                    simd::min_f32(simd::max_f32(simd::madd_f32(gate_preact, beta, half), zero), one);
+                let swish = simd::mul_f32(gate_preact, gate);
                 let act = simd::mul_f32(swish, id_preact);
                 simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK), act);
             }

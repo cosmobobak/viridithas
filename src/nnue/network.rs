@@ -128,6 +128,8 @@ struct UnquantisedNetwork {
     l3f_weights:  [[f32;   HEADS]; L3_SIZE],
     l3x_biases:   [[f32;   HEADS]; OUTPUT_BUCKETS],
     l3f_biases:    [f32;   HEADS],
+    swish_beta_l1: [f32; L2_SIZE],
+    swish_beta_l2: [f32; L3_SIZE],
 }
 
 /// The floating-point parameters of the network, after de-factorisation.
@@ -142,6 +144,8 @@ struct MergedNetwork {
     l2_biases:   [[f32; L3_SIZE * 2]; OUTPUT_BUCKETS],
     l3_weights: [[[f32;   HEADS]; OUTPUT_BUCKETS]; L3_SIZE],
     l3_biases:   [[f32;   HEADS]; OUTPUT_BUCKETS],
+    swish_beta_l1: [f32; L2_SIZE],
+    swish_beta_l2: [f32; L3_SIZE],
 }
 
 /// A quantised network file, for compressed embedding.
@@ -157,6 +161,8 @@ struct QuantisedNetwork {
     l2_biases:   [[f32; L3_SIZE * 2]; OUTPUT_BUCKETS],
     l3_weights: [[[f32;   HEADS]; OUTPUT_BUCKETS]; L3_SIZE],
     l3_biases:   [[f32;   HEADS]; OUTPUT_BUCKETS],
+    swish_beta_l1: [f32; L2_SIZE],
+    swish_beta_l2: [f32; L3_SIZE],
 }
 
 /// The parameters of viri's neural network, quantised and permuted
@@ -172,6 +178,8 @@ pub struct NNUEParams {
     pub l2_bias:     [Align64<[f32; L3_SIZE * 2]>; OUTPUT_BUCKETS],
     pub l3_weights: [[Align64<[f32; L3_SIZE]>; HEADS]; OUTPUT_BUCKETS],
     pub l3_bias:             [[f32; HEADS]; OUTPUT_BUCKETS],
+    pub swish_beta_l1: Align64<[f32; L2_SIZE]>,
+    pub swish_beta_l2: Align64<[f32; L3_SIZE]>,
 }
 
 // const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = {
@@ -338,6 +346,9 @@ impl UnquantisedNetwork {
                 net.l3_biases[i][head] = self.l3x_biases[i][head] + self.l3f_biases[head];
             }
         }
+        // copy the swish beta parameters
+        net.swish_beta_l1.copy_from_slice(&self.swish_beta_l1);
+        net.swish_beta_l2.copy_from_slice(&self.swish_beta_l2);
 
         let range = |slice: &[f32]| {
             let init = (f32::INFINITY, f32::NEG_INFINITY);
@@ -372,6 +383,9 @@ impl UnquantisedNetwork {
         let (l3b_min, l3b_max) = range(l3_biases_flat);
         println!("L3 weight range: [{l3w_min}, {l3w_max}]");
         println!("L3 bias range: [{l3b_min}, {l3b_max}]");
+
+        println!("l1 swish betas: {:?}", &net.swish_beta_l1);
+        println!("l2 swish betas: {:?}", &net.swish_beta_l2);
 
         net
     }
@@ -440,6 +454,8 @@ impl MergedNetwork {
         dump_layer!("l2b", self.l2_biases);
         dump_layer!("l3w", self.l3_weights);
         dump_layer!("l3b", self.l3_biases);
+        dump_layer!("swish_beta_l1", self.swish_beta_l1);
+        dump_layer!("swish_beta_l2", self.swish_beta_l2);
 
         Ok(())
     }
@@ -520,6 +536,8 @@ impl MergedNetwork {
         net.l2_biases = self.l2_biases;
         net.l3_weights = self.l3_weights;
         net.l3_biases = self.l3_biases;
+        net.swish_beta_l1 = self.swish_beta_l1;
+        net.swish_beta_l2 = self.swish_beta_l2;
 
         net
     }
@@ -664,6 +682,10 @@ impl QuantisedNetwork {
             // transfer the L3 biases
             net.l3_bias[bucket] = self.l3_biases[bucket];
         }
+
+        // transfer the swish beta parameters
+        net.swish_beta_l1.copy_from_slice(&self.swish_beta_l1);
+        net.swish_beta_l2.copy_from_slice(&self.swish_beta_l2);
 
         net
     }
@@ -1535,12 +1557,14 @@ impl NNUEState {
             them,
             &nn.l1_weights[out],
             &nn.l1_bias[out],
+            &nn.swish_beta_l1,
             &mut l1_outputs,
         );
         layers::propagate_l2(
             &l1_outputs,
             &nn.l2_weights[out],
             &nn.l2_bias[out],
+            &nn.swish_beta_l2,
             &mut l2_outputs,
         );
 
