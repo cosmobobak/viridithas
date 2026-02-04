@@ -6,10 +6,8 @@ use crate::{
         types::Square,
     },
     historytable::{
-        CORRECTION_HISTORY_MAX, HASH_HISTORY_SIZE, cont_history_bonus, cont_history_malus,
-        main_history_bonus, main_history_malus, pawn_history_bonus, pawn_history_malus,
-        tactical_history_bonus, tactical_history_malus, update_cont_history, update_correction,
-        update_history,
+        CORRECTION_HISTORY_MAX, HASH_HISTORY_SIZE, history_bonus, history_malus,
+        update_cont_history, update_correction, update_history,
     },
     threadlocal::ThreadData,
     util::MAX_DEPTH,
@@ -32,9 +30,9 @@ impl ThreadData<'_> {
                 threats.contains_square(to),
             );
             let delta = if m == best_move {
-                main_history_bonus(&self.info.conf, depth)
+                history_bonus(&self.info.conf.main_history, depth)
             } else {
-                -main_history_malus(&self.info.conf, depth)
+                -history_malus(&self.info.conf.main_history, depth)
             };
             update_history(val, delta);
         }
@@ -51,9 +49,9 @@ impl ThreadData<'_> {
         good: bool,
     ) {
         let delta = if good {
-            main_history_bonus(&self.info.conf, depth)
+            history_bonus(&self.info.conf.main_history, depth)
         } else {
-            -main_history_malus(&self.info.conf, depth)
+            -history_malus(&self.info.conf.main_history, depth)
         };
         let val = self.main_hist.get_mut(
             moved,
@@ -73,9 +71,9 @@ impl ThreadData<'_> {
             #[expect(clippy::cast_possible_truncation)]
             let val = &mut self.pawn_hist[pawn_index as usize][piece_moved][to];
             let delta = if m == best_move {
-                pawn_history_bonus(&self.info.conf, depth)
+                history_bonus(&self.info.conf.pawn_history, depth)
             } else {
-                -pawn_history_malus(&self.info.conf, depth)
+                -history_malus(&self.info.conf.pawn_history, depth)
             };
             update_history(val, delta);
         }
@@ -84,9 +82,9 @@ impl ThreadData<'_> {
     /// Update the pawn-structure history counter for a single move.
     pub fn update_pawn_history_single(&mut self, to: Square, moved: Piece, depth: i32, good: bool) {
         let delta = if good {
-            pawn_history_bonus(&self.info.conf, depth)
+            history_bonus(&self.info.conf.pawn_history, depth)
         } else {
-            -pawn_history_malus(&self.info.conf, depth)
+            -history_malus(&self.info.conf.pawn_history, depth)
         };
         let pawn_index = self.board.state.keys.pawn % HASH_HISTORY_SIZE as u64;
         #[expect(clippy::cast_possible_truncation)]
@@ -109,9 +107,9 @@ impl ThreadData<'_> {
             let to_threat = threats.contains_square(to);
             let val = &mut self.tactical_hist[usize::from(to_threat)][capture][piece_moved][to];
             let delta = if m == best_move {
-                tactical_history_bonus(&self.info.conf, depth)
+                history_bonus(&self.info.conf.tactical_history, depth)
             } else {
-                -tactical_history_malus(&self.info.conf, depth)
+                -history_malus(&self.info.conf.tactical_history, depth)
             };
             update_history(val, delta);
         }
@@ -137,14 +135,28 @@ impl ThreadData<'_> {
         height: usize,
         good: bool,
     ) {
-        let list = [
+        let indexed_multipliers = [
             (1, self.info.conf.cont1_stat_score_mul),
             (2, self.info.conf.cont2_stat_score_mul),
             (4, self.info.conf.cont4_stat_score_mul),
         ];
 
+        let boni = [
+            history_bonus(&self.info.conf.cont1_history, depth),
+            history_bonus(&self.info.conf.cont2_history, depth),
+            history_bonus(&self.info.conf.cont4_history, depth),
+        ];
+
+        let mali = [
+            -history_malus(&self.info.conf.cont1_history, depth),
+            -history_malus(&self.info.conf.cont2_history, depth),
+            -history_malus(&self.info.conf.cont4_history, depth),
+        ];
+
+        let adjustments = if good { boni } else { mali };
+
         let mut sum = 0;
-        for (index, mul) in list {
+        for (index, mul) in indexed_multipliers {
             if height < index {
                 break;
             }
@@ -152,15 +164,10 @@ impl ThreadData<'_> {
         }
         sum /= 32;
 
-        for (index, _) in list {
+        for ((index, _), delta) in indexed_multipliers.into_iter().zip(adjustments) {
             if height < index {
                 break;
             }
-            let delta = if good {
-                cont_history_bonus(&self.info.conf, depth, index)
-            } else {
-                -cont_history_malus(&self.info.conf, depth, index)
-            };
             let val = &mut self.cont_hist[self.ss[height - index].ch_idx][piece][to];
             update_cont_history(val, sum, delta);
         }
