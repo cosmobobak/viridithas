@@ -1082,8 +1082,7 @@ pub fn alpha_beta<NT: NodeType>(
         // if the static eval is too low, check if qsearch can beat alpha.
         // if it can't, we can prune the node.
         if alpha < 2000
-            && static_eval
-                < alpha - t.info.conf.razoring_coeff_0 - t.info.conf.razoring_coeff_1 * depth
+            && eval < alpha - t.info.conf.razoring_coeff_0 - t.info.conf.razoring_coeff_1 * depth
         {
             let v = quiescence::<OffPV>(pv, t, alpha, beta);
             if v <= alpha {
@@ -1110,8 +1109,10 @@ pub fn alpha_beta<NT: NodeType>(
         // if we can give the opponent a free move while retaining
         // a score above beta, we can prune the node.
         if cut_node
-            && t.ss[height - 1].searching.is_some()
+            && eval >= beta
+            && eval >= static_eval
             && depth > 2
+            && t.ss[height - 1].searching.is_some()
             && static_eval
                 + i32::from(improving) * t.info.conf.nmp_improving_margin
                 + depth * t.info.conf.nmp_depth_mul
@@ -1127,10 +1128,7 @@ pub fn alpha_beta<NT: NodeType>(
             t.tt.prefetch(t.board.key_after_null_move());
             let r = 4
                 + depth / 3
-                + std::cmp::min(
-                    (static_eval - beta) / t.info.conf.nmp_reduction_eval_divisor,
-                    4,
-                )
+                + std::cmp::min((eval - beta) / t.info.conf.nmp_reduction_eval_divisor, 4)
                 + i32::from(tt_capture.is_some());
             let nm_depth = depth - r;
             t.ss[height].searching = None;
@@ -1351,7 +1349,7 @@ pub fn alpha_beta<NT: NodeType>(
             let fp_margin = lmr_depth * t.info.conf.futility_coeff_1
                 + t.info.conf.futility_coeff_0
                 + stat_score / 128;
-            if is_quiet && lmr_depth < 6 && static_eval + fp_margin <= alpha {
+            if is_quiet && lmr_depth < 6 && eval + fp_margin <= alpha {
                 move_picker.skip_quiets = true;
             }
         }
