@@ -588,6 +588,19 @@ pub fn quiescence<NT: NodeType>(
             return hit.value;
         }
 
+        // permit leaping back up into main search:
+        if !NT::PV
+            && let Some(m) = hit.mov
+            && !t.above_qsearch
+            && !t.board.is_tactical(m)
+            && hit.bound.is_lower()
+        {
+            t.above_qsearch = true;
+            let score = alpha_beta::<OffPV>(pv, t, 1, alpha, beta, true);
+            t.above_qsearch = false;
+            return score;
+        }
+
         if illegal { None } else { Some(hit) }
     } else {
         None

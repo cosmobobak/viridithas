@@ -26,7 +26,10 @@ pub struct ThreadData<'a> {
     // stack array is right-padded by one because singular verification
     // will try to access the next ply in an edge case.
     pub ss: [StackEntry; MAX_DEPTH + 1],
+    /// bit 0: white nmp banned, bit 1: black nmp banned
     pub banned_nmp: u8,
+    /// have we leapt back up into mainsearch from qsearch?
+    pub above_qsearch: bool,
     pub nnue: Box<nnue::network::NNUEState>,
     pub nnue_params: &'static NNUEParams,
 
@@ -77,6 +80,7 @@ impl<'a> ThreadData<'a> {
         let mut td = Self {
             ss: array::from_fn(|_| StackEntry::default()),
             banned_nmp: 0,
+            above_qsearch: false,
             nnue: nnue::network::NNUEState::new(&board, nnue_params),
             nnue_params,
             main_hist: ThreatsHistoryTable::new(),
