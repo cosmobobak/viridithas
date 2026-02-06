@@ -138,28 +138,28 @@ impl ThreadData<'_> {
         let indexed_multipliers = [
             (1, self.info.conf.cont1_stat_score_mul),
             (2, self.info.conf.cont2_stat_score_mul),
-            (3, self.info.conf.cont3_stat_score_mul),
+            // (3, self.info.conf.cont3_stat_score_mul),
             (4, self.info.conf.cont4_stat_score_mul),
-            (5, self.info.conf.cont5_stat_score_mul),
-            (6, self.info.conf.cont6_stat_score_mul),
+            // (5, self.info.conf.cont5_stat_score_mul),
+            // (6, self.info.conf.cont6_stat_score_mul),
         ];
 
         let boni = [
             history_bonus(&self.info.conf.cont1_history, depth),
             history_bonus(&self.info.conf.cont2_history, depth),
-            history_bonus(&self.info.conf.cont3_history, depth),
+            // history_bonus(&self.info.conf.cont3_history, depth),
             history_bonus(&self.info.conf.cont4_history, depth),
-            history_bonus(&self.info.conf.cont5_history, depth),
-            history_bonus(&self.info.conf.cont6_history, depth),
+            // history_bonus(&self.info.conf.cont5_history, depth),
+            // history_bonus(&self.info.conf.cont6_history, depth),
         ];
 
         let mali = [
             -history_malus(&self.info.conf.cont1_history, depth),
             -history_malus(&self.info.conf.cont2_history, depth),
-            -history_malus(&self.info.conf.cont3_history, depth),
+            // -history_malus(&self.info.conf.cont3_history, depth),
             -history_malus(&self.info.conf.cont4_history, depth),
-            -history_malus(&self.info.conf.cont5_history, depth),
-            -history_malus(&self.info.conf.cont6_history, depth),
+            // -history_malus(&self.info.conf.cont5_history, depth),
+            // -history_malus(&self.info.conf.cont6_history, depth),
         ];
 
         let adjustments = if good { boni } else { mali };
