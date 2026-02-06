@@ -195,9 +195,8 @@ impl MovePicker {
     pub fn score_quiets(t: &ThreadData, ms: &mut [MoveListEntry]) {
         let height = t.board.height();
 
-        let cont_blocks = std::array::from_fn::<_, 6, _>(|i| {
-            (height > i + 1).then(|| &t.cont_hist[t.ss[height - 1 - i].ch_idx])
-        });
+        let cont_blocks =
+            [1, 2].map(|i| (height > i).then(|| &t.cont_hist[t.ss[height - i].ch_idx]));
 
         let threats = t.board.state.threats.all;
         #[expect(clippy::cast_possible_truncation)]
