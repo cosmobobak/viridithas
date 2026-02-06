@@ -77,6 +77,7 @@ def plot_tracked_value(ax, data: dict, index: int) -> None:
     name: int = data["name"]
     count: int = data["count"]
     avg: int = data["avg"]
+    avg_abs: int = data["avg_abs"]
     stddev: int = data["stddev"]
     min_val: int = data["min"]
     max_val: int = data["max"]
@@ -145,7 +146,7 @@ def plot_tracked_value(ax, data: dict, index: int) -> None:
         short_name = expr if len(expr) <= 40 else expr[:37] + "..."
     else:
         short_name = name
-    title = f"{short_name}\nn={count:,} avg={avg:.1f} std={stddev:.1f}\nmin={min_val} max={max_val}"
+    title = f"{short_name}\nn={count:,} avg={avg:.1f} |avg|={avg_abs:.1f} std={stddev:.1f}\nmin={min_val} max={max_val}"
     ax.set_title(title, fontsize=7)
     ax.tick_params(axis="both", labelsize=6)
 
