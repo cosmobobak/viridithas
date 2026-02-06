@@ -212,9 +212,8 @@ impl MovePicker {
             let mut score = 0;
 
             score += i32::from(t.main_hist[from_threat][to_threat][piece][to]);
-            let divisors = [1, 1, 2, 2, 4, 4];
-            for (cb, d) in cont_blocks.iter().zip(divisors) {
-                score += cb.map_or(0, |b| i32::from(b[piece][to]) / d);
+            for block in cont_blocks {
+                score += block.map_or(0, |b| i32::from(b[piece][to]));
             }
             score += i32::from(t.pawn_hist[pawn_index][piece][to]);
 
