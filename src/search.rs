@@ -1694,7 +1694,7 @@ fn get_cont_history(t: &ThreadData<'_>, height: usize, hist_to: Square, moved: P
         stat_score += i32::from(t.cont_hist[t.ss[height - 6].ch_idx][moved][hist_to])
             * t.info.conf.cont6_stat_score_mul;
     }
-    stat_score
+    (i64::from(stat_score) * 100 / 129) as i32
 }
 
 /// The margin for Reverse Futility Pruning.
