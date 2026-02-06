@@ -195,30 +195,9 @@ impl MovePicker {
     pub fn score_quiets(t: &ThreadData, ms: &mut [MoveListEntry]) {
         let height = t.board.height();
 
-        let mut cont_block_0 = None;
-        let mut cont_block_1 = None;
-        let mut cont_block_2 = None;
-        let mut cont_block_3 = None;
-        let mut cont_block_4 = None;
-        let mut cont_block_5 = None;
-        if height > 1 {
-            cont_block_0 = Some(&t.cont_hist[t.ss[height - 1].ch_idx]);
-        }
-        if height > 2 {
-            cont_block_1 = Some(&t.cont_hist[t.ss[height - 2].ch_idx]);
-        }
-        if height > 3 {
-            cont_block_2 = Some(&t.cont_hist[t.ss[height - 3].ch_idx]);
-        }
-        if height > 4 {
-            cont_block_3 = Some(&t.cont_hist[t.ss[height - 4].ch_idx]);
-        }
-        if height > 5 {
-            cont_block_4 = Some(&t.cont_hist[t.ss[height - 5].ch_idx]);
-        }
-        if height > 6 {
-            cont_block_5 = Some(&t.cont_hist[t.ss[height - 6].ch_idx]);
-        }
+        let cont_blocks = std::array::from_fn::<_, 6, _>(|i| {
+            (height > i + 1).then(|| &t.cont_hist[t.ss[height - 1 - i].ch_idx])
+        });
 
         let threats = t.board.state.threats.all;
         #[expect(clippy::cast_possible_truncation)]
@@ -233,23 +212,9 @@ impl MovePicker {
             let mut score = 0;
 
             score += i32::from(t.main_hist[from_threat][to_threat][piece][to]);
-            if let Some(cmh_block) = cont_block_0 {
-                score += i32::from(cmh_block[piece][to]);
-            }
-            if let Some(cmh_block) = cont_block_1 {
-                score += i32::from(cmh_block[piece][to]);
-            }
-            if let Some(cmh_block) = cont_block_2 {
-                score += i32::from(cmh_block[piece][to]) / 2;
-            }
-            if let Some(cmh_block) = cont_block_3 {
-                score += i32::from(cmh_block[piece][to]) / 2;
-            }
-            if let Some(cmh_block) = cont_block_4 {
-                score += i32::from(cmh_block[piece][to]) / 4;
-            }
-            if let Some(cmh_block) = cont_block_5 {
-                score += i32::from(cmh_block[piece][to]) / 4;
+            let divisors = [1, 1, 2, 2, 4, 4];
+            for (cb, d) in cont_blocks.iter().zip(divisors) {
+                score += cb.map_or(0, |b| i32::from(b[piece][to]) / d);
             }
             score += i32::from(t.pawn_hist[pawn_index][piece][to]);
 
