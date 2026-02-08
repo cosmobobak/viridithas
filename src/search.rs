@@ -1141,11 +1141,6 @@ pub fn alpha_beta<NT: NodeType>(
         }
     }
 
-    // TT-reduction (IIR).
-    if NT::PV && !matches!(tt_hit, Some(tte) if tte.depth + 4 > depth) {
-        depth -= i32::from(depth >= 4);
-    }
-
     // cutnode-based TT reduction.
     if cut_node
         && excluded.is_none()
