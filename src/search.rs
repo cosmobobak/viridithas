@@ -1141,14 +1141,6 @@ pub fn alpha_beta<NT: NodeType>(
         }
     }
 
-    // cutnode-based TT reduction.
-    if cut_node
-        && excluded.is_none()
-        && (tt_move.is_none() || !matches!(tt_hit, Some(tte) if tte.depth + 4 > depth))
-    {
-        depth -= i32::from(depth >= 8);
-    }
-
     // the margins for static-exchange-evaluation pruning for tactical and quiet moves.
     let see_table = [
         t.info.conf.see_tactical_margin * depth * depth,
