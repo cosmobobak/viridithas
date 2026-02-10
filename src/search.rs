@@ -1598,6 +1598,10 @@ pub fn alpha_beta<NT: NodeType>(
         t.update_history_single(from, to, moved, threats, depth, true);
     }
 
+    if !NT::ROOT && best_score <= alpha {
+        t.ss[height].ttpv = t.ss[height].ttpv || t.ss[height - 1].ttpv;
+    }
+
     if excluded.is_none() {
         debug_assert!(
             alpha != original_alpha || best_move.is_none(),
