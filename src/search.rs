@@ -1441,6 +1441,8 @@ pub fn alpha_beta<NT: NodeType>(
                 r -= i32::from(t.ss[height].ttpv) * t.info.conf.lmr_ttpv_mul;
                 // reduce more on cut nodes
                 r += i32::from(cut_node) * t.info.conf.lmr_cut_node_mul;
+                // reduce even more on cut nodes that were never PV.
+                r += i32::from(cut_node && !t.ss[height].ttpv) * t.info.conf.lmr_cut_node_mul;
                 // extend/reduce using the stat_score of the move
                 r -= stat_score * 1024 / t.info.conf.history_lmr_divisor;
                 // reduce refutation moves less
