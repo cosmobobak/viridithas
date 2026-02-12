@@ -15,6 +15,8 @@ use crate::{
 
 use crate::chess::board::Board;
 
+const CONTINUATION_CORRECTION_LOOKBACK: u8 = 8;
+
 impl ThreadData<'_> {
     /// Update the history counters of a batch of moves.
     pub fn update_history(&mut self, moves_to_adjust: &[Move], best_move: Move, depth: i32) {
@@ -227,12 +229,15 @@ impl ThreadData<'_> {
         update(minor);
         update(major);
 
-        if height > 2 {
-            let ch1 = self.ss[height - 1].ch_idx;
-            let ch2 = self.ss[height - 2].ch_idx;
-            let pt1 = ch1.piece.piece_type();
-            let pt2 = ch2.piece.piece_type();
-            update(&mut self.continuation_corrhist[ch1.to][pt1][ch2.to][pt2][us]);
+        for lookback in 0..usize::from(CONTINUATION_CORRECTION_LOOKBACK) {
+            let lookback = lookback * 2;
+            if height > lookback + 2 {
+                let ch1 = self.ss[height - lookback - 1].ch_idx;
+                let ch2 = self.ss[height - lookback - 2].ch_idx;
+                let pt1 = ch1.piece.piece_type();
+                let pt2 = ch2.piece.piece_type();
+                update(&mut self.continuation_corrhist[ch1.to][pt1][ch2.to][pt2][us]);
+            }
         }
     }
 
@@ -252,21 +257,24 @@ impl ThreadData<'_> {
         let minor = self.minor_corrhist.get(us, keys.minor);
         let major = self.major_corrhist.get(us, keys.major);
 
-        let cont = if height > 2 {
-            let ch1 = self.ss[height - 1].ch_idx;
-            let ch2 = self.ss[height - 2].ch_idx;
-            let pt1 = ch1.piece.piece_type();
-            let pt2 = ch2.piece.piece_type();
-            i64::from(self.continuation_corrhist[ch1.to][pt1][ch2.to][pt2][us])
-        } else {
-            0
-        };
+        let mut cont = 0;
+        for lookback in 0..usize::from(CONTINUATION_CORRECTION_LOOKBACK) {
+            let lookback = lookback * 2;
+            if height > lookback + 2 {
+                let ch1 = self.ss[height - lookback - 1].ch_idx;
+                let ch2 = self.ss[height - lookback - 2].ch_idx;
+                let pt1 = ch1.piece.piece_type();
+                let pt2 = ch2.piece.piece_type();
+                cont += i64::from(self.continuation_corrhist[ch1.to][pt1][ch2.to][pt2][us]);
+            }
+        }
 
         let adjustment = pawn * i64::from(self.info.conf.pawn_corrhist_weight)
             + major * i64::from(self.info.conf.major_corrhist_weight)
             + minor * i64::from(self.info.conf.minor_corrhist_weight)
             + (white + black) * i64::from(self.info.conf.nonpawn_corrhist_weight)
-            + cont * i64::from(self.info.conf.continuation_corrhist_weight);
+            + cont * i64::from(self.info.conf.continuation_corrhist_weight)
+                / i64::from(CONTINUATION_CORRECTION_LOOKBACK);
 
         (adjustment * 12 / 0x40000) as i32
     }
