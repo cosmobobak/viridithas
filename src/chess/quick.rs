@@ -82,10 +82,16 @@ impl Quick {
             Pawn, Pawn, Pawn,
         ];
 
-        let ary = record
+        // let ary = record
+        //     .as_bytes()
+        //     .as_array::<40>()
+        //     .ok_or(QuickParseError::InvalidLength(record.len()))?;
+
+        // backcompat for 1.92.0 :sob:
+        let ary: [_; 40] = record
             .as_bytes()
-            .as_array::<40>()
-            .ok_or(QuickParseError::InvalidLength(record.len()))?;
+            .try_into()
+            .map_err(|_| QuickParseError::InvalidLength(record.len()))?;
 
         let a0 = decode(ary[0]);
         let a1 = decode(ary[1]);
