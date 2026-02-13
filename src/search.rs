@@ -1384,16 +1384,17 @@ pub fn alpha_beta<NT: NodeType>(
             if value == VALUE_NONE {
                 extension = 1; // extend if there's only one legal move.
             } else if value < r_beta {
-                if !NT::PV
-                    && t.ss[height].dextensions <= 12
-                    && value < r_beta - t.info.conf.dext_margin
-                {
-                    // double-extend if we failed low by a lot
-                    extension = 2 + i32::from(is_quiet && value < r_beta - t.info.conf.text_margin);
-                } else {
-                    // normal singular extension
-                    extension = 1;
-                }
+                let dext =
+                    t.info.conf.dext_margin + 256 * i32::from(NT::PV) + 16 * i32::from(!is_quiet);
+                let text =
+                    t.info.conf.text_margin + 512 * i32::from(NT::PV) + 32 * i32::from(!is_quiet);
+
+                let mut singular_extension = 1;
+                singular_extension +=
+                    i32::from(t.ss[height].dextensions <= 12 && value < r_beta - dext);
+                singular_extension +=
+                    i32::from(t.ss[height].dextensions <= 12 && value < r_beta - text);
+                extension = singular_extension;
             } else if !NT::PV && value >= beta && !is_decisive(value) {
                 // multi-cut: if a move other than the best one beats beta,
                 // then we can cut with relatively high confidence.
