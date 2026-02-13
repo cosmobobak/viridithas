@@ -25,7 +25,7 @@ V3NAME := $(LXE)-$(VERSION)-$(INF)-x86_64-v3$(EXT)
 V4NAME := $(LXE)-$(VERSION)-$(INF)-x86_64-v4$(EXT)
 
 openbench:
-	cargo rustc -r --features syzygy -- -C target-cpu=native --emit link=$(NAME)
+	cargo rustc -r -- -C target-cpu=native --emit link=$(NAME)
 
 tmp-dir:
 	$(MKDIR) $(TMPDIR)
