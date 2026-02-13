@@ -77,7 +77,7 @@ const HALF_BUCKET_MAP: [usize; 32] = [
 /// The number of buckets in the feature transformer.
 pub const BUCKETS: usize = max!(HALF_BUCKET_MAP) + 1;
 /// The number of output buckets
-pub const OUTPUT_BUCKETS: usize = 8;
+pub const OUTPUT_BUCKETS: usize = 16;
 /// The mapping from square to bucket.
 const BUCKET_MAP: [usize; 64] = {
     let mut map = [0; 64];
