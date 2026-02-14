@@ -55,6 +55,9 @@ def load_histogram_data(csv_path: Path) -> tuple[np.ndarray, np.ndarray]:
             bins.append(int(bin_start))
             counts.append(int(count))
 
+    bins = bins[5:]
+    counts = counts[5:]
+
     return np.array(bins), np.array(counts)
 
 
