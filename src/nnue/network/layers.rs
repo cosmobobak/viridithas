@@ -91,7 +91,8 @@ mod generic {
             // SAFETY: `sums` is `L2_SIZE` long, and `output` is `L2_SIZE` long.
             // As such, the indices that we construct are valid.
             unsafe {
-                let preact = (*sums.get_unchecked(i) as f32).mul_add(L1_MUL, *biases.get_unchecked(i));
+                let preact =
+                    (*sums.get_unchecked(i) as f32).mul_add(L1_MUL, *biases.get_unchecked(i));
                 let clamped = f32::clamp(preact + SWISH_K / 2.0, 0.0, SWISH_K);
                 *output.get_unchecked_mut(i) = preact * clamped / SWISH_K;
             }
