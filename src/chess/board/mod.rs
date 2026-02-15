@@ -17,6 +17,7 @@ use crate::{
         chessmove::{Move, MoveFlags},
         fen::Fen,
         piece::{Black, Col, Colour, Piece, PieceType, White},
+        quick::Quick,
         squareset::SquareSet,
         types::{CastlingRights, CheckState, File, Rank, Square, State},
     },
@@ -383,6 +384,29 @@ impl Board {
         self.set_from_fen(&fen);
     }
 
+    pub fn set_from_quick(&mut self, quick: &Quick) {
+        self.reset();
+
+        self.state.bbs = quick.board;
+
+        for sq in Square::all() {
+            self.state.mailbox[sq] = quick.board.piece_at(sq);
+        }
+
+        self.side = quick.turn;
+        self.state.castle_perm = quick.rights;
+        if self.side == Colour::Black {
+            self.ply += 1;
+        }
+
+        self.state.keys = self.state.generate_pos_keys(self.side);
+        self.state.threats = self.state.bbs.generate_threats(self.side);
+        self.state.pinned = [
+            self.state.bbs.generate_pinned(Colour::White),
+            self.state.bbs.generate_pinned(Colour::Black),
+        ];
+    }
+
     #[cfg(test)]
     pub fn from_fen(fen: &str) -> Result<Self, crate::errors::FenParseError> {
         let parsed = Fen::parse_relaxed(fen)?;
@@ -403,6 +427,14 @@ impl Board {
         let mut out = Self::empty();
         out.set_dfrc_idx(scharnagl);
         out
+    }
+
+    #[cfg(test)]
+    pub fn from_quick(record: &str) -> Result<Self, crate::errors::QuickParseError> {
+        let parsed = Quick::parse(record.trim_ascii())?;
+        let mut out = Self::empty();
+        out.set_from_quick(&parsed);
+        Ok(out)
     }
 
     /// Determines if `sq` is attacked by `side`
@@ -1454,7 +1486,7 @@ impl std::fmt::UpperHex for Board {
         }
 
         writeln!(f, "  a b c d e f g h")?;
-        writeln!(f, "FEN: {self}")?;
+        write!(f, "FEN: {self}")?;
 
         Ok(())
     }
@@ -1700,5 +1732,14 @@ mod tests {
             Board::from_fen("r1bqkbnr/pppp1p1p/2n5/4pPp1/4P3/8/PPPP2PP/RNBQKBNR w KQkq g6 0 4")
                 .unwrap();
         assert_eq!(legal.ep_sq(), Some(Square::G6));
+    }
+
+    #[test]
+    fn quick_sanity_check() {
+        use crate::chess::board::Board;
+
+        let board = Board::from_quick("RxlGB:R:::::9GK:::::Dk::::::O:::::::::::").unwrap();
+
+        assert_eq!(board.to_string(), "8/8/6q1/8/p2R4/P3P3/1P1K1k2/8 b - - 0 1");
     }
 }

@@ -33,13 +33,13 @@
 
 #include "viridithas_bridge.h"
 
-#define PYRRHIC_POPCOUNT(x)              (viridithas_popcount(x))
-#define PYRRHIC_LSB(x)                   (viridithas_lsb(x))
-#define PYRRHIC_POPLSB(x)                (viridithas_poplsb(x))
+#define PYRRHIC_POPCOUNT(x) (viridithas_popcount(x))
+#define PYRRHIC_LSB(x) (viridithas_lsb(x))
+#define PYRRHIC_POPLSB(x) (viridithas_poplsb(x))
 
-#define PYRRHIC_PAWN_ATTACKS(sq, c)      (viridithas_pawn_attacks(sq, c))
-#define PYRRHIC_KNIGHT_ATTACKS(sq)       (viridithas_knight_attacks(sq))
-#define PYRRHIC_BISHOP_ATTACKS(sq, occ)  (viridithas_bishop_attacks(sq, occ))
-#define PYRRHIC_ROOK_ATTACKS(sq, occ)    (viridithas_rook_attacks(sq, occ))
-#define PYRRHIC_QUEEN_ATTACKS(sq, occ)   (viridithas_queen_attacks(sq, occ))
-#define PYRRHIC_KING_ATTACKS(sq)         (viridithas_king_attacks(sq))
+#define PYRRHIC_PAWN_ATTACKS(sq, c) (viridithas_pawn_attacks(sq, c))
+#define PYRRHIC_KNIGHT_ATTACKS(sq) (viridithas_knight_attacks(sq))
+#define PYRRHIC_BISHOP_ATTACKS(sq, occ) (viridithas_bishop_attacks(sq, occ))
+#define PYRRHIC_ROOK_ATTACKS(sq, occ) (viridithas_rook_attacks(sq, occ))
+#define PYRRHIC_QUEEN_ATTACKS(sq, occ) (viridithas_queen_attacks(sq, occ))
+#define PYRRHIC_KING_ATTACKS(sq) (viridithas_king_attacks(sq))

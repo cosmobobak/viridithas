@@ -147,7 +147,11 @@ pub const fn see_value(piece_type: PieceType, conf: &Config) -> i32 {
     }
 }
 
-pub fn eval_stats(input: &Path, histogram_output: Option<&Path>) -> anyhow::Result<()> {
+pub fn eval_stats(
+    input: &Path,
+    histogram_output: Option<&Path>,
+    bucket_index: Option<usize>,
+) -> anyhow::Result<()> {
     // Histogram data: bin evaluations into 10 cp buckets
     const BIN_SIZE: i32 = 10;
 
@@ -178,6 +182,12 @@ pub fn eval_stats(input: &Path, histogram_output: Option<&Path>) -> anyhow::Resu
         board.set_from_fen(&parsed);
 
         if board.in_check() {
+            continue;
+        }
+
+        if let Some(bucket_index) = bucket_index
+            && bucket_index != network::output_bucket(&board)
+        {
             continue;
         }
 
@@ -254,6 +264,13 @@ pub fn eval_stats(input: &Path, histogram_output: Option<&Path>) -> anyhow::Resu
 
         println!("\nHISTOGRAM RECORDED TO {}", output_path.display());
     }
+
+    #[cfg(feature = "ft-record")]
+    crate::nnue::network::layers::FT_OUTPUT_FILE
+        .lock()
+        .unwrap()
+        .flush()
+        .unwrap();
 
     Ok(())
 }

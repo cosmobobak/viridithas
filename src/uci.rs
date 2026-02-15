@@ -29,6 +29,7 @@ use crate::{
         },
         fen::Fen,
         piece::Colour,
+        quick::Quick,
     },
     cuckoo,
     errors::{GoParseError, PerftParseError, PositionParseError, SetOptionParseError, UciError},
@@ -179,7 +180,7 @@ pub fn main_loop() -> Result<(), UciError> {
                 println!("{:X}", t.board);
                 Ok(())
             }
-            "debug" => {
+            "d" | "debug" => {
                 let t = thread_data.first_mut();
                 println!("{:?}", t.board);
                 Ok(())
@@ -287,6 +288,47 @@ pub fn main_loop() -> Result<(), UciError> {
                 {
                     for t in &mut thread_data {
                         t.board.set_from_fen(&fen);
+                        for tok in command.split_whitespace() {
+                            if let Ok(mv) =
+                                t.board.parse_uci(tok).or_else(|_| t.board.parse_san(tok))
+                            {
+                                t.board.make_move_simple(mv);
+                                t.board.zero_height();
+                            }
+                        }
+                        t.board.zero_height();
+                        t.nnue.reinit_from(&t.board, t.nnue_params);
+                    }
+                    Ok(())
+                // then try to quick-ly parse
+                } else if let Some(first_40) = command.get(..command.len().min(40))
+                    && let Ok(quick) = Quick::parse(first_40)
+                {
+                    for t in &mut thread_data {
+                        t.board.set_from_quick(&quick);
+                        for tok in command.split_whitespace() {
+                            if let Ok(mv) =
+                                t.board.parse_uci(tok).or_else(|_| t.board.parse_san(tok))
+                            {
+                                t.board.make_move_simple(mv);
+                                t.board.zero_height();
+                            }
+                        }
+                        t.board.zero_height();
+                        t.nnue.reinit_from(&t.board, t.nnue_params);
+                    }
+                    Ok(())
+                // lastly, attempt to find some legal moves
+                // this is a tad iffy, and comes the closest to
+                // silently accepting keysmashes
+                } else if command.split_whitespace().any(|tok| {
+                    thread_data[0]
+                        .board
+                        .parse_uci(tok)
+                        .or_else(|_| thread_data[0].board.parse_san(tok))
+                        .is_ok()
+                }) {
+                    for t in &mut thread_data {
                         for tok in command.split_whitespace() {
                             if let Ok(mv) =
                                 t.board.parse_uci(tok).or_else(|_| t.board.parse_san(tok))

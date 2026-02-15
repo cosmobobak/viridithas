@@ -39,7 +39,7 @@ use crate::{
     util::{INFINITY, MAX_DEPTH, VALUE_NONE},
 };
 
-use self::parameters::Config;
+use self::parameters::{Config, HistoryConfig};
 
 // In alpha-beta search, there are three classes of node to be aware of:
 // 1. PV-nodes: nodes that end up being within the alpha-beta window,
@@ -94,42 +94,12 @@ const LMR_TT_CAPTURE_MUL: i32 = 999;
 const LMR_CHECK_MUL: i32 = 1361;
 const LMR_CORR_MUL: i32 = 448;
 const LMR_BASE_OFFSET: i32 = 226;
-const MAIN_HISTORY_BONUS_MUL: i32 = 357;
-const MAIN_HISTORY_BONUS_OFFSET: i32 = 226;
-const MAIN_HISTORY_BONUS_MAX: i32 = 2241;
-const MAIN_HISTORY_MALUS_MUL: i32 = 111;
-const MAIN_HISTORY_MALUS_OFFSET: i32 = 561;
-const MAIN_HISTORY_MALUS_MAX: i32 = 915;
-const CONT1_HISTORY_BONUS_MUL: i32 = 287;
-const CONT1_HISTORY_BONUS_OFFSET: i32 = 150;
-const CONT1_HISTORY_BONUS_MAX: i32 = 3729;
-const CONT1_HISTORY_MALUS_MUL: i32 = 270;
-const CONT1_HISTORY_MALUS_OFFSET: i32 = 267;
-const CONT1_HISTORY_MALUS_MAX: i32 = 1178;
-const CONT2_HISTORY_BONUS_MUL: i32 = 177;
-const CONT2_HISTORY_BONUS_OFFSET: i32 = 178;
-const CONT2_HISTORY_BONUS_MAX: i32 = 1596;
-const CONT2_HISTORY_MALUS_MUL: i32 = 280;
-const CONT2_HISTORY_MALUS_OFFSET: i32 = 130;
-const CONT2_HISTORY_MALUS_MAX: i32 = 943;
-const CONT4_HISTORY_BONUS_MUL: i32 = 177;
-const CONT4_HISTORY_BONUS_OFFSET: i32 = 185;
-const CONT4_HISTORY_BONUS_MAX: i32 = 1630;
-const CONT4_HISTORY_MALUS_MUL: i32 = 201;
-const CONT4_HISTORY_MALUS_OFFSET: i32 = -32;
-const CONT4_HISTORY_MALUS_MAX: i32 = 945;
-const PAWN_HISTORY_BONUS_MUL: i32 = 169;
-const PAWN_HISTORY_BONUS_OFFSET: i32 = 162;
-const PAWN_HISTORY_BONUS_MAX: i32 = 2208;
-const PAWN_HISTORY_MALUS_MUL: i32 = 251;
-const PAWN_HISTORY_MALUS_OFFSET: i32 = 188;
-const PAWN_HISTORY_MALUS_MAX: i32 = 1281;
-const TACTICAL_HISTORY_BONUS_MUL: i32 = 104;
-const TACTICAL_HISTORY_BONUS_OFFSET: i32 = 328;
-const TACTICAL_HISTORY_BONUS_MAX: i32 = 1248;
-const TACTICAL_HISTORY_MALUS_MUL: i32 = 29;
-const TACTICAL_HISTORY_MALUS_OFFSET: i32 = 394;
-const TACTICAL_HISTORY_MALUS_MAX: i32 = 1122;
+const MAIN_HISTORY: HistoryConfig = HistoryConfig::new(357, 226, 2241, 111, 561, 915);
+const CONT1_HISTORY: HistoryConfig = HistoryConfig::new(287, 150, 3729, 270, 267, 1178);
+const CONT2_HISTORY: HistoryConfig = HistoryConfig::new(177, 178, 1596, 280, 130, 943);
+const CONT4_HISTORY: HistoryConfig = HistoryConfig::new(177, 185, 1630, 201, -32, 945);
+const PAWN_HISTORY: HistoryConfig = HistoryConfig::new(169, 162, 2208, 251, 188, 1281);
+const TACTICAL_HISTORY: HistoryConfig = HistoryConfig::new(104, 328, 1248, 29, 394, 1122);
 const MAIN_STAT_SCORE_MUL: i32 = 26;
 const CONT1_STAT_SCORE_MUL: i32 = 37;
 const CONT2_STAT_SCORE_MUL: i32 = 33;
@@ -1118,7 +1088,11 @@ pub fn alpha_beta<NT: NodeType>(
                 >= beta
             && !t.nmp_banned_for(t.board.turn())
             && t.board.zugzwang_unlikely()
-            && !matches!(tt_hit, Some(TTHit { value: v, bound: Bound::Upper, .. }) if v < beta)
+            // don't nmp when the tt thinks it’s worthless:
+            && !matches!(tt_hit, Some(TTHit { bound: Bound::Upper, value, .. }) if value < beta)
+            // don't nmp when we have a tt fail-high on an obvious capture:
+            && !matches!(tt_hit, Some(TTHit { bound: Bound::Lower, mov: Some(m), .. })
+                if t.board.estimated_see(&t.info.conf, m) > t.info.conf.see_pawn_value * 2)
         {
             t.tt.prefetch(t.board.key_after_null_move());
             let r = 4
@@ -1165,11 +1139,6 @@ pub fn alpha_beta<NT: NodeType>(
                 }
             }
         }
-    }
-
-    // TT-reduction (IIR).
-    if NT::PV && !matches!(tt_hit, Some(tte) if tte.depth + 4 > depth) {
-        depth -= i32::from(depth >= 4);
     }
 
     // cutnode-based TT reduction.
@@ -1636,12 +1605,13 @@ pub fn alpha_beta<NT: NodeType>(
         );
         // if we're not in check, and we don't have a tactical best-move,
         // and the static eval needs moving in a direction, then update corrhist.
+        let fresh_eval = adj_shuffle(t, raw_eval, clock) + t.correction();
         if !(in_check
             || best_move.is_some_and(|m| t.board.is_tactical(m))
-            || flag == Bound::Lower && best_score <= static_eval
-            || flag == Bound::Upper && best_score >= static_eval)
+            || flag == Bound::Lower && best_score <= fresh_eval
+            || flag == Bound::Upper && best_score >= fresh_eval)
         {
-            t.update_correction_history(depth, tt_complexity, best_score - static_eval);
+            t.update_correction_history(depth, tt_complexity, best_score - fresh_eval);
         }
         t.tt.store(
             key,
