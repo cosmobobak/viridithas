@@ -3,7 +3,7 @@ use crate::{
         chessmove::Move,
         piece::{Colour, Piece, PieceType},
         squareset::SquareSet,
-        types::{ContHistIndex, Square},
+        types::Square,
     },
     historytable::{
         CORRECTION_HISTORY_MAX, HASH_HISTORY_SIZE, history_bonus, history_malus,
