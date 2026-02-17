@@ -1884,31 +1884,83 @@ pub fn adj_shuffle(t: &ThreadData, raw_eval: i32, clock: u8) -> i32 {
 }
 
 pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadData<'a> {
-    let total_nodes = thread_headers[0].info.nodes.get_global();
+    #![expect(clippy::cast_possible_wrap, clippy::large_stack_arrays)]
 
-    let (mut best_thread, rest) = thread_headers.split_first().unwrap();
+    let Some((mut best, rest @ [_next, ..])) = thread_headers.split_first() else {
+        // <2 threads, obvious case:
+        return &thread_headers[0];
+    };
+
+    // Thread voting: each thread votes for its best move,
+    // weighted by (score - min_score + OFFSET) * completed_depth.
+    let min_score = thread_headers
+        .iter()
+        .filter(|t| t.completed > 0)
+        .map(|t| t.pv().score())
+        .min()
+        .unwrap_or(0);
+
+    let vote_value =
+        |t: &ThreadData| -> i64 { i64::from(t.pv().score() - min_score + 10) * t.completed as i64 };
+
+    let mut votes = [[0i64; 64]; 64];
+    for t in thread_headers {
+        if t.completed == 0 {
+            continue;
+        }
+        if let Some(&m) = t.pv().moves().first() {
+            votes[m.from()][m.to()] += vote_value(t);
+        }
+    }
 
     for thread in rest {
-        let best_depth = best_thread.completed;
-        let best_score = best_thread.pvs[best_depth].score();
-        let this_depth = thread.completed;
-        let this_score = thread.pvs[this_depth].score();
-        if (this_depth == best_depth || this_score >= MINIMUM_TB_WIN_SCORE)
-            && this_score > best_score
-        {
-            best_thread = thread;
+        if thread.completed == 0 {
+            continue;
         }
-        if this_depth > best_depth && (this_score > best_score || best_score < MINIMUM_TB_WIN_SCORE)
+
+        let best_score = best.pv().score();
+        let this_score = thread.pv().score();
+
+        let best_move = best.pv().moves().first().copied();
+        let this_move = thread.pv().moves().first().copied();
+
+        // If the current best is decisive, only replace with a more accurate decisive score
+        // (larger absolute value = shorter line to the game-theoretic result).
+        //
+        // This does mean that we prefer to take shorter mates, even when those
+        // mates are bad for us. This is good from a “playing nice” POV, but might
+        // worsen performance if we ever produce spurious mate scores.
+        if is_decisive(best_score) {
+            if this_score.abs() > best_score.abs() {
+                best = thread;
+            }
+            continue;
+        }
+
+        // If this thread found a decisive win, take it.
+        if this_score >= MINIMUM_TB_WIN_SCORE {
+            best = thread;
+            continue;
+        }
+
+        // Otherwise, prefer the thread whose move has more total votes.
+        let best_votes = best_move.map_or(0, |m| votes[m.from()][m.to()]);
+        let this_votes = this_move.map_or(0, |m| votes[m.from()][m.to()]);
+
+        if this_votes > best_votes
+            || (this_votes == best_votes && vote_value(thread) > vote_value(best))
         {
-            best_thread = thread;
+            best = thread;
         }
     }
 
     // if we aren't using the main thread (thread 0) then we need to do
     // an extra uci info line to show the best move/score/pv
-    if best_thread.thread_id != 0 {
+    if best.thread_id != 0 {
+        let total_nodes = thread_headers[0].info.nodes.get_global();
+
         readout_info(
-            best_thread,
+            best,
             &thread_headers[0].info,
             Bound::Exact,
             total_nodes,
@@ -1916,7 +1968,7 @@ pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadD
         );
     }
 
-    best_thread
+    best
 }
 
 /// Print the info about an iteration of the search.
