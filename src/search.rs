@@ -1884,7 +1884,7 @@ pub fn adj_shuffle(t: &ThreadData, raw_eval: i32, clock: u8) -> i32 {
 }
 
 pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadData<'a> {
-    #![expect(clippy::cast_possible_wrap, clippy::large_stack_arrays)]
+    #![expect(clippy::cast_possible_wrap)]
 
     let Some((mut best, rest @ [_next, ..])) = thread_headers.split_first() else {
         // <2 threads, obvious case:
@@ -1903,13 +1903,18 @@ pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadD
     let vote_value =
         |t: &ThreadData| -> i64 { i64::from(t.pv().score() - min_score + 10) * t.completed as i64 };
 
-    let mut votes = [[0i64; 64]; 64];
+    let mut vote_map = ArrayVec::<_, 256>::new();
     for t in thread_headers {
         if t.completed == 0 {
             continue;
         }
         if let Some(&m) = t.pv().moves().first() {
-            votes[m.from()][m.to()] += vote_value(t);
+            let votes = vote_value(t);
+            if let Some(entry) = vote_map.iter_mut().find(|(k, _)| *k == m) {
+                entry.1 += votes;
+            } else {
+                vote_map.push((m, votes));
+            }
         }
     }
 
@@ -1943,9 +1948,16 @@ pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadD
             continue;
         }
 
+        let votes = |m| {
+            vote_map
+                .iter()
+                .find_map(|(k, v)| (*k == m).then_some(*v))
+                .unwrap()
+        };
+
         // Otherwise, prefer the thread whose move has more total votes.
-        let best_votes = best_move.map_or(0, |m| votes[m.from()][m.to()]);
-        let this_votes = this_move.map_or(0, |m| votes[m.from()][m.to()]);
+        let best_votes = best_move.map_or(0, votes);
+        let this_votes = this_move.map_or(0, votes);
 
         if this_votes > best_votes
             || (this_votes == best_votes && vote_value(thread) > vote_value(best))
