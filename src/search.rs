@@ -39,7 +39,7 @@ use crate::{
     util::{INFINITY, MAX_DEPTH, VALUE_NONE},
 };
 
-use self::parameters::Config;
+use self::parameters::{Config, HistoryConfig};
 
 // In alpha-beta search, there are three classes of node to be aware of:
 // 1. PV-nodes: nodes that end up being within the alpha-beta window,
@@ -94,42 +94,12 @@ const LMR_TT_CAPTURE_MUL: i32 = 999;
 const LMR_CHECK_MUL: i32 = 1361;
 const LMR_CORR_MUL: i32 = 448;
 const LMR_BASE_OFFSET: i32 = 226;
-const MAIN_HISTORY_BONUS_MUL: i32 = 357;
-const MAIN_HISTORY_BONUS_OFFSET: i32 = 226;
-const MAIN_HISTORY_BONUS_MAX: i32 = 2241;
-const MAIN_HISTORY_MALUS_MUL: i32 = 111;
-const MAIN_HISTORY_MALUS_OFFSET: i32 = 561;
-const MAIN_HISTORY_MALUS_MAX: i32 = 915;
-const CONT1_HISTORY_BONUS_MUL: i32 = 287;
-const CONT1_HISTORY_BONUS_OFFSET: i32 = 150;
-const CONT1_HISTORY_BONUS_MAX: i32 = 3729;
-const CONT1_HISTORY_MALUS_MUL: i32 = 270;
-const CONT1_HISTORY_MALUS_OFFSET: i32 = 267;
-const CONT1_HISTORY_MALUS_MAX: i32 = 1178;
-const CONT2_HISTORY_BONUS_MUL: i32 = 177;
-const CONT2_HISTORY_BONUS_OFFSET: i32 = 178;
-const CONT2_HISTORY_BONUS_MAX: i32 = 1596;
-const CONT2_HISTORY_MALUS_MUL: i32 = 280;
-const CONT2_HISTORY_MALUS_OFFSET: i32 = 130;
-const CONT2_HISTORY_MALUS_MAX: i32 = 943;
-const CONT4_HISTORY_BONUS_MUL: i32 = 177;
-const CONT4_HISTORY_BONUS_OFFSET: i32 = 185;
-const CONT4_HISTORY_BONUS_MAX: i32 = 1630;
-const CONT4_HISTORY_MALUS_MUL: i32 = 201;
-const CONT4_HISTORY_MALUS_OFFSET: i32 = -32;
-const CONT4_HISTORY_MALUS_MAX: i32 = 945;
-const PAWN_HISTORY_BONUS_MUL: i32 = 169;
-const PAWN_HISTORY_BONUS_OFFSET: i32 = 162;
-const PAWN_HISTORY_BONUS_MAX: i32 = 2208;
-const PAWN_HISTORY_MALUS_MUL: i32 = 251;
-const PAWN_HISTORY_MALUS_OFFSET: i32 = 188;
-const PAWN_HISTORY_MALUS_MAX: i32 = 1281;
-const TACTICAL_HISTORY_BONUS_MUL: i32 = 104;
-const TACTICAL_HISTORY_BONUS_OFFSET: i32 = 328;
-const TACTICAL_HISTORY_BONUS_MAX: i32 = 1248;
-const TACTICAL_HISTORY_MALUS_MUL: i32 = 29;
-const TACTICAL_HISTORY_MALUS_OFFSET: i32 = 394;
-const TACTICAL_HISTORY_MALUS_MAX: i32 = 1122;
+const MAIN_HISTORY: HistoryConfig = HistoryConfig::new(357, 226, 2241, 111, 561, 915);
+const CONT1_HISTORY: HistoryConfig = HistoryConfig::new(287, 150, 3729, 270, 267, 1178);
+const CONT2_HISTORY: HistoryConfig = HistoryConfig::new(177, 178, 1596, 280, 130, 943);
+const CONT4_HISTORY: HistoryConfig = HistoryConfig::new(177, 185, 1630, 201, -32, 945);
+const PAWN_HISTORY: HistoryConfig = HistoryConfig::new(169, 162, 2208, 251, 188, 1281);
+const TACTICAL_HISTORY: HistoryConfig = HistoryConfig::new(104, 328, 1248, 29, 394, 1122);
 const MAIN_STAT_SCORE_MUL: i32 = 26;
 const CONT1_STAT_SCORE_MUL: i32 = 37;
 const CONT2_STAT_SCORE_MUL: i32 = 33;
@@ -1171,11 +1141,6 @@ pub fn alpha_beta<NT: NodeType>(
         }
     }
 
-    // TT-reduction (IIR).
-    if NT::PV && !matches!(tt_hit, Some(tte) if tte.depth + 4 > depth) {
-        depth -= i32::from(depth >= 4);
-    }
-
     // cutnode-based TT reduction.
     if cut_node
         && excluded.is_none()
@@ -1919,31 +1884,95 @@ pub fn adj_shuffle(t: &ThreadData, raw_eval: i32, clock: u8) -> i32 {
 }
 
 pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadData<'a> {
-    let total_nodes = thread_headers[0].info.nodes.get_global();
+    #![expect(clippy::cast_possible_wrap)]
 
-    let (mut best_thread, rest) = thread_headers.split_first().unwrap();
+    let Some((mut best, rest @ [_next, ..])) = thread_headers.split_first() else {
+        // <2 threads, obvious case:
+        return &thread_headers[0];
+    };
+
+    // Thread voting: each thread votes for its best move,
+    // weighted by (score - min_score + OFFSET) * completed_depth.
+    let min_score = thread_headers
+        .iter()
+        .filter(|t| t.completed > 0)
+        .map(|t| t.pv().score())
+        .min()
+        .unwrap_or(0);
+
+    let vote_value =
+        |t: &ThreadData| -> i64 { i64::from(t.pv().score() - min_score + 10) * t.completed as i64 };
+
+    let mut vote_map = ArrayVec::<_, 256>::new();
+    for t in thread_headers {
+        if t.completed == 0 {
+            continue;
+        }
+        if let Some(&m) = t.pv().moves().first() {
+            let votes = vote_value(t);
+            if let Some(entry) = vote_map.iter_mut().find(|(k, _)| *k == m) {
+                entry.1 += votes;
+            } else {
+                vote_map.push((m, votes));
+            }
+        }
+    }
 
     for thread in rest {
-        let best_depth = best_thread.completed;
-        let best_score = best_thread.pvs[best_depth].score();
-        let this_depth = thread.completed;
-        let this_score = thread.pvs[this_depth].score();
-        if (this_depth == best_depth || this_score >= MINIMUM_TB_WIN_SCORE)
-            && this_score > best_score
-        {
-            best_thread = thread;
+        if thread.completed == 0 {
+            continue;
         }
-        if this_depth > best_depth && (this_score > best_score || best_score < MINIMUM_TB_WIN_SCORE)
+
+        let best_score = best.pv().score();
+        let this_score = thread.pv().score();
+
+        let best_move = best.pv().moves().first().copied();
+        let this_move = thread.pv().moves().first().copied();
+
+        // If the current best is decisive, only replace with a more accurate decisive score
+        // (larger absolute value = shorter line to the game-theoretic result).
+        //
+        // This does mean that we prefer to take shorter mates, even when those
+        // mates are bad for us. This is good from a “playing nice” POV, but might
+        // worsen performance if we ever produce spurious mate scores.
+        if is_decisive(best_score) {
+            if this_score.abs() > best_score.abs() {
+                best = thread;
+            }
+            continue;
+        }
+
+        // If this thread found a decisive win, take it.
+        if this_score >= MINIMUM_TB_WIN_SCORE {
+            best = thread;
+            continue;
+        }
+
+        let votes = |m| {
+            vote_map
+                .iter()
+                .find_map(|(k, v)| (*k == m).then_some(*v))
+                .unwrap()
+        };
+
+        // Otherwise, prefer the thread whose move has more total votes.
+        let best_votes = best_move.map_or(0, votes);
+        let this_votes = this_move.map_or(0, votes);
+
+        if this_votes > best_votes
+            || (this_votes == best_votes && vote_value(thread) > vote_value(best))
         {
-            best_thread = thread;
+            best = thread;
         }
     }
 
     // if we aren't using the main thread (thread 0) then we need to do
     // an extra uci info line to show the best move/score/pv
-    if best_thread.thread_id != 0 {
+    if best.thread_id != 0 {
+        let total_nodes = thread_headers[0].info.nodes.get_global();
+
         readout_info(
-            best_thread,
+            best,
             &thread_headers[0].info,
             Bound::Exact,
             total_nodes,
@@ -1951,7 +1980,7 @@ pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadD
         );
     }
 
-    best_thread
+    best
 }
 
 /// Print the info about an iteration of the search.

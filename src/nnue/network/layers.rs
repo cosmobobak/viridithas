@@ -90,7 +90,8 @@ mod generic {
             // SAFETY: `sums` is `L2_SIZE` long, and `output` is `L2_SIZE` long.
             // As such, the indices that we construct are valid.
             unsafe {
-                let preact = (*sums.get_unchecked(i) as f32).mul_add(L1_MUL, *biases.get_unchecked(i));
+                let preact =
+                    (*sums.get_unchecked(i) as f32).mul_add(L1_MUL, *biases.get_unchecked(i));
                 let beta = *swish_beta.get_unchecked(i);
                 let gate = f32::clamp(preact * beta + 0.5, 0.0, 1.0);
                 *output.get_unchecked_mut(i) = preact * gate;
@@ -518,7 +519,8 @@ mod simd {
                 let unscaled = simd::i32_to_f32(simd::load_i32(acc.as_ptr().add(i * F32_CHUNK)));
                 let preact = simd::madd_f32(unscaled, sum_mul, bias);
                 // activate: gate = clamp(x * beta + 0.5, 0, 1)
-                let gate = simd::min_f32(simd::max_f32(simd::madd_f32(preact, beta, half), zero), one);
+                let gate =
+                    simd::min_f32(simd::max_f32(simd::madd_f32(preact, beta, half), zero), one);
                 let act = simd::mul_f32(preact, gate);
                 simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK), act);
             }
@@ -568,8 +570,10 @@ mod simd {
                 let id_preact = simd::load_f32(sums.as_ptr().add(i * F32_CHUNK + L3_SIZE));
                 let beta = simd::load_f32(swish_beta.as_ptr().add(i * F32_CHUNK));
                 // gate = clamp(x * beta + 0.5, 0, 1)
-                let gate =
-                    simd::min_f32(simd::max_f32(simd::madd_f32(gate_preact, beta, half), zero), one);
+                let gate = simd::min_f32(
+                    simd::max_f32(simd::madd_f32(gate_preact, beta, half), zero),
+                    one,
+                );
                 let swish = simd::mul_f32(gate_preact, gate);
                 let act = simd::mul_f32(swish, id_preact);
                 simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK), act);
