@@ -1541,7 +1541,7 @@ mod tests {
             io::{BufRead, BufReader},
         };
 
-        let fens = BufReader::new(File::open("epds/perftsuite.epd").unwrap())
+        let fens = BufReader::new(File::open("assets/epds/perftsuite.epd").unwrap())
             .lines()
             .map(|l| l.unwrap().split_once(';').unwrap().0.trim().to_owned())
             .collect::<Vec<_>>();

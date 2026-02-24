@@ -111,8 +111,8 @@ pub fn gamut() -> anyhow::Result<()> {
     const NODES_LIMIT: u64 = 60_000_000;
     // open perftsuite.epd
     println!("running perft on perftsuite.epd");
-    let f =
-        File::open("epds/perftsuite.epd").with_context(|| "Failed to open epds/perftsuite.epd")?;
+    let f = File::open("assets/epds/perftsuite.epd")
+        .with_context(|| "Failed to open assets/epds/perftsuite.epd")?;
     let mut pos = Board::empty();
     for line in BufReader::new(f).lines() {
         let line = line?;

@@ -1,6 +1,6 @@
 <div align="center">
 
-  ![Logo](images/logo2.png)
+  ![Logo](assets/images/logo2.png)
   
   [![Build][build-badge]][build-link]
   [![License][license-badge]][license-link]
