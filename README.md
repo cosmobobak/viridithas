@@ -84,7 +84,8 @@ Andrew Grant's [Ethereal](https://github.com/AndyGrant/Ethereal), the exceedingl
 [build-link]:https://github.com/cosmobobak/viridithas/actions/workflows/rust.yml
 [commits-badge]:https://img.shields.io/github/commits-since/cosmobobak/viridithas/latest?style=for-the-badge
 [commits-link]:https://github.com/cosmobobak/viridithas/commits/master
-[release-badge]:https://img.shields.io/github/v/release/cosmobobak/viridithas?style=for-the-badge&label=official%20release
+[release-badge]:https://img.shields.io/github/v/tag/cosmobobak/viridithas?style=for-the-badge&label=official%20release
 [release-link]:https://github.com/cosmobobak/viridithas/releases/latest
 [license-badge]:https://img.shields.io/github/license/cosmobobak/viridithas?style=for-the-badge&label=license&color=success
 [license-link]:https://github.com/cosmobobak/viridithas/blob/master/LICENSE
+
