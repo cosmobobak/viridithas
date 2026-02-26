@@ -1618,13 +1618,22 @@ pub fn visualise_nnue() -> anyhow::Result<()> {
     for neuron in 0..crate::nnue::network::L1_SIZE {
         nnue_params.visualise_neuron(neuron, &path);
     }
+    nnue_params.composite_neurons(&path);
     let (min, max) = nnue_params.min_max_feature_weight();
     println!("Min / Max FT values: {min} / {max}");
     Ok(())
 }
 
+const IMAGE_SPACING: usize = 0;
+
 impl NNUEParams {
     pub fn visualise_neuron(&self, neuron: usize, path: &std::path::Path) {
+        let image = self.neuron_image(neuron);
+        let path = path.join(format!("neuron_{neuron}.tga"));
+        image.save_as_tga(path);
+    }
+
+    fn neuron_image(&self, neuron: usize) -> Image {
         #![allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         // remap pieces to keep opposite colours together
         static PIECE_REMAPPING: [usize; 12] = [0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11];
@@ -1634,41 +1643,38 @@ impl NNUEParams {
         for colour in Colour::all() {
             for piece_type in PieceType::all() {
                 for square in Square::all() {
-                    let feature_indices = {
-                        let white_king = Square::H1;
-                        let black_king = Square::H8;
-                        let f = FeatureUpdate {
-                            sq: square,
-                            piece: Piece::new(colour, piece_type),
-                        };
-                        [
-                            feature::index(Colour::White, white_king, f),
-                            feature::index(Colour::Black, black_king, f),
-                        ]
+                    let white_king = Square::H1;
+                    let f = FeatureUpdate {
+                        sq: square,
+                        piece: Piece::new(colour, piece_type),
                     };
-                    let index = feature_indices[Colour::White].index() * L1_SIZE + starting_idx;
+                    let feature_index = feature::index(Colour::White, white_king, f);
+                    let index = feature_index.index() * L1_SIZE + starting_idx;
                     slice.push(self.l0_weights[index]);
                 }
             }
         }
 
-        let mut image = Image::zeroed(8 * 6 + 5, 8 * 2 + 1); // + for inter-piece spacing
+        let max_abs = slice.iter().copied().map(i16::unsigned_abs).max().unwrap();
+        let weight_to_colour = |weight: i16| -> u32 {
+            if max_abs == 0 {
+                return image::inferno_colour_map(0);
+            }
+            let magnitude = f32::from(weight.unsigned_abs()) / f32::from(max_abs);
+            let idx = (magnitude * 255.0).round() as u8;
+            if weight >= 0 {
+                image::inferno_colour_map(idx)
+            } else {
+                image::cool_inferno_colour_map(idx)
+            }
+        };
+
+        let mut image = Image::zeroed(8 * 6 + IMAGE_SPACING * 5, 8 * 2 + IMAGE_SPACING);
 
         for (piece, chunk) in slice.chunks(64).enumerate() {
             let piece = PIECE_REMAPPING[piece];
             let piece_colour = piece % 2;
             let piece_type = piece / 2;
-            let (max, min) = if piece_type == 0 {
-                let chunk = &chunk[8..56]; // first and last rank are always 0 for pawns
-                (*chunk.iter().max().unwrap(), *chunk.iter().min().unwrap())
-            } else {
-                (*chunk.iter().max().unwrap(), *chunk.iter().min().unwrap())
-            };
-            let weight_to_colour = |weight: i16| -> u32 {
-                let intensity = f32::from(weight - min) / f32::from(max - min);
-                let idx = (intensity * 255.0).round() as u8;
-                image::inferno_colour_map(idx)
-            };
             for (square, &weight) in chunk.iter().enumerate() {
                 let row = square / 8;
                 let col = square % 8;
@@ -1678,15 +1684,61 @@ impl NNUEParams {
                     weight_to_colour(weight)
                 };
                 image.set(
-                    col + piece_type * 8 + piece_type,
-                    row + piece_colour * 9,
+                    col + piece_type * (8 + IMAGE_SPACING),
+                    row + piece_colour * (8 + IMAGE_SPACING),
                     colour,
                 );
             }
         }
 
-        let path = path.join(format!("neuron_{neuron}.tga"));
-        image.save_as_tga(path);
+        image
+    }
+
+    pub fn composite_neurons(&self, path: &Path) {
+        const TILE_W: usize = 8 * 6 + IMAGE_SPACING * 5;
+        const TILE_H: usize = 8 * 2 + IMAGE_SPACING;
+
+        // aiming for a 16:9 aspect ratio
+        let cols = (1..=L1_SIZE)
+            .min_by_key(|&c| {
+                let rows = L1_SIZE.div_ceil(c);
+                let w = c * (TILE_W + IMAGE_SPACING);
+                let h = rows * (TILE_H + IMAGE_SPACING);
+                // minimise |w/h - 16/9|, i.e. |9w - 16h|
+                (9 * w).abs_diff(16 * h)
+            })
+            .unwrap();
+        let rows = L1_SIZE.div_ceil(cols);
+        let img_w = cols * TILE_W + (cols - 1) * IMAGE_SPACING;
+        let img_h = rows * TILE_H + (rows - 1) * IMAGE_SPACING;
+
+        #[expect(clippy::cast_possible_truncation)]
+        let neuron_order = (0..L1_SIZE as u16).collect::<ArrayVec<u16, L1_SIZE>>();
+        // the sorting is nice, but doesn’t look quite so pretty.
+        // neuron_order.sort_by_key(|&n| {
+        //     let start = n;
+        //     let mean_abs: u64 = (0..INPUT)
+        //         .map(|i| u64::from(self.l0_weights[i * L1_SIZE + start as usize].unsigned_abs()))
+        //         .sum();
+        //     mean_abs
+        // });
+        let mut composite = Image::zeroed(img_w, img_h);
+        for (loc, &neuron) in neuron_order.iter().enumerate() {
+            let col = loc % cols;
+            let row = loc / cols;
+            let ox = col * (TILE_W + IMAGE_SPACING);
+            let oy = row * (TILE_H + IMAGE_SPACING);
+            let tile = self.neuron_image(neuron as usize);
+            for ty in 0..TILE_H {
+                for tx in 0..TILE_W {
+                    composite.set(ox + tx, oy + ty, tile.pixel(tx, ty));
+                }
+            }
+        }
+
+        let path = path.join("composite.tga");
+
+        composite.save_as_tga(path);
     }
 
     pub fn min_max_feature_weight(&self) -> (i16, i16) {
