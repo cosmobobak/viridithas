@@ -1686,6 +1686,10 @@ fn rfp_margin(pos: &Board, info: &SearchInfo, depth: i32, improving: bool, corre
     info.conf.rfp_margin * depth
         - i32::from(improving && !can_win_material(pos)) * info.conf.rfp_improving_margin
         + correction.abs() / 2
+        - 64 * i32::from(
+            pos.state.threats.all & pos.state.bbs.colours[pos.turn()] != SquareSet::EMPTY
+                && !pos.in_check(),
+        )
 }
 
 /// Update the main and continuation history tables for a batch of moves.
