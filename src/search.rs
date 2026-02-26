@@ -206,7 +206,7 @@ pub fn search_position(
             tablebases::probe::get_tablebase_move(&thread_headers[0].board)
     {
         let pv = &mut thread_headers[0].pvs[1];
-        pv.load_from(best_move, &PVariation::default());
+        pv.load_from(best_move, &PVariation::new());
         pv.score = score;
         thread_headers[0].info.tbhits.increment();
         thread_headers[0].info.tbhits.flush();
@@ -326,7 +326,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
         !ThTy::MAIN_THREAD || t.thread_id == 0,
         "main thread must have thread_id 0"
     );
-    let mut pv = PVariation::default();
+    let mut pv = PVariation::new();
     let max_depth = dyn_max_depth(t);
     let mut average_value = VALUE_NONE;
     'deepening: for iteration in 1..=max_depth {
@@ -507,7 +507,7 @@ pub fn quiescence<NT: NodeType>(
 
     let key = t.board.state.keys.zobrist ^ HM_CLOCK_KEYS[t.board.state.fifty_move_counter as usize];
 
-    let mut local_pv = PVariation::default();
+    let mut local_pv = PVariation::new();
     let l_pv = &mut local_pv;
 
     pv.moves.clear();
@@ -734,7 +734,7 @@ pub fn alpha_beta<NT: NodeType>(
     #[cfg(debug_assertions)]
     t.board.check_validity();
 
-    let mut local_pv = PVariation::default();
+    let mut local_pv = PVariation::new();
     let l_pv = &mut local_pv;
 
     let key = t.board.state.keys.zobrist ^ HM_CLOCK_KEYS[t.board.state.fifty_move_counter as usize];
@@ -1240,8 +1240,10 @@ pub fn alpha_beta<NT: NodeType>(
                     t.ss[height].ttpv,
                 );
 
+                // if the value is a mate or TB-win, don't interpolate it.
+                // it's completely fine to return decisive scores here,
+                // as they lower-bound the true score.
                 if is_decisive(value) {
-                    // it's totally sound to return mates as cutoffs here.
                     return value;
                 }
 
@@ -1370,9 +1372,12 @@ pub fn alpha_beta<NT: NodeType>(
             let r_beta = tte.value - depth * 48 / 64;
             let r_depth = (depth - 1) / 2;
 
+            // execute a search of the position, pretending that
+            // the move `m` is unplayable, to determine how important
+            // that move is.
             t.ss[height].excluded = Some(m);
             let value = alpha_beta::<OffPV>(
-                &mut PVariation::default(),
+                &mut PVariation::new(),
                 t,
                 r_depth,
                 r_beta - 1,
@@ -1394,9 +1399,11 @@ pub fn alpha_beta<NT: NodeType>(
                     // normal singular extension
                     extension = 1;
                 }
-            } else if !NT::PV && value >= beta && !is_decisive(value) {
+            } else if !NT::PV && value >= beta {
                 // multi-cut: if a move other than the best one beats beta,
                 // then we can cut with relatively high confidence.
+                // it's completely fine to return decisive scores here,
+                // as they lower-bound the true score.
                 return value;
             } else if tte.value >= beta {
                 // a sort of light multi-cut.
@@ -1725,7 +1732,7 @@ pub fn is_forced(margin: i32, t: &mut ThreadData, m: Move, value: i32, depth: i3
     let pts_prev = t.info.print_to_stdout;
     t.info.print_to_stdout = false;
     let value = alpha_beta::<CheckForced>(
-        &mut PVariation::default(),
+        &mut PVariation::new(),
         t,
         r_depth,
         r_beta - 1,
@@ -2105,18 +2112,16 @@ pub struct LMTable {
 }
 
 impl LMTable {
-    pub const NULL: Self = Self {
-        lm_reduction_table: [[0; 64]; 64],
-        lmp_movecount_table: [[0; 12]; 2],
-    };
-
     pub fn new(config: &Config) -> Self {
         #![allow(
             clippy::cast_possible_truncation,
             clippy::cast_precision_loss,
             clippy::cast_sign_loss
         )]
-        let mut out = Self::NULL;
+        let mut out = Self {
+            lm_reduction_table: [[0; 64]; 64],
+            lmp_movecount_table: [[0; 12]; 2],
+        };
         let (base, division) = (
             config.lmr_base / 100.0 * 1024.0,
             config.lmr_division / 100.0 / 1024.0,
@@ -2144,11 +2149,5 @@ impl LMTable {
     pub fn lmp_movecount(&self, depth: i32, improving: bool) -> usize {
         let depth: usize = depth.clamp(0, 11).try_into().unwrap_or_default();
         self.lmp_movecount_table[usize::from(improving)][depth]
-    }
-}
-
-impl Default for LMTable {
-    fn default() -> Self {
-        Self::new(&Config::default())
     }
 }

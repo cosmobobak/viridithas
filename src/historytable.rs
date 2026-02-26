@@ -65,11 +65,7 @@ impl HistoryTable {
     }
 
     pub fn clear(&mut self) {
-        if self.table.is_empty() {
-            self.table = [[0; BOARD_N_SQUARES]; 12];
-        } else {
-            self.table.iter_mut().flatten().for_each(|x| *x = 0);
-        }
+        self.table.iter_mut().flatten().for_each(|x| *x = 0);
     }
 }
 
@@ -94,10 +90,9 @@ pub struct ThreatsHistoryTable {
 
 impl ThreatsHistoryTable {
     pub const fn new() -> Self {
-        const ELEM: HistoryTable = HistoryTable::new();
-        const SLICE: [HistoryTable; 2] = [ELEM; 2];
-        const ARRAY: [[HistoryTable; 2]; 2] = [SLICE; 2];
-        Self { table: ARRAY }
+        Self {
+            table: [const { [const { HistoryTable::new() }; 2] }; 2],
+        }
     }
 
     pub fn clear(&mut self) {

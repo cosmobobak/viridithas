@@ -407,6 +407,12 @@ impl Board {
         ];
     }
 
+    pub fn startpos() -> Self {
+        let mut out = Self::empty();
+        out.set_startpos();
+        out
+    }
+
     #[cfg(test)]
     pub fn from_fen(fen: &str) -> Result<Self, crate::errors::FenParseError> {
         let parsed = Fen::parse_relaxed(fen)?;
@@ -1194,7 +1200,7 @@ impl Board {
     }
 
     pub fn legal_moves(&self) -> ArrayVec<Move, MAX_POSITION_MOVES> {
-        let mut legal_moves = ArrayVec::default();
+        let mut legal_moves = ArrayVec::new();
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
         for &m in move_list.iter_moves() {
@@ -1403,14 +1409,6 @@ impl GameOutcome {
     }
 }
 
-impl Default for Board {
-    fn default() -> Self {
-        let mut out = Self::empty();
-        out.set_startpos();
-        out
-    }
-}
-
 impl Display for Board {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         let mut counter = 0;
@@ -1505,7 +1503,7 @@ mod tests {
             Board::from_fen("rnbqkb1r/pppppppp/5n2/8/3N4/8/PPPPPPPP/RNBQKB1R b KQkq - 100 2")
                 .unwrap();
         assert_eq!(fiftymove_draw.outcome(), Some(Draw(FiftyMoves)));
-        let mut draw_repetition = Board::default();
+        let mut draw_repetition = Board::startpos();
         assert_eq!(draw_repetition.outcome(), None);
         draw_repetition.make_move_simple(Move::new(Square::G1, Square::F3));
         draw_repetition.make_move_simple(Move::new(Square::B8, Square::C6));
@@ -1624,7 +1622,7 @@ mod tests {
         use super::Board;
         use crate::chess::chessmove::Move;
         use crate::chess::types::Square;
-        let mut board = Board::default();
+        let mut board = Board::startpos();
         let mv = Move::new(Square::E2, Square::E3);
         let key = board.key_after(mv);
         board.make_move_simple(mv);
@@ -1649,7 +1647,7 @@ mod tests {
     #[test]
     fn key_after_works_for_nullmove() {
         use super::Board;
-        let mut board = Board::default();
+        let mut board = Board::startpos();
         let key = board.key_after_null_move();
         board.make_nullmove();
         assert_eq!(board.state.keys.zobrist, key);
@@ -1708,13 +1706,13 @@ mod tests {
         use super::Board;
         use crate::chess::chessmove::Move;
         use crate::chess::types::Square;
-        let mut board = Board::default();
+        let mut board = Board::startpos();
         assert!(board.is_legal(Move::new(Square::E2, Square::E4)));
         board.make_move_simple(Move::new(Square::E2, Square::E4));
         assert!(board.is_legal(Move::new(Square::E7, Square::E5)));
         board.make_move_simple(Move::new(Square::E7, Square::E5));
         board.set_startpos();
-        let board2 = Board::default();
+        let board2 = Board::startpos();
         assert_eq!(board, board2);
     }
 

@@ -87,7 +87,7 @@ pub fn main_loop() -> Result<(), UciError> {
     let nodes = AtomicU64::new(0);
     let tbhits = AtomicU64::new(0);
     let mut thread_data = make_thread_data(
-        &Board::default(),
+        &Board::startpos(),
         tt.view(),
         nnue_params,
         &stopped,
@@ -833,7 +833,7 @@ pub fn bench(
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE, &pool);
     let mut thread_data = make_thread_data(
-        &Board::default(),
+        &Board::startpos(),
         tt.view(),
         nnue_params,
         &stopped,
@@ -938,7 +938,7 @@ pub fn go_benchmark(nnue_params: &'static NNUEParams) -> Result<(), UciError> {
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE, &pool);
     let mut thread_data = make_thread_data(
-        &Board::default(),
+        &Board::startpos(),
         tt.view(),
         nnue_params,
         &stopped,

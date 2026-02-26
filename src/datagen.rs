@@ -433,7 +433,7 @@ fn generate_on_thread<'a>(
     let tbhits = AtomicU64::new(0);
     let mut thread_data = std::array::from_fn::<_, 2, _>(|colour| {
         make_thread_data(
-            &Board::default(),
+            &Board::startpos(),
             tts[colour].view(),
             nnue_params,
             &stopped,
@@ -1077,7 +1077,7 @@ fn relabel_binpacks(
     mut output_buffer: impl Write,
 ) -> Result<(), anyhow::Error> {
     let nnue_params = NNUEParams::decompress_and_alloc()?;
-    let mut nnue_state = NNUEState::new(&Board::default(), nnue_params);
+    let mut nnue_state = NNUEState::new(&Board::startpos(), nnue_params);
 
     let mut move_buffer = Vec::new();
     while let Ok(mut game) =
