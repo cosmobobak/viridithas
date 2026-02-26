@@ -465,11 +465,10 @@ pub struct State {
 impl Default for State {
     fn default() -> Self {
         Self {
-            // curse thee array autoimpls
             mailbox: [None; 64],
             castle_perm: CastlingRights::default(),
             ep_square: None,
-            fifty_move_counter: u8::default(),
+            fifty_move_counter: 0,
             threats: Threats::default(),
             bbs: PieceLayout::default(),
             pinned: <[SquareSet; 2]>::default(),

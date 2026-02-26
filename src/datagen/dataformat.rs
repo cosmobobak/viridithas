@@ -442,7 +442,7 @@ mod tests {
 
     #[test]
     fn game_roundtrip() {
-        let mut game = Game::new(&Board::default());
+        let mut game = Game::new(&Board::startpos());
         game.add_move(Move::new(Square::E2, Square::E4), 0);
         game.add_move(Move::new(Square::E7, Square::E5), -314);
         game.add_move(Move::new(Square::G1, Square::F3), 200);
@@ -456,7 +456,7 @@ mod tests {
 
     #[test]
     fn splat() {
-        let mut game = Game::new(&Board::default());
+        let mut game = Game::new(&Board::startpos());
         game.add_move(Move::new(Square::E2, Square::E4), 3);
         game.add_move(Move::new(Square::E7, Square::E5), -314);
         game.add_move(Move::new(Square::G1, Square::F3), 200);
@@ -472,7 +472,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(boards.len(), 3);
-        let mut check_board = Board::default();
+        let mut check_board = Board::startpos();
         assert_eq!(boards[0].unpack().0.to_string(), check_board.to_string());
         assert_eq!(boards[0].unpack().1, 3);
         let e4 = Move::new(Square::E2, Square::E4);

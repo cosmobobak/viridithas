@@ -420,7 +420,8 @@ impl MergedNetwork {
             ($name:expr, $field:expr) => {
                 writeln!(writer, $name)?;
                 let len = size_of_val(&$field) / size_of::<f32>();
-                // SAFETY: lol
+                // SAFETY: the field is a contiguous array of f32, so casting
+                // to *const f32 is valid, and `len` is size_of_val / size_of::<f32>().
                 let slice = unsafe {
                     let ptr = $field.as_ptr().cast::<f32>();
                     std::slice::from_raw_parts(ptr, len)
@@ -1116,7 +1117,7 @@ pub fn dry_run() -> anyhow::Result<()> {
         println!("[#] Embedded NNUE is compressed, dry-run must operate on zeroed network.");
     }
     println!("[#] Constructing Board");
-    let start_pos = Board::default();
+    let start_pos = Board::startpos();
     println!("[#] Generating network parameters");
     let nnue_params = if EMBEDDED_NNUE_VERBATIM {
         Static(NNUEParams::decompress_and_alloc()?)
@@ -1596,7 +1597,7 @@ impl NNUEState {
 /// (everything after the feature extraction)
 pub fn inference_benchmark(state: &NNUEState, nnue_params: &NNUEParams) {
     let start = std::time::Instant::now();
-    let board = Board::default();
+    let board = Board::startpos();
     for _ in 0..1_000_000 {
         std::hint::black_box(std::hint::black_box(state).evaluate(
             std::hint::black_box(nnue_params),
