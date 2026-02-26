@@ -1836,12 +1836,12 @@ pub fn static_exchange_eval(board: &Board, conf: &Config, m: Move, threshold: i3
             || next_victim == PieceType::Bishop
             || next_victim == PieceType::Queen
         {
-            attackers |= movegen::bishop_attacks(to, occupied) & diag_sliders;
+            attackers |= movegen::diag_attacks(to, occupied) & diag_sliders;
         }
 
         // orthogonal moves reveal rooks and queens:
         if next_victim == PieceType::Rook || next_victim == PieceType::Queen {
-            attackers |= movegen::rook_attacks(to, occupied) & orth_sliders;
+            attackers |= movegen::orth_attacks(to, occupied) & orth_sliders;
         }
 
         attackers &= occupied;

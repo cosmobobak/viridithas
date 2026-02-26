@@ -13,7 +13,7 @@ use movegen::{MAX_POSITION_MOVES, RAY_BETWEEN, RAY_FULL};
 use crate::{
     chess::{
         CHESS960,
-        board::movegen::{MoveList, bishop_attacks, pawn_attacks, pawn_attacks_by, rook_attacks},
+        board::movegen::{MoveList, diag_attacks, orth_attacks, pawn_attacks, pawn_attacks_by},
         chessmove::{Move, MoveFlags},
         fen::Fen,
         piece::{Black, Col, Colour, Piece, PieceType, White},
@@ -646,9 +646,9 @@ impl Board {
 
             let occ_after = bbs.occupied() ^ to.as_set() ^ from.as_set() ^ cap_sq.as_set();
 
-            return bishop_attacks(king, occ_after) & (their_queens | their_bishops)
+            return diag_attacks(king, occ_after) & (their_queens | their_bishops)
                 == SquareSet::EMPTY
-                && rook_attacks(king, occ_after) & (their_queens | their_rooks)
+                && orth_attacks(king, occ_after) & (their_queens | their_rooks)
                     == SquareSet::EMPTY;
         }
 
@@ -659,8 +659,8 @@ impl Board {
 
             let diags = their_queens | their_bishops;
             let orthos = their_queens | their_rooks;
-            let moving_into_check = bishop_attacks(to, without_king) & diags != SquareSet::EMPTY
-                || rook_attacks(to, without_king) & orthos != SquareSet::EMPTY;
+            let moving_into_check = diag_attacks(to, without_king) & diags != SquareSet::EMPTY
+                || orth_attacks(to, without_king) & orthos != SquareSet::EMPTY;
             return !moving_into_check;
         }
 
