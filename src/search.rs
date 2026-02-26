@@ -13,7 +13,7 @@ use crate::{
         CHESS960,
         board::{
             Board,
-            movegen::{self, MAX_POSITION_MOVES, RAY_FULL},
+            movegen::{self, MAX_POSITION_MOVES, RAY_PASS},
         },
         chessmove::Move,
         piece::{Colour, Piece, PieceType},
@@ -1792,24 +1792,22 @@ pub fn static_exchange_eval(board: &Board, conf: &Config, m: Move, threshold: i3
     // after the move, it's the opponent's turn.
     let mut colour = !board.turn();
 
-    let white_pinned = board.state.pinned[Colour::White];
-    let black_pinned = board.state.pinned[Colour::Black];
-
     let kings = bbs.pieces[PieceType::King];
     let white_king = kings & bbs.colours[Colour::White];
     let black_king = kings & bbs.colours[Colour::Black];
 
-    let white_king_ray = RAY_FULL[to][white_king.first().unwrap()];
-    let black_king_ray = RAY_FULL[to][black_king.first().unwrap()];
+    let king_rays = [
+        RAY_PASS[white_king.first().unwrap()][to],
+        RAY_PASS[black_king.first().unwrap()][to],
+    ];
 
-    let allowed = !(white_pinned | black_pinned)
-        | (white_pinned & white_king_ray)
-        | (black_pinned & black_king_ray);
-
-    let mut attackers = bbs.all_attackers_to_sq(to, occupied) & allowed;
+    let mut attackers = bbs.all_attackers_to_sq(to, occupied);
 
     loop {
-        let my_attackers = attackers & bbs.colours[colour];
+        let mut my_attackers = attackers & bbs.colours[colour];
+        if (board.state.pinners[!colour] & occupied) != SquareSet::EMPTY {
+            my_attackers &= !(board.state.pinned[colour] & !king_rays[colour]);
+        }
         if my_attackers == SquareSet::EMPTY {
             break;
         }

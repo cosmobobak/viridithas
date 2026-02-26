@@ -190,10 +190,10 @@ impl Board {
         );
         self.state.keys = self.state.generate_pos_keys(self.side);
         self.state.threats = self.state.bbs.generate_threats(self.side);
-        self.state.pinned = [
-            self.state.bbs.generate_pinned(Colour::White),
-            self.state.bbs.generate_pinned(Colour::Black),
-        ];
+        let (white_pinned, black_pinners) = self.state.bbs.generate_pinned(Colour::White);
+        let (black_pinned, white_pinners) = self.state.bbs.generate_pinned(Colour::Black);
+        self.state.pinned = [white_pinned, black_pinned];
+        self.state.pinners = [white_pinners, black_pinners];
     }
 
     pub fn set_dfrc_idx(&mut self, scharnagl: usize) {
@@ -246,10 +246,10 @@ impl Board {
         );
         self.state.keys = self.state.generate_pos_keys(self.side);
         self.state.threats = self.state.bbs.generate_threats(self.side);
-        self.state.pinned = [
-            self.state.bbs.generate_pinned(Colour::White),
-            self.state.bbs.generate_pinned(Colour::Black),
-        ];
+        let (white_pinned, black_pinners) = self.state.bbs.generate_pinned(Colour::White);
+        let (black_pinned, white_pinners) = self.state.bbs.generate_pinned(Colour::Black);
+        self.state.pinned = [white_pinned, black_pinned];
+        self.state.pinners = [white_pinners, black_pinners];
     }
 
     pub fn get_scharnagl_backrank(scharnagl: usize) -> [PieceType; 8] {
@@ -348,10 +348,10 @@ impl Board {
         // generate derived state
         self.state.keys = self.state.generate_pos_keys(self.side);
         self.state.threats = self.state.bbs.generate_threats(self.side);
-        self.state.pinned = [
-            self.state.bbs.generate_pinned(Colour::White),
-            self.state.bbs.generate_pinned(Colour::Black),
-        ];
+        let (white_pinned, black_pinners) = self.state.bbs.generate_pinned(Colour::White);
+        let (black_pinned, white_pinners) = self.state.bbs.generate_pinned(Colour::Black);
+        self.state.pinned = [white_pinned, black_pinned];
+        self.state.pinners = [white_pinners, black_pinners];
 
         // clear illegal en-passant squares:
         let can_attack = self
@@ -401,10 +401,10 @@ impl Board {
 
         self.state.keys = self.state.generate_pos_keys(self.side);
         self.state.threats = self.state.bbs.generate_threats(self.side);
-        self.state.pinned = [
-            self.state.bbs.generate_pinned(Colour::White),
-            self.state.bbs.generate_pinned(Colour::Black),
-        ];
+        let (white_pinned, black_pinners) = self.state.bbs.generate_pinned(Colour::White);
+        let (black_pinned, white_pinners) = self.state.bbs.generate_pinned(Colour::Black);
+        self.state.pinned = [white_pinned, black_pinned];
+        self.state.pinners = [white_pinners, black_pinners];
     }
 
     #[cfg(test)]
@@ -905,10 +905,10 @@ impl Board {
         self.height += 1;
 
         self.state.threats = self.state.bbs.generate_threats(self.side);
-        self.state.pinned = [
-            self.state.bbs.generate_pinned(Colour::White),
-            self.state.bbs.generate_pinned(Colour::Black),
-        ];
+        let (white_pinned, black_pinners) = self.state.bbs.generate_pinned(Colour::White);
+        let (black_pinned, white_pinners) = self.state.bbs.generate_pinned(Colour::Black);
+        self.state.pinned = [white_pinned, black_pinned];
+        self.state.pinners = [white_pinners, black_pinners];
 
         #[cfg(debug_assertions)]
         self.check_validity();
@@ -970,12 +970,14 @@ impl Board {
             threats,
             keys,
             pinned,
+            pinners,
             ..
         } = self.history.last().expect("No move to unmake!");
 
         self.state.ep_square = *ep_square;
         self.state.threats = *threats;
         self.state.pinned = *pinned;
+        self.state.pinners = *pinners;
         self.state.keys.zobrist = keys.zobrist;
 
         self.history.pop();

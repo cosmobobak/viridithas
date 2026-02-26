@@ -232,10 +232,11 @@ impl PieceLayout {
         king_bb.first().unwrap()
     }
 
-    pub fn generate_pinned(&self, side: Colour) -> SquareSet {
+    pub fn generate_pinned(&self, side: Colour) -> (SquareSet, SquareSet) {
         use PieceType::{Bishop, Queen, Rook};
 
         let mut pinned = SquareSet::EMPTY;
+        let mut pinners = SquareSet::EMPTY;
 
         let king = self.king_sq(side);
 
@@ -252,10 +253,11 @@ impl PieceLayout {
             let maybe_pinned = us & RAY_BETWEEN[king][potential_attacker];
             if maybe_pinned.one() {
                 pinned |= maybe_pinned;
+                pinners |= potential_attacker.as_set();
             }
         }
 
-        pinned
+        (pinned, pinners)
     }
 
     pub fn generate_threats(&self, side: Colour) -> Threats {

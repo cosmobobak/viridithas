@@ -456,6 +456,8 @@ pub struct State {
     pub bbs: PieceLayout,
     /// Pieces that cannot be moved without the king being checked.
     pub pinned: [SquareSet; 2],
+    /// Pieces that are pinning other pieces.
+    pub pinners: [SquareSet; 2],
     /// An array to accelerate `Board::piece_at()`.
     pub mailbox: [Option<Piece>; 64],
     /// Zobrist hashes.
@@ -473,6 +475,7 @@ impl Default for State {
             threats: Threats::default(),
             bbs: PieceLayout::default(),
             pinned: <[SquareSet; 2]>::default(),
+            pinners: <[SquareSet; 2]>::default(),
             keys: Keys::default(),
         }
     }

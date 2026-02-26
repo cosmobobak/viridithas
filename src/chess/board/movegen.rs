@@ -127,6 +127,35 @@ pub static RAY_BETWEEN: [[SquareSet; 64]; 64] = {
     res
 };
 
+pub static RAY_PASS: [[SquareSet; 64]; 64] = {
+    let mut res = [[SquareSet::EMPTY; 64]; 64];
+    let mut from = Square::A1;
+    loop {
+        let mut to = Square::A1;
+        loop {
+            if rook_attacks_on_the_fly(from, SquareSet::EMPTY).contains_square(to) {
+                let a = rook_attacks_on_the_fly(from, SquareSet::EMPTY);
+                let b = rook_attacks_on_the_fly(to, from.as_set());
+                res[from.index()][to.index()] = SquareSet::intersection(a, b);
+            }
+            if bishop_attacks_on_the_fly(from, SquareSet::EMPTY).contains_square(to) {
+                let a = bishop_attacks_on_the_fly(from, SquareSet::EMPTY);
+                let b = bishop_attacks_on_the_fly(to, from.as_set());
+                res[from.index()][to.index()] = SquareSet::intersection(a, b);
+            }
+            let Some(next) = to.add(1) else {
+                break;
+            };
+            to = next;
+        }
+        let Some(next) = from.add(1) else {
+            break;
+        };
+        from = next;
+    }
+    res
+};
+
 pub static RAY_INTERSECTING: [[SquareSet; 64]; 64] = {
     let mut res = [[SquareSet::EMPTY; 64]; 64];
     let mut from = Square::A1;
