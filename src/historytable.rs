@@ -5,98 +5,18 @@ use crate::{
         piece::{Colour, Piece},
         types::Square,
     },
-    search::parameters::Config,
+    search::parameters::HistoryConfig,
     util::BOARD_N_SQUARES,
 };
 
-pub fn main_history_bonus(conf: &Config, depth: i32) -> i32 {
-    i32::min(
-        conf.main_history_bonus_mul * depth + conf.main_history_bonus_offset,
-        conf.main_history_bonus_max,
-    )
-}
-pub fn main_history_malus(conf: &Config, depth: i32) -> i32 {
-    i32::min(
-        conf.main_history_malus_mul * depth + conf.main_history_malus_offset,
-        conf.main_history_malus_max,
-    )
-}
-pub fn cont1_history_bonus(conf: &Config, depth: i32) -> i32 {
-    i32::min(
-        conf.cont1_history_bonus_mul * depth + conf.cont1_history_bonus_offset,
-        conf.cont1_history_bonus_max,
-    )
-}
-pub fn cont1_history_malus(conf: &Config, depth: i32) -> i32 {
-    i32::min(
-        conf.cont1_history_malus_mul * depth + conf.cont1_history_malus_offset,
-        conf.cont1_history_malus_max,
-    )
-}
-pub fn cont2_history_bonus(conf: &Config, depth: i32) -> i32 {
-    i32::min(
-        conf.cont2_history_bonus_mul * depth + conf.cont2_history_bonus_offset,
-        conf.cont2_history_bonus_max,
-    )
-}
-pub fn cont2_history_malus(conf: &Config, depth: i32) -> i32 {
-    i32::min(
-        conf.cont2_history_malus_mul * depth + conf.cont2_history_malus_offset,
-        conf.cont2_history_malus_max,
-    )
-}
-pub fn cont4_history_bonus(conf: &Config, depth: i32) -> i32 {
-    i32::min(
-        conf.cont4_history_bonus_mul * depth + conf.cont4_history_bonus_offset,
-        conf.cont4_history_bonus_max,
-    )
-}
-pub fn cont4_history_malus(conf: &Config, depth: i32) -> i32 {
-    i32::min(
-        conf.cont4_history_malus_mul * depth + conf.cont4_history_malus_offset,
-        conf.cont4_history_malus_max,
-    )
-}
-pub fn pawn_history_bonus(conf: &Config, depth: i32) -> i32 {
-    i32::min(
-        conf.pawn_history_bonus_mul * depth + conf.pawn_history_bonus_offset,
-        conf.pawn_history_bonus_max,
-    )
-}
-pub fn pawn_history_malus(conf: &Config, depth: i32) -> i32 {
-    i32::min(
-        conf.pawn_history_malus_mul * depth + conf.pawn_history_malus_offset,
-        conf.pawn_history_malus_max,
-    )
-}
-pub fn tactical_history_bonus(conf: &Config, depth: i32) -> i32 {
-    i32::min(
-        conf.tactical_history_bonus_mul * depth + conf.tactical_history_bonus_offset,
-        conf.tactical_history_bonus_max,
-    )
-}
-pub fn tactical_history_malus(conf: &Config, depth: i32) -> i32 {
-    i32::min(
-        conf.tactical_history_malus_mul * depth + conf.tactical_history_malus_offset,
-        conf.tactical_history_malus_max,
-    )
+#[inline]
+pub fn history_bonus(conf: &HistoryConfig, depth: i32) -> i32 {
+    i32::min(conf.bonus_mul * depth + conf.bonus_offset, conf.bonus_max)
 }
 
-pub fn cont_history_bonus(conf: &Config, depth: i32, index: usize) -> i32 {
-    match index {
-        1 => cont1_history_bonus(conf, depth),
-        2 => cont2_history_bonus(conf, depth),
-        4 => cont4_history_bonus(conf, depth),
-        _ => unreachable!(),
-    }
-}
-pub fn cont_history_malus(conf: &Config, depth: i32, index: usize) -> i32 {
-    match index {
-        1 => cont1_history_malus(conf, depth),
-        2 => cont2_history_malus(conf, depth),
-        4 => cont4_history_malus(conf, depth),
-        _ => unreachable!(),
-    }
+#[inline]
+pub fn history_malus(conf: &HistoryConfig, depth: i32) -> i32 {
+    i32::min(conf.malus_mul * depth + conf.malus_offset, conf.malus_max)
 }
 
 pub const MAX_HISTORY: i32 = i16::MAX as i32 / 2;
