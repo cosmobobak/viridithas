@@ -639,10 +639,12 @@ pub fn quiescence<NT: NodeType>(
             continue;
         }
         let is_tactical = t.board.is_tactical(m);
+        let gives_check = t.board.is_direct_check(m);
         let is_recapture = Some(m.to()) == t.ss[height - 1].searching.map(Move::to);
         if best_score > -MINIMUM_TB_WIN_SCORE
             && is_tactical
             && !in_check
+            && !gives_check
             && !is_recapture
             && futility <= alpha
             && !is_decisive(futility)
