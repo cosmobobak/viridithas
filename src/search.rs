@@ -59,7 +59,7 @@ const DELTA_INITIAL: i32 = 12;
 const ASPIRATION_EVAL_DIVISOR: i32 = 30155;
 const DELTA_BASE_MUL: i32 = 43;
 const DELTA_REDUCTION_MUL: i32 = 19;
-const RFP_MARGIN: i32 = 73;
+const RFP_MARGIN: i32 = 40;
 const RFP_IMPROVING_MARGIN: i32 = 76;
 const NMP_IMPROVING_MARGIN: i32 = 132;
 const NMP_DEPTH_MUL: i32 = -8;
@@ -1685,7 +1685,7 @@ fn get_cont_history(t: &ThreadData<'_>, height: usize, hist_to: Square, moved: P
 
 /// The margin for Reverse Futility Pruning.
 fn rfp_margin(pos: &Board, info: &SearchInfo, depth: i32, improving: bool, correction: i32) -> i32 {
-    info.conf.rfp_margin * depth
+    info.conf.rfp_margin * depth + 6 * depth * depth
         - i32::from(improving && !can_win_material(pos)) * info.conf.rfp_improving_margin
         + correction.abs() / 2
 }
