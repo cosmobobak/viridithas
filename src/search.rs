@@ -1318,7 +1318,11 @@ pub fn alpha_beta<NT: NodeType>(
             let fp_margin = lmr_depth * t.info.conf.futility_coeff_1
                 + t.info.conf.futility_coeff_0
                 + stat_score / 128;
-            if is_quiet && lmr_depth < 6 && static_eval + fp_margin <= alpha {
+            if is_quiet
+                && lmr_depth < 6
+                && static_eval + fp_margin <= alpha
+                && !t.board.is_direct_check(m)
+            {
                 move_picker.skip_quiets = true;
             }
         }

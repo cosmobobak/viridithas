@@ -111,6 +111,11 @@ impl Board {
         self.state.threats.checkers != SquareSet::EMPTY
     }
 
+    pub fn is_direct_check(&self, mv: Move) -> bool {
+        let moved_piece = self.state.mailbox[mv.from()].unwrap().piece_type();
+        self.state.threats.tellers[moved_piece].contains_square(mv.to())
+    }
+
     pub fn zero_height(&mut self) {
         self.height = 0;
     }

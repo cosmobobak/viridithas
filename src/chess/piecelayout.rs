@@ -2,7 +2,8 @@ use std::fmt::Display;
 
 use crate::chess::{
     board::movegen::{
-        self, RAY_BETWEEN, diag_attacks, king_attacks, knight_attacks, pawn_attacks, orth_attacks,
+        self, RAY_BETWEEN, diag_attacks, king_attacks, knight_attacks, orth_attacks, pawn_attacks,
+        pawn_attacks_by,
     },
     piece::{Black, Col, Colour, Piece, PieceType, White},
     squareset::SquareSet,
@@ -303,12 +304,19 @@ impl PieceLayout {
             Colour::Black => our_king_bb.south_east_one() | our_king_bb.south_west_one(),
         };
         checkers |= backwards_from_king & their_pawns;
-        let knight_attacks = knight_attacks(our_king_sq);
-        checkers |= knight_attacks & their_knights;
-        let diag_attacks = diag_attacks(our_king_sq, blockers);
-        checkers |= diag_attacks & (their_bishops | their_queens);
-        let ortho_attacks = orth_attacks(our_king_sq, blockers);
-        checkers |= ortho_attacks & (their_rooks | their_queens);
+        let from_knight = knight_attacks(our_king_sq);
+        checkers |= from_knight & their_knights;
+        let from_diag = diag_attacks(our_king_sq, blockers);
+        checkers |= from_diag & (their_bishops | their_queens);
+        let from_orth = orth_attacks(our_king_sq, blockers);
+        checkers |= from_orth & (their_rooks | their_queens);
+
+        let mut tellers = [SquareSet::EMPTY; 6];
+        tellers[PieceType::Pawn] = pawn_attacks_by(their_king.as_set(), !side);
+        tellers[PieceType::Knight] = knight_attacks(their_king);
+        tellers[PieceType::Bishop] = diag_attacks(their_king, blockers);
+        tellers[PieceType::Rook] = orth_attacks(their_king, blockers);
+        tellers[PieceType::Queen] = tellers[PieceType::Bishop] | tellers[PieceType::Rook];
 
         Threats {
             all: all_threats,
@@ -316,6 +324,7 @@ impl PieceLayout {
             leq_minor,
             leq_rook,
             checkers,
+            tellers,
         }
     }
 }
@@ -327,6 +336,7 @@ pub struct Threats {
     pub leq_minor: SquareSet,
     pub leq_rook: SquareSet,
     pub checkers: SquareSet,
+    pub tellers: [SquareSet; 6],
 }
 
 impl Display for PieceLayout {
