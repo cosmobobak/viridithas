@@ -216,6 +216,8 @@ impl MovePicker {
             }
             score += i32::from(t.pawn_hist[pawn_index][piece][to]);
 
+            score += 10_000 * i32::from(t.board.is_direct_check(m.mov));
+
             match piece.piece_type() {
                 PieceType::Pawn => {
                     let turn = t.board.turn();
