@@ -98,12 +98,14 @@ const MAIN_HISTORY: HistoryConfig = HistoryConfig::new(357, 226, 2241, 111, 561,
 const CONT1_HISTORY: HistoryConfig = HistoryConfig::new(287, 150, 3729, 270, 267, 1178);
 const CONT2_HISTORY: HistoryConfig = HistoryConfig::new(177, 178, 1596, 280, 130, 943);
 const CONT4_HISTORY: HistoryConfig = HistoryConfig::new(177, 185, 1630, 201, -32, 945);
+const CONT6_HISTORY: HistoryConfig = HistoryConfig::new(177, 185, 1630, 201, -32, 945);
 const PAWN_HISTORY: HistoryConfig = HistoryConfig::new(169, 162, 2208, 251, 188, 1281);
 const TACTICAL_HISTORY: HistoryConfig = HistoryConfig::new(104, 328, 1248, 29, 394, 1122);
 const MAIN_STAT_SCORE_MUL: i32 = 26;
 const CONT1_STAT_SCORE_MUL: i32 = 37;
 const CONT2_STAT_SCORE_MUL: i32 = 33;
 const CONT4_STAT_SCORE_MUL: i32 = 13;
+const CONT6_STAT_SCORE_MUL: i32 = 13;
 const TACT_STAT_SCORE_MUL: i32 = 43;
 const PAWN_CORRHIST_WEIGHT: i32 = 1890;
 const MAJOR_CORRHIST_WEIGHT: i32 = 1461;
@@ -1679,6 +1681,10 @@ fn get_cont_history(t: &ThreadData<'_>, height: usize, hist_to: Square, moved: P
     if height >= 4 {
         stat_score += i32::from(t.cont_hist[t.ss[height - 4].ch_idx][moved][hist_to])
             * t.info.conf.cont4_stat_score_mul;
+    }
+    if height >= 6 {
+        stat_score += i32::from(t.cont_hist[t.ss[height - 6].ch_idx][moved][hist_to])
+            * t.info.conf.cont6_stat_score_mul;
     }
     stat_score
 }
