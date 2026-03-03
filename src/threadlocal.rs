@@ -11,7 +11,7 @@ use crate::{
     chess::{board::Board, chessmove::Move, piece::Colour},
     historytable::{
         CaptureHistoryTable, ContinuationCorrectionHistoryTable, CorrectionHistoryTable,
-        DoubleHistoryTable, HashHistoryTable, HistoryTable, ThreatsHistoryTable,
+        DoubleHistoryTable, FromToTable, HashHistoryTable, PieceToTable, ThreatsHistoryTable,
     },
     nnue::{self, network::NNUEParams},
     search::pv::PVariation,
@@ -31,8 +31,8 @@ pub struct ThreadData<'a> {
     pub nnue: Box<nnue::network::NNUEState>,
     pub nnue_params: &'static NNUEParams,
 
-    pub main_hist: Box<ThreatsHistoryTable>,
-    pub fact_hist: Box<HistoryTable>,
+    pub piece_to_hist: Box<ThreatsHistoryTable<PieceToTable>>,
+    pub from_to_hist: Box<ThreatsHistoryTable<FromToTable>>,
     pub tactical_hist: Box<CaptureHistoryTable>,
     pub cont_hist: Box<DoubleHistoryTable>,
     pub pawn_hist: Box<HashHistoryTable>,
@@ -80,8 +80,8 @@ impl<'a> ThreadData<'a> {
             banned_nmp: 0,
             nnue: nnue::network::NNUEState::new(&board, nnue_params),
             nnue_params,
-            main_hist: Box::new(ThreatsHistoryTable::new()),
-            fact_hist: Box::new(HistoryTable::new()),
+            piece_to_hist: ThreatsHistoryTable::boxed(),
+            from_to_hist: ThreatsHistoryTable::boxed(),
             tactical_hist: CaptureHistoryTable::boxed(),
             cont_hist: DoubleHistoryTable::boxed(),
             pawn_hist: HashHistoryTable::boxed(),
@@ -144,8 +144,8 @@ impl<'a> ThreadData<'a> {
     }
 
     pub fn clear_tables(&mut self) {
-        self.main_hist.clear();
-        self.fact_hist.clear();
+        self.piece_to_hist.clear();
+        self.from_to_hist.clear();
         self.tactical_hist.clear();
         self.cont_hist.clear();
         self.pawn_hist.clear();
