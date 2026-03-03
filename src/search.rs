@@ -1280,7 +1280,8 @@ pub fn alpha_beta<NT: NodeType>(
             continue;
         }
 
-        let lmr_reduction = t.info.lm_table.lm_reduction(depth, moves_made);
+        let mut lmr_reduction = t.info.lm_table.lm_reduction(depth, moves_made);
+        lmr_reduction += 768 * i32::from(t.ss[height].ttpv);
         let lmr_depth = std::cmp::max(depth - lmr_reduction / 1024, 0);
         let is_quiet = !t.board.is_tactical(m);
 
