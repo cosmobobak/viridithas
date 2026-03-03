@@ -32,6 +32,7 @@ pub struct ThreadData<'a> {
     pub nnue_params: &'static NNUEParams,
 
     pub main_hist: ThreatsHistoryTable,
+    pub slow_hist: ThreatsHistoryTable,
     pub tactical_hist: Box<CaptureHistoryTable>,
     pub cont_hist: Box<DoubleHistoryTable>,
     pub pawn_hist: Box<HashHistoryTable>,
@@ -80,6 +81,7 @@ impl<'a> ThreadData<'a> {
             nnue: nnue::network::NNUEState::new(&board, nnue_params),
             nnue_params,
             main_hist: ThreatsHistoryTable::new(),
+            slow_hist: ThreatsHistoryTable::new(),
             tactical_hist: CaptureHistoryTable::boxed(),
             cont_hist: DoubleHistoryTable::boxed(),
             pawn_hist: HashHistoryTable::boxed(),
@@ -143,6 +145,7 @@ impl<'a> ThreadData<'a> {
 
     pub fn clear_tables(&mut self) {
         self.main_hist.clear();
+        self.slow_hist.clear();
         self.tactical_hist.clear();
         self.cont_hist.clear();
         self.pawn_hist.clear();

@@ -21,20 +21,29 @@ impl ThreadData<'_> {
         let threats = self.board.state.threats.all;
         for &m in moves_to_adjust {
             let from = m.from();
-            let piece_moved = self.board.state.mailbox[from];
+            let piece_moved = self.board.state.mailbox[from].unwrap();
             let to = m.history_to_square();
-            let val = self.main_hist.get_mut(
-                piece_moved.unwrap(),
-                to,
-                threats.contains_square(from),
-                threats.contains_square(to),
-            );
-            let delta = if m == best_move {
-                history_bonus(&self.info.conf.main_history, depth)
+            let from_threat = threats.contains_square(from);
+            let to_threat = threats.contains_square(to);
+            let (delta, slow_delta) = if m == best_move {
+                (
+                    history_bonus(&self.info.conf.main_history, depth),
+                    history_bonus(&self.info.conf.slow_history, depth),
+                )
             } else {
-                -history_malus(&self.info.conf.main_history, depth)
+                (
+                    -history_malus(&self.info.conf.main_history, depth),
+                    -history_malus(&self.info.conf.slow_history, depth),
+                )
             };
+            let val = self
+                .main_hist
+                .get_mut(piece_moved, to, from_threat, to_threat);
+            let slow_val = self
+                .slow_hist
+                .get_mut(piece_moved, to, from_threat, to_threat);
             update_history(val, delta);
+            update_history(slow_val, slow_delta);
         }
     }
 
@@ -48,18 +57,23 @@ impl ThreadData<'_> {
         depth: i32,
         good: bool,
     ) {
-        let delta = if good {
-            history_bonus(&self.info.conf.main_history, depth)
+        let (delta, slow_delta) = if good {
+            (
+                history_bonus(&self.info.conf.main_history, depth),
+                history_bonus(&self.info.conf.slow_history, depth),
+            )
         } else {
-            -history_malus(&self.info.conf.main_history, depth)
+            (
+                -history_malus(&self.info.conf.main_history, depth),
+                -history_malus(&self.info.conf.slow_history, depth),
+            )
         };
-        let val = self.main_hist.get_mut(
-            moved,
-            to,
-            threats.contains_square(from),
-            threats.contains_square(to),
-        );
+        let from_threat = threats.contains_square(from);
+        let to_threat = threats.contains_square(to);
+        let val = self.main_hist.get_mut(moved, to, from_threat, to_threat);
+        let slow_val = self.slow_hist.get_mut(moved, to, from_threat, to_threat);
         update_history(val, delta);
+        update_history(slow_val, slow_delta);
     }
 
     /// Update the pawn-structure history counters of a batch of moves.

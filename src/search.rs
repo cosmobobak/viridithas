@@ -95,12 +95,14 @@ const LMR_CHECK_MUL: i32 = 1361;
 const LMR_CORR_MUL: i32 = 448;
 const LMR_BASE_OFFSET: i32 = 226;
 const MAIN_HISTORY: HistoryConfig = HistoryConfig::new(357, 226, 2241, 111, 561, 915);
+const SLOW_HISTORY: HistoryConfig = HistoryConfig::new(89, 57, 560, 28, 140, 229);
 const CONT1_HISTORY: HistoryConfig = HistoryConfig::new(287, 150, 3729, 270, 267, 1178);
 const CONT2_HISTORY: HistoryConfig = HistoryConfig::new(177, 178, 1596, 280, 130, 943);
 const CONT4_HISTORY: HistoryConfig = HistoryConfig::new(177, 185, 1630, 201, -32, 945);
 const PAWN_HISTORY: HistoryConfig = HistoryConfig::new(169, 162, 2208, 251, 188, 1281);
 const TACTICAL_HISTORY: HistoryConfig = HistoryConfig::new(104, 328, 1248, 29, 394, 1122);
 const MAIN_STAT_SCORE_MUL: i32 = 26;
+const SLOW_STAT_SCORE_MUL: i32 = 20;
 const CONT1_STAT_SCORE_MUL: i32 = 37;
 const CONT2_STAT_SCORE_MUL: i32 = 33;
 const CONT4_STAT_SCORE_MUL: i32 = 13;
@@ -1662,6 +1664,8 @@ fn get_quiet_history(
     let mut stat_score = 0;
     stat_score += i32::from(t.main_hist[from_threat][to_threat][moved][hist_to])
         * t.info.conf.main_stat_score_mul;
+    stat_score += i32::from(t.slow_hist[from_threat][to_threat][moved][hist_to])
+        * t.info.conf.slow_stat_score_mul;
     stat_score += get_cont_history(t, height, hist_to, moved);
     stat_score
 }
