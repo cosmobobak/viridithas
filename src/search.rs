@@ -1004,7 +1004,9 @@ pub fn alpha_beta<NT: NodeType>(
             threats.contains_square(from),
             threats.contains_square(to),
         );
+        let fact_val = &mut t.fact_hist[moved][to];
         update_history(val, delta);
+        update_history(fact_val, delta);
     }
 
     // "improving" is true when the current position has a better static evaluation than the one from a fullmove ago.
@@ -1660,8 +1662,11 @@ fn get_quiet_history(
     to_threat: usize,
 ) -> i32 {
     let mut stat_score = 0;
-    stat_score += i32::from(t.main_hist[from_threat][to_threat][moved][hist_to])
-        * t.info.conf.main_stat_score_mul;
+    let main = i32::midpoint(
+        i32::from(t.main_hist[from_threat][to_threat][moved][hist_to]),
+        i32::from(t.fact_hist[moved][hist_to]),
+    );
+    stat_score += main * t.info.conf.main_stat_score_mul;
     stat_score += get_cont_history(t, height, hist_to, moved);
     stat_score
 }

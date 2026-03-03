@@ -210,7 +210,10 @@ impl MovePicker {
 
             let mut score = 0;
 
-            score += i32::from(t.main_hist[from_threat][to_threat][piece][to]);
+            score += i32::midpoint(
+                i32::from(t.main_hist[from_threat][to_threat][piece][to]),
+                i32::from(t.fact_hist[piece][to]),
+            );
             for block in cont_blocks {
                 score += block.map_or(0, |b| i32::from(b[piece][to]));
             }

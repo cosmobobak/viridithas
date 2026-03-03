@@ -21,20 +21,22 @@ impl ThreadData<'_> {
         let threats = self.board.state.threats.all;
         for &m in moves_to_adjust {
             let from = m.from();
-            let piece_moved = self.board.state.mailbox[from];
+            let piece_moved = self.board.state.mailbox[from].unwrap();
             let to = m.history_to_square();
             let val = self.main_hist.get_mut(
-                piece_moved.unwrap(),
+                piece_moved,
                 to,
                 threats.contains_square(from),
                 threats.contains_square(to),
             );
+            let fact_val = &mut self.fact_hist[piece_moved][to];
             let delta = if m == best_move {
                 history_bonus(&self.info.conf.main_history, depth)
             } else {
                 -history_malus(&self.info.conf.main_history, depth)
             };
             update_history(val, delta);
+            update_history(fact_val, delta);
         }
     }
 
@@ -59,7 +61,9 @@ impl ThreadData<'_> {
             threats.contains_square(from),
             threats.contains_square(to),
         );
+        let fact_val = &mut self.fact_hist[moved][to];
         update_history(val, delta);
+        update_history(fact_val, delta);
     }
 
     /// Update the pawn-structure history counters of a batch of moves.
