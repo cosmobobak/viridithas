@@ -998,13 +998,14 @@ pub fn alpha_beta<NT: NodeType>(
             -t.info.conf.eval_policy_update_max,
             t.info.conf.eval_policy_update_max,
         );
-        let val = t.main_hist.get_mut(
-            moved,
-            to,
-            threats.contains_square(from),
-            threats.contains_square(to),
-        );
+        let val = &mut t
+            .piece_to_hist
+            .get_mut(threats.contains_square(from), threats.contains_square(to))[moved][to];
+        let fact_val = &mut t
+            .from_to_hist
+            .get_mut(threats.contains_square(from), threats.contains_square(to))[from][to];
         update_history(val, delta);
+        update_history(fact_val, delta);
     }
 
     // "improving" is true when the current position has a better static evaluation than the one from a fullmove ago.
@@ -1292,7 +1293,7 @@ pub fn alpha_beta<NT: NodeType>(
         let from_threat = usize::from(threats.contains_square(from));
         let to_threat = usize::from(threats.contains_square(hist_to));
         let stat_score = if is_quiet {
-            get_quiet_history(t, height, hist_to, moved, from_threat, to_threat) / 32
+            get_quiet_history(t, height, from, hist_to, moved, from_threat, to_threat) / 32
         } else {
             get_tactical_history(t, hist_to, moved, to_threat, m) / 32
         };
@@ -1655,14 +1656,18 @@ fn get_tactical_history(
 fn get_quiet_history(
     t: &ThreadData<'_>,
     height: usize,
+    from: Square,
     hist_to: Square,
     moved: Piece,
     from_threat: usize,
     to_threat: usize,
 ) -> i32 {
     let mut stat_score = 0;
-    stat_score += i32::from(t.main_hist[from_threat][to_threat][moved][hist_to])
-        * t.info.conf.main_stat_score_mul;
+    let main = i32::midpoint(
+        i32::from(t.piece_to_hist[from_threat][to_threat][moved][hist_to]),
+        i32::from(t.from_to_hist[from_threat][to_threat][from][hist_to]),
+    );
+    stat_score += main * t.info.conf.main_stat_score_mul;
     stat_score += get_cont_history(t, height, hist_to, moved);
     stat_score
 }
