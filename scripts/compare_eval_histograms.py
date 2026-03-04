@@ -1,6 +1,6 @@
 #!/usr/bin/env -S uv run --quiet --script
 # /// script
-# requires-python = ">=3.11"
+# requires-python = ">=3.14"
 # dependencies = [
 #     "matplotlib>=3.8.0",
 #     "numpy>=1.26.0",
@@ -122,7 +122,7 @@ def plot_comparison(
         plt.savefig(output_path, dpi=300, bbox_inches="tight")
         print(f"Plot saved to {output_path}")
     else:
-        plt.show()
+        plt.show(block=True)
 
 
 def main() -> None:

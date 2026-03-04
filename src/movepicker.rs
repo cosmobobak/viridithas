@@ -195,14 +195,8 @@ impl MovePicker {
     pub fn score_quiets(t: &ThreadData, ms: &mut [MoveListEntry]) {
         let height = t.board.height();
 
-        let mut cont_block_0 = None;
-        let mut cont_block_1 = None;
-        if height > 1 {
-            cont_block_0 = Some(&t.cont_hist[t.ss[height - 1].ch_idx]);
-        }
-        if height > 2 {
-            cont_block_1 = Some(&t.cont_hist[t.ss[height - 2].ch_idx]);
-        }
+        let cont_blocks =
+            [1, 2].map(|i| (height > i).then(|| &t.cont_hist[t.ss[height - i].ch_idx]));
 
         let threats = t.board.state.threats.all;
         #[expect(clippy::cast_possible_truncation)]
@@ -216,14 +210,16 @@ impl MovePicker {
 
             let mut score = 0;
 
-            score += i32::from(t.main_hist[from_threat][to_threat][piece][to]);
-            if let Some(cmh_block) = cont_block_0 {
-                score += i32::from(cmh_block[piece][to]);
-            }
-            if let Some(cmh_block) = cont_block_1 {
-                score += i32::from(cmh_block[piece][to]);
+            score += i32::midpoint(
+                i32::from(t.piece_to_hist[from_threat][to_threat][piece][to]),
+                i32::from(t.from_to_hist[from_threat][to_threat][from][to]),
+            );
+            for block in cont_blocks {
+                score += block.map_or(0, |b| i32::from(b[piece][to]));
             }
             score += i32::from(t.pawn_hist[pawn_index][piece][to]);
+
+            score += 10_000 * i32::from(t.board.is_direct_check(m.mov));
 
             match piece.piece_type() {
                 PieceType::Pawn => {

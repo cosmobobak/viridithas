@@ -13,10 +13,11 @@ use movegen::{MAX_POSITION_MOVES, RAY_BETWEEN, RAY_FULL};
 use crate::{
     chess::{
         CHESS960,
-        board::movegen::{MoveList, bishop_attacks, pawn_attacks, pawn_attacks_by, rook_attacks},
+        board::movegen::{MoveList, diag_attacks, orth_attacks, pawn_attacks, pawn_attacks_by},
         chessmove::{Move, MoveFlags},
         fen::Fen,
         piece::{Black, Col, Colour, Piece, PieceType, White},
+        quick::Quick,
         squareset::SquareSet,
         types::{CastlingRights, CheckState, File, Rank, Square, State},
     },
@@ -108,6 +109,11 @@ impl Board {
 
     pub fn in_check(&self) -> bool {
         self.state.threats.checkers != SquareSet::EMPTY
+    }
+
+    pub fn is_direct_check(&self, mv: Move) -> bool {
+        let moved_piece = self.state.mailbox[mv.from()].unwrap().piece_type();
+        self.state.threats.tellers[moved_piece].contains_square(mv.to())
     }
 
     pub fn zero_height(&mut self) {
@@ -383,6 +389,35 @@ impl Board {
         self.set_from_fen(&fen);
     }
 
+    pub fn set_from_quick(&mut self, quick: &Quick) {
+        self.reset();
+
+        self.state.bbs = quick.board;
+
+        for sq in Square::all() {
+            self.state.mailbox[sq] = quick.board.piece_at(sq);
+        }
+
+        self.side = quick.turn;
+        self.state.castle_perm = quick.rights;
+        if self.side == Colour::Black {
+            self.ply += 1;
+        }
+
+        self.state.keys = self.state.generate_pos_keys(self.side);
+        self.state.threats = self.state.bbs.generate_threats(self.side);
+        self.state.pinned = [
+            self.state.bbs.generate_pinned(Colour::White),
+            self.state.bbs.generate_pinned(Colour::Black),
+        ];
+    }
+
+    pub fn startpos() -> Self {
+        let mut out = Self::empty();
+        out.set_startpos();
+        out
+    }
+
     #[cfg(test)]
     pub fn from_fen(fen: &str) -> Result<Self, crate::errors::FenParseError> {
         let parsed = Fen::parse_relaxed(fen)?;
@@ -403,6 +438,14 @@ impl Board {
         let mut out = Self::empty();
         out.set_dfrc_idx(scharnagl);
         out
+    }
+
+    #[cfg(test)]
+    pub fn from_quick(record: &str) -> Result<Self, crate::errors::QuickParseError> {
+        let parsed = Quick::parse(record.trim_ascii())?;
+        let mut out = Self::empty();
+        out.set_from_quick(&parsed);
+        Ok(out)
     }
 
     /// Determines if `sq` is attacked by `side`
@@ -608,9 +651,9 @@ impl Board {
 
             let occ_after = bbs.occupied() ^ to.as_set() ^ from.as_set() ^ cap_sq.as_set();
 
-            return bishop_attacks(king, occ_after) & (their_queens | their_bishops)
+            return diag_attacks(king, occ_after) & (their_queens | their_bishops)
                 == SquareSet::EMPTY
-                && rook_attacks(king, occ_after) & (their_queens | their_rooks)
+                && orth_attacks(king, occ_after) & (their_queens | their_rooks)
                     == SquareSet::EMPTY;
         }
 
@@ -621,8 +664,8 @@ impl Board {
 
             let diags = their_queens | their_bishops;
             let orthos = their_queens | their_rooks;
-            let moving_into_check = bishop_attacks(to, without_king) & diags != SquareSet::EMPTY
-                || rook_attacks(to, without_king) & orthos != SquareSet::EMPTY;
+            let moving_into_check = diag_attacks(to, without_king) & diags != SquareSet::EMPTY
+                || orth_attacks(to, without_king) & orthos != SquareSet::EMPTY;
             return !moving_into_check;
         }
 
@@ -1162,7 +1205,7 @@ impl Board {
     }
 
     pub fn legal_moves(&self) -> ArrayVec<Move, MAX_POSITION_MOVES> {
-        let mut legal_moves = ArrayVec::default();
+        let mut legal_moves = ArrayVec::new();
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
         for &m in move_list.iter_moves() {
@@ -1371,14 +1414,6 @@ impl GameOutcome {
     }
 }
 
-impl Default for Board {
-    fn default() -> Self {
-        let mut out = Self::empty();
-        out.set_startpos();
-        out
-    }
-}
-
 impl Display for Board {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         let mut counter = 0;
@@ -1454,7 +1489,7 @@ impl std::fmt::UpperHex for Board {
         }
 
         writeln!(f, "  a b c d e f g h")?;
-        writeln!(f, "FEN: {self}")?;
+        write!(f, "FEN: {self}")?;
 
         Ok(())
     }
@@ -1473,7 +1508,7 @@ mod tests {
             Board::from_fen("rnbqkb1r/pppppppp/5n2/8/3N4/8/PPPPPPPP/RNBQKB1R b KQkq - 100 2")
                 .unwrap();
         assert_eq!(fiftymove_draw.outcome(), Some(Draw(FiftyMoves)));
-        let mut draw_repetition = Board::default();
+        let mut draw_repetition = Board::startpos();
         assert_eq!(draw_repetition.outcome(), None);
         draw_repetition.make_move_simple(Move::new(Square::G1, Square::F3));
         draw_repetition.make_move_simple(Move::new(Square::B8, Square::C6));
@@ -1509,7 +1544,7 @@ mod tests {
             io::{BufRead, BufReader},
         };
 
-        let fens = BufReader::new(File::open("epds/perftsuite.epd").unwrap())
+        let fens = BufReader::new(File::open("assets/epds/perftsuite.epd").unwrap())
             .lines()
             .map(|l| l.unwrap().split_once(';').unwrap().0.trim().to_owned())
             .collect::<Vec<_>>();
@@ -1592,7 +1627,7 @@ mod tests {
         use super::Board;
         use crate::chess::chessmove::Move;
         use crate::chess::types::Square;
-        let mut board = Board::default();
+        let mut board = Board::startpos();
         let mv = Move::new(Square::E2, Square::E3);
         let key = board.key_after(mv);
         board.make_move_simple(mv);
@@ -1617,7 +1652,7 @@ mod tests {
     #[test]
     fn key_after_works_for_nullmove() {
         use super::Board;
-        let mut board = Board::default();
+        let mut board = Board::startpos();
         let key = board.key_after_null_move();
         board.make_nullmove();
         assert_eq!(board.state.keys.zobrist, key);
@@ -1676,13 +1711,13 @@ mod tests {
         use super::Board;
         use crate::chess::chessmove::Move;
         use crate::chess::types::Square;
-        let mut board = Board::default();
+        let mut board = Board::startpos();
         assert!(board.is_legal(Move::new(Square::E2, Square::E4)));
         board.make_move_simple(Move::new(Square::E2, Square::E4));
         assert!(board.is_legal(Move::new(Square::E7, Square::E5)));
         board.make_move_simple(Move::new(Square::E7, Square::E5));
         board.set_startpos();
-        let board2 = Board::default();
+        let board2 = Board::startpos();
         assert_eq!(board, board2);
     }
 
@@ -1700,5 +1735,14 @@ mod tests {
             Board::from_fen("r1bqkbnr/pppp1p1p/2n5/4pPp1/4P3/8/PPPP2PP/RNBQKBNR w KQkq g6 0 4")
                 .unwrap();
         assert_eq!(legal.ep_sq(), Some(Square::G6));
+    }
+
+    #[test]
+    fn quick_sanity_check() {
+        use crate::chess::board::Board;
+
+        let board = Board::from_quick("RxlGB:R:::::9GK:::::Dk::::::O:::::::::::").unwrap();
+
+        assert_eq!(board.to_string(), "8/8/6q1/8/p2R4/P3P3/1P1K1k2/8 b - - 0 1");
     }
 }

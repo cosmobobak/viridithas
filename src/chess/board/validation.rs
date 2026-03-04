@@ -45,14 +45,13 @@ impl Board {
             self.state.keys
         );
 
-        if !(self.state.ep_square.is_none()
-            || (self.state.ep_square.unwrap().rank() == Rank::Six && self.side == Colour::White)
-            || (self.state.ep_square.unwrap().rank() == Rank::Three && self.side == Colour::Black))
+        if let Some(ep_square) = self.state.ep_square
+            && !(ep_square.rank() == Rank::Six && self.side == Colour::White)
+            && !(ep_square.rank() == Rank::Three && self.side == Colour::Black)
         {
             panic!(
-                "en passant square is corrupt: expected square to be None or to be on ranks 6 or 3, got {} ({:?})",
-                self.state.ep_square.unwrap(),
-                self.state.ep_square.unwrap().rank()
+                "en passant square is corrupt: expected square to be None or to be on ranks 6 or 3, got {ep_square} ({:?})",
+                ep_square.rank()
             );
         }
 

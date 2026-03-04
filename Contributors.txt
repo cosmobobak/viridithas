@@ -1,5 +1,0 @@
-I would like to thank notable contributors to Viridithas (listed in alphabetical order):
-
-Archishmaan Peyyety (archishou), for optimisations to quiescence search and his work on enhanced aspiration windows.
-Ciekce, for his work on time management, board representation, and threat history.
-Johan, for his fantastic work keeping SweHosting running, and for generously advancing chess programming with his donations of hardware-time.

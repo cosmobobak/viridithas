@@ -1744,3 +1744,109 @@ equilibrium | replace search scores in dataset with    | fixed-nodes:
             |                                          | PENTA 81⁺² 1902⁺¹ 4003⁰ 2033⁻¹ 90⁻²
             |                                          | vs. inimical
 ------------|------------------------------------------|-----------------------------------------------
+  synchrony | standard recipe, remove output buckets   | fixed-nodes:
+            |                                          | https://test.expositor.dev/test/459/
+            |                                          |   LLR +3.22 (−2.94 LO +2.94 HI BND for −3.00 LO +0.00 HI ELO)
+            |                                          |  PERF +1.06 ± 2.14 ELO = −1.08 LO +3.20 HI ELO
+            |                                          |  CONF 25 KNODE 1 THREAD 16 MB CACHE
+            |                                          | GAMES 41008 = 11926W 17281D 11801L = 29.1%W 42.1%D 28.8%L
+            |                                          | PENTA 847⁺² 5008⁺¹ 8900⁰ 4921⁻¹ 828⁻²
+            |                                          | vs. inimical
+            |                                          |
+            |                                          | STC:
+            |                                          | https://test.expositor.dev/test/460/
+            |                                          |   LLR −1.08 (−2.94 LO +2.94 HI BND for −3.00 LO +0.00 HI ELO)
+            |                                          |  PERF −1.10 ± 1.33 ELO = −2.43 LO +0.22 HI ELO
+            |                                          |  CONF 8+0.08 SEC 1 THREAD 16 MB CACHE
+            |                                          | GAMES 73948 = 18127W 37459D 18362L = 24.5%W 50.7%D 24.8%L
+            |                                          | PENTA 360⁺² 8821⁺¹ 18358⁰ 9094⁻¹ 341⁻²
+            |                                          | vs. inimical
+------------|------------------------------------------|-----------------------------------------------
+    noumena | 400sb finetune of inimical with WDL=1.0  | STC:
+            |                                          | https://test.expositor.dev/test/462/
+            |                                          |   LLR +2.95 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF +2.32 ± 1.76 ELO = +0.55 LO +4.08 HI ELO
+            |                                          |  CONF 8+0.08 SEC 1 THREAD 16 MB CACHE
+            |                                          | GAMES 40212 = 9952W 20576D 9684L = 24.7%W 51.2%D 24.1%L
+            |                                          | PENTA 150⁺² 4953⁺¹ 10177⁰ 4667⁻¹ 159⁻²
+            |                                          | vs. inimical
+            |                                          |
+            |                                          | LTC:
+            |                                          | https://test.expositor.dev/test/463/
+            |                                          |   LLR +3.05 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF +2.38 ± 1.74 ELO = +0.64 LO +4.13 HI ELO
+            |                                          |  CONF 40+0.4 SEC 1 THREAD 128 MB CACHE
+            |                                          | GAMES 36436 = 8629W 19428D 8379L = 23.7%W 53.3%D 23.0%L
+            |                                          | PENTA 33⁺² 4338⁺¹ 9740⁰ 4060⁻¹ 47⁻²
+            |                                          | vs. inimical
+------------|------------------------------------------|-----------------------------------------------
+  hyperphor | WDL-head network trained via MSE on      | fixed-nodes:
+            | expected-value computation from win and  | https://test.expositor.dev/test/466/
+            | draw probabilities, yoshie's idea        |  PERF −8.86 ± 4.16 ELO = −13.02 LO −4.69 HI ELO
+            |                                          |  CONF 25 KNODE 1 THREAD 16 MB CACHE
+            |                                          | GAMES 11106 = 3124W 4575D 3407L = 28.1%W 41.2%D 30.7%L
+            |                                          | PENTA 189⁺² 1326⁺¹ 2325⁰ 1439⁻¹ 274⁻²
+            |                                          | vs. noumena
+------------|------------------------------------------|-----------------------------------------------
+    goibniu | WDL-head network trained on composite of | fixed-nodes:
+            | MSE and CE on intermediate nodes, 2stage | https://test.expositor.dev/test/469/
+            | fine-tuned on WDL=1.0                    |   LLR +2.95 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF +4.13 ± 2.82 ELO = +1.31 LO +6.94 HI ELO
+            |                                          |  CONF 25 KNODE 1 THREAD 16 MB CACHE
+            |                                          | GAMES 24004 = 7111W 10067D 6826L = 29.6%W 41.9%D 28.4%L
+            |                                          | PENTA 538⁺² 2981⁺¹ 5186⁰ 2822⁻¹ 475⁻²
+            |                                          | vs. noumena
+            |                                          |
+            |                                          | STC:
+            |                                          | https://test.expositor.dev/test/471/
+            |                                          |   LLR −3.01 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −6.00 ± 3.69 ELO = −9.69 LO −2.31 HI ELO
+            |                                          |  CONF 8+0.08 SEC 1 THREAD 16 MB CACHE
+            |                                          | GAMES 9384 = 2210W 4802D 2372L = 23.6%W 51.2%D 25.3%L
+            |                                          | PENTA 42⁺² 1031⁺¹ 2401⁰ 1159⁻¹ 59⁻²
+            |                                          | vs. noumena
+            |                                          |
+            |                                          | LTC:
+            |                                          | https://test.expositor.dev/test/472/
+            |                                          |   LLR −2.99 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −4.78 ± 3.28 ELO = −8.07 LO −1.50 HI ELO
+            |                                          |  CONF 40+0.4 SEC 1 THREAD 128 MB CACHE
+            |                                          | GAMES 10970 = 2550W 5719D 2701L = 23.2%W 52.1%D 24.6%L
+            |                                          | PENTA 9⁺² 1271⁺¹ 2791⁰ 1388⁻¹ 26⁻²
+            |                                          | vs. noumena
+            |                                          |
+            |                                          | limited VLTC:
+            |                                          | https://test.expositor.dev/test/473/
+            |                                          |  PERF +2.54 ± 7.33 ELO = −4.79 LO +9.87 HI ELO
+            |                                          |  CONF 120+1.0 SEC 1 THREAD 128 MB CACHE
+            |                                          | GAMES 2052 = 483W 1101D 468L = 23.5%W 53.7%D 22.8%L
+            |                                          | PENTA 2⁺² 245⁺¹ 545⁰ 234⁻¹ 0⁻²
+            |                                          | vs. noumena
+------------|------------------------------------------|-----------------------------------------------
+   flourish | inimical with HardSwish1 activation on   | STC:
+            | l1 and l2 instead of SCReLU.             | https://test.expositor.dev/test/474/
+            |                                          |   LLR −3.13 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −9.03 ± 4.86 ELO = −13.89 LO −4.17 HI ELO
+            |                                          |  CONF 25 KNODE 1 THREAD 16 MB CACHE
+            |                                          | GAMES 8122 = 2271W 3369D 2482L = 28.0%W 41.5%D 30.6%L
+            |                                          | PENTA 153⁺² 912⁺¹ 1772⁰ 1019⁻¹ 205⁻²
+            |                                          | vs. inimical
+------------|------------------------------------------|-----------------------------------------------
+    flounce | flourish with HardSwish6. Block-sparsity | LTC:
+            | has been ruined, drop of 70% → 50%.      | https://test.expositor.dev/test/479/
+            |                                          |   LLR −3.03 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF −0.95 ± 1.79 ELO = −2.75 LO +0.84 HI ELO
+            |                                          |  CONF 40+0.4 SEC 1 THREAD 128 MB CACHE
+            |                                          | GAMES 35796 = 8633W 18432D 8731L = 24.1%W 51.5%D 24.4%L
+            |                                          | PENTA 50⁺² 4195⁺¹ 9315⁰ 4283⁻¹ 55⁻²
+            |                                          | vs. noumena
+------------|------------------------------------------|-----------------------------------------------
+   sibilant | flounce with L0_out activations given an | LTC:
+            | L1-norm penalty to encourage sparsity.   | https://test.expositor.dev/test/490/
+            |                                          |   LLR +3.04 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          |  PERF +5.90 ± 3.11 ELO = +2.80 LO +9.01 HI ELO
+            |                                          |  CONF 40+0.4 SEC 1 THREAD 128 MB CACHE
+            |                                          | GAMES 11660 = 2918W 6022D 2720L = 25.0%W 51.6%D 23.3%L
+            |                                          | PENTA 22⁺² 1437⁺¹ 3100⁰ 1259⁻¹ 12⁻²
+            |                                          | vs. noumena
+------------|------------------------------------------|-----------------------------------------------
