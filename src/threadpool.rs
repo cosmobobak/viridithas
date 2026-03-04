@@ -106,30 +106,41 @@ impl<'scope, 'env> ScopeExt<'scope, 'env> for Scope<'scope, 'env> {
     }
 }
 
-fn make_worker_thread() -> WorkerThread {
+fn make_worker_thread(index: usize) -> WorkerThread {
+    let index: u16 = index
+        .try_into()
+        .expect("Too many threads: index exceeds u16::MAX");
+
     let (sender, receiver) = make_work_channel();
 
-    let handle = std::thread::spawn(move || {
-        while let Ok(work) = receiver.receiver.recv() {
-            work();
-            let (lock, cvar) = &*receiver.completion_signal;
-            let mut completed = lock.lock().unwrap();
-            *completed = true;
-            drop(completed); // Release the lock before notifying
-            cvar.notify_one();
-        }
-    });
+    let handle = std::thread::Builder::new()
+        .name(format!("worker-{index}"))
+        .spawn(move || {
+            #[cfg(feature = "numa")]
+            crate::numa::NUMA.bind_thread(index);
+
+            while let Ok(work) = receiver.receiver.recv() {
+                work();
+                let (lock, cvar) = &*receiver.completion_signal;
+                let mut completed = lock.lock().unwrap();
+                *completed = true;
+                drop(completed); // Release the lock before notifying
+                cvar.notify_one();
+            }
+        })
+        .expect("Failed to spawn worker thread");
 
     WorkerThread {
         handle,
         comms: sender,
+        index,
     }
 }
 
 /// Create some number of worker threads. Panics if `num_threads` is zero.
 pub fn make_worker_threads(num_threads: usize) -> Vec1<WorkerThread> {
     (0..num_threads)
-        .map(|_| make_worker_thread())
+        .map(make_worker_thread)
         .collect::<Vec<_>>()
         .try_into()
         .unwrap()
@@ -138,6 +149,7 @@ pub fn make_worker_threads(num_threads: usize) -> Vec1<WorkerThread> {
 pub struct WorkerThread {
     handle: std::thread::JoinHandle<()>,
     comms: WorkSender,
+    index: u16,
 }
 
 impl WorkerThread {
@@ -154,7 +166,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "ReceiverHandle was dropped without receiving a value")]
     fn test_work_sender_receiver() {
-        let thread = make_worker_thread();
+        let thread = make_worker_thread(0);
 
         std::thread::scope(|s| {
             let _receiver_handle = s.spawn_into(
@@ -170,7 +182,7 @@ mod tests {
 
     #[test]
     fn test_work_sender_receiver_success() {
-        let thread = make_worker_thread();
+        let thread = make_worker_thread(0);
 
         std::thread::scope(|s| {
             let receiver_handle = s.spawn_into(

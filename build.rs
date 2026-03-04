@@ -24,6 +24,8 @@ fn prep_net() {
 fn build_dependencies() {
     #[cfg(feature = "syzygy")]
     build_fathom();
+    #[cfg(feature = "numa")]
+    println!("cargo:rustc-link-lib=numa");
 }
 
 #[cfg(feature = "syzygy")]
@@ -46,6 +48,8 @@ fn build_fathom() {
 fn generate_bindings() {
     #[cfg(all(feature = "bindgen", feature = "syzygy"))]
     generate_fathom_bindings();
+    #[cfg(all(feature = "bindgen", feature = "numa"))]
+    generate_numa_bindings();
 }
 
 #[cfg(all(feature = "bindgen", feature = "syzygy"))]
@@ -60,4 +64,16 @@ fn generate_fathom_bindings() {
     bindings
         .write_to_file("./src/tablebases/bindings.rs")
         .unwrap();
+}
+
+#[cfg(all(feature = "bindgen", feature = "numa"))]
+fn generate_numa_bindings() {
+    let bindings = bindgen::Builder::default()
+        .header("./deps/numa/include/numa.h")
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        .layout_tests(false)
+        .generate()
+        .unwrap();
+
+    bindings.write_to_file("./src/numa/bindings.rs").unwrap();
 }

@@ -13,6 +13,9 @@ mod datagen;
 #[cfg(feature = "stats")]
 pub mod stats;
 
+#[cfg(feature = "numa")]
+mod numa;
+
 mod bench;
 mod chess;
 mod cli;
@@ -51,6 +54,14 @@ pub static NAME: &str = "Viridithas";
 pub static VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn main() -> anyhow::Result<()> {
+    #[cfg(feature = "numa")]
+    if let Some(numa) = &*numa::NUMA {
+        println!(
+            "info string NUMA is available with {} configured nodes.",
+            numa.node_count()
+        );
+    }
+
     if std::env::args_os().len() == 1 {
         // fast path to UCI:
         return Ok(uci::main_loop()?);
