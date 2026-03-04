@@ -94,6 +94,7 @@ const LMR_TT_CAPTURE_MUL: i32 = 999;
 const LMR_CHECK_MUL: i32 = 1361;
 const LMR_CORR_MUL: i32 = 448;
 const LMR_BASE_OFFSET: i32 = 226;
+const TTPV_LMR_DEPTH_MUL: i32 = 768;
 const MAIN_HISTORY: HistoryConfig = HistoryConfig::new(357, 226, 2241, 111, 561, 915);
 const CONT1_HISTORY: HistoryConfig = HistoryConfig::new(287, 150, 3729, 270, 267, 1178);
 const CONT2_HISTORY: HistoryConfig = HistoryConfig::new(177, 178, 1596, 280, 130, 943);
@@ -1282,7 +1283,7 @@ pub fn alpha_beta<NT: NodeType>(
         }
 
         let mut lmr_reduction = t.info.lm_table.lm_reduction(depth, moves_made);
-        lmr_reduction += 768 * i32::from(t.ss[height].ttpv);
+        lmr_reduction += t.info.conf.ttpv_lmr_depth_mul * i32::from(t.ss[height].ttpv);
         let lmr_depth = std::cmp::max(depth - lmr_reduction / 1024, 0);
         let is_quiet = !t.board.is_tactical(m);
 
