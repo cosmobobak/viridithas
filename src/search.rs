@@ -1618,7 +1618,9 @@ pub fn alpha_beta<NT: NodeType>(
         // and the static eval needs moving in a direction, then update corrhist.
         let fresh_eval = adj_shuffle(t, raw_eval, clock) + t.correction();
         if !(in_check
-            || best_move.is_some_and(|m| t.board.is_tactical(m))
+            || best_move.is_some_and(|m| {
+                t.board.is_tactical(m) && static_exchange_eval(&t.board, &t.info.conf, m, 0)
+            })
             || flag == Bound::Lower && best_score <= fresh_eval
             || flag == Bound::Upper && best_score >= fresh_eval)
         {
