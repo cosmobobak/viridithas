@@ -524,8 +524,8 @@ mod simd {
 
     #[allow(clippy::needless_range_loop, clippy::cast_ptr_alignment)]
     pub fn propagate_l2(
-        inputs: &Align64<[f32; L2_SIZE]>,
-        weights: &Align64<[f32; L2_SIZE * L3_SIZE * 2]>,
+        inputs: &[f32; L2_SIZE - 1],
+        weights: &Align64<[f32; (L2_SIZE - 1) * L3_SIZE * 2]>,
         biases: &Align64<[f32; L3_SIZE * 2]>,
         output: &mut Align64<[f32; L3_SIZE]>,
     ) {
@@ -543,7 +543,7 @@ mod simd {
             let mut sums = biases.clone();
 
             // affine transform
-            for i in 0..L2_SIZE {
+            for i in 0..L2_SIZE - 1 {
                 let activation = simd::splat_f32(*inputs.get_unchecked(i));
                 for j in 0..L3_SIZE * 2 / F32_CHUNK {
                     let acc = simd::load_f32(sums.as_ptr().add(j * F32_CHUNK));
