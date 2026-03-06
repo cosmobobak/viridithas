@@ -262,7 +262,7 @@ mod simd {
         weights: &Align64<[i8; L1_SIZE * L2_SIZE]>,
         biases: &Align64<[f32; L2_SIZE]>,
         output: &mut Align64<[f32; L2_SIZE]>,
-    ) {
+    ) -> f32 {
         const L1_PAIR_COUNT: usize = L1_SIZE / 2;
         const NNZ_INPUT_SIMD_WIDTH: usize =
             std::mem::size_of::<VecI32>() / std::mem::size_of::<i32>();
@@ -396,7 +396,7 @@ mod simd {
                     .unwrap();
             }
 
-            propagate_l1(&ft_outputs, nnz_slice, weights, biases, output);
+            propagate_l1(&ft_outputs, nnz_slice, weights, biases, output)
         }
     }
 
@@ -407,7 +407,7 @@ mod simd {
         weights: &Align64<[i8; L1_SIZE * L2_SIZE]>,
         biases: &Align64<[f32; L2_SIZE]>,
         output: &mut Align64<[f32; L2_SIZE]>,
-    ) {
+    ) -> f32 {
         const NUM_ACCS: usize = L2_SIZE / F32_CHUNK;
         // SAFETY: Breaking it down by unsafe operations:
         // 1. get_unchecked[_mut] / .as[_mut]_ptr().add(): We only ever index at most
@@ -508,17 +508,24 @@ mod simd {
             let inv_k = simd::splat_f32(1.0 / SWISH_K);
             let half_k = simd::splat_f32(SWISH_K / 2.0);
             let sum_mul = simd::splat_f32(L1_MUL);
+            let mut preacts = Align64([0f32; L2_SIZE]);
             for i in 0..L2_SIZE / F32_CHUNK {
                 // convert i32 to f32, multiplying by the quantisation constant
                 let bias = simd::load_f32(biases.as_ptr().add(i * F32_CHUNK));
                 let unscaled = simd::i32_to_f32(simd::load_i32(acc.as_ptr().add(i * F32_CHUNK)));
                 let preact = simd::madd_f32(unscaled, sum_mul, bias);
+                simd::store_f32(preacts.as_mut_ptr().add(i * F32_CHUNK), preact);
+            }
+            for i in 0..L2_SIZE / F32_CHUNK {
                 // activate
+                let preact = simd::load_f32(preacts.as_ptr().add(i * F32_CHUNK));
                 let gate = simd::min_f32(simd::max_f32(simd::add_f32(preact, half_k), zero), k);
                 let act = simd::mul_f32(preact, gate);
                 let act = simd::mul_f32(act, inv_k);
                 simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK), act);
             }
+
+            preacts[0]
         }
     }
 

@@ -1531,7 +1531,7 @@ impl NNUEState {
         let mut l1_outputs = Align64([0.0; L2_SIZE]);
         let mut l2_outputs = Align64([0.0; L3_SIZE]);
 
-        layers::activate_ft_and_propagate_l1(
+        let skip = layers::activate_ft_and_propagate_l1(
             us,
             them,
             &nn.l1_weights[out],
@@ -1555,7 +1555,7 @@ impl NNUEState {
                 &mut l3_output,
             );
 
-            l3_output += l1_outputs[0];
+            l3_output += skip;
 
             (l3_output * SCALE as f32) as i32
         } else if HEADS == 3 {
