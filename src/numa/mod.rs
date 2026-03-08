@@ -98,14 +98,10 @@ impl Numa {
         let node = self.get_node(id);
         let mask = &map[node];
         unsafe {
-            // > numa_run_on_node_mask() runs the current task and its children
-            // > only on nodes specified in nodemask. They will not migrate to
-            // > CPUs of other nodes until the node affinity is reset with a new
-            // > call to numa_run_on_node_mask() or numa_run_on_node(). Passing
-            // > numa_all_nodes permits the kernel to schedule on all nodes again.
-            // > On success, 0 is returned; on error -1 is returned, and errno is
-            // > set to indicate the error.
-            bindings::numa_run_on_node_mask(mask.0);
+            // > numa_sched_setaffinity() sets the scheduling affinity of the
+            // > task identified by pid to the CPUs specified in mask. If pid
+            // > is 0, the current task is affected.
+            bindings::numa_sched_setaffinity(0, mask.0);
         }
     }
 }
