@@ -34,7 +34,10 @@ use crate::{
     cuckoo,
     errors::{GoParseError, PerftParseError, PositionParseError, SetOptionParseError, UciError},
     evaluation::evaluate,
-    nnue::{self, network::NNUEParams},
+    nnue::{
+        self,
+        network::{CachedNetwork, NNUEParams},
+    },
     perft,
     search::{LMTable, adj_shuffle, parameters::Config, search_position},
     searchinfo::SearchInfo,
@@ -821,7 +824,7 @@ fn print_uci_response(info: &SearchInfo, full: bool) {
 pub fn bench(
     benchcmd: &str,
     search_params: &Config,
-    nnue_params: &'static NNUEParams,
+    nnue_params: &'static CachedNetwork,
     depth: Option<usize>,
     threads: Option<usize>,
 ) -> Result<(), UciError> {
@@ -860,7 +863,8 @@ pub fn bench(
                 thread_data[0].info.print_to_stdout = true;
                 return Err(e.into());
             }
-            t.nnue.reinit_from(&t.board, nnue_params);
+            t.nnue
+                .reinit_from(&t.board, nnue_params.as_static_params(t.thread_id));
         }
         thread_data[0].info.clock.start();
         let res = parse_go(&bench_string, thread_data[0].board.turn());
@@ -927,7 +931,7 @@ pub fn bench(
 }
 
 /// Benchmark the go UCI command.
-pub fn go_benchmark(nnue_params: &'static NNUEParams) -> Result<(), UciError> {
+pub fn go_benchmark(nnue_params: &'static CachedNetwork) -> Result<(), UciError> {
     #![allow(clippy::cast_precision_loss)]
     const COUNT: usize = 1000;
     const THREADS: usize = 250;

@@ -36,10 +36,12 @@ use crate::{
     },
     datagen::dataformat::Game,
     evaluation::{is_decisive, is_mate_score},
-    nnue::network::{NNUEParams, NNUEState},
+    nnue::network::{CachedNetwork, NNUEParams, NNUEState},
     search::{parameters::Config, search_position, static_exchange_eval},
-    tablebases::probe::SYZYGY_ENABLED,
-    tablebases::{self, probe::WDL},
+    tablebases::{
+        self,
+        probe::{SYZYGY_ENABLED, WDL},
+    },
     threadlocal::make_thread_data,
     threadpool,
     timemgmt::{SearchLimit, TimeManager},
@@ -326,6 +328,7 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
                 let opt_ref = &options;
                 let path_ref = &data_dir;
                 let nnue_params_ref = &nnue_params;
+                // TODO: use threadpool here.
                 s.spawn(move || {
                     // this rng is different between each thread
                     // (https://rust-random.github.io/book/guide-parallel.html)
@@ -401,7 +404,7 @@ fn generate_on_thread<'a>(
     id: usize,
     options: &DataGenOptions,
     data_dir: &Path,
-    nnue_params: &'static NNUEParams,
+    nnue_params: &'static CachedNetwork,
     mut startpos_src: Box<dyn StartposGenerator + 'a>,
 ) -> anyhow::Result<HashMap<GameOutcome, u64>> {
     // Datagen uses the default configuration:
@@ -1076,7 +1079,7 @@ fn relabel_binpacks(
     mut input_buffer: impl BufRead,
     mut output_buffer: impl Write,
 ) -> Result<(), anyhow::Error> {
-    let nnue_params = NNUEParams::decompress_and_alloc()?;
+    let nnue_params = NNUEParams::decompress_and_alloc()?.as_static_params(0);
     let mut nnue_state = NNUEState::new(&Board::startpos(), nnue_params);
 
     let mut move_buffer = Vec::new();

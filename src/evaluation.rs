@@ -157,7 +157,7 @@ pub fn eval_stats(
 
     let f = File::open(input).with_context(|| format!("Failed to open {}", input.display()))?;
     let mut board = Board::startpos();
-    let nnue_params = NNUEParams::decompress_and_alloc()?;
+    let nnue_params = NNUEParams::decompress_and_alloc()?.as_static_params(0);
     let mut nnue = NNUEState::new(&board, nnue_params);
 
     let mut total = 0i128;

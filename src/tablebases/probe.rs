@@ -279,7 +279,7 @@ mod tests {
         let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
         tt.resize(MEGABYTE, &pool);
-        let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
+        let nnue_params = NNUEParams::get();
         let mut t = Box::new(ThreadData::new(
             0,
             position,
@@ -318,7 +318,7 @@ mod tests {
         let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
         tt.resize(MEGABYTE, &pool);
-        let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
+        let nnue_params = NNUEParams::get();
         let mut t = Box::new(ThreadData::new(
             0,
             position,

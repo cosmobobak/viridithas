@@ -21,13 +21,20 @@ unsafe impl Sync for BitmaskPtr {}
 /// Is only `Some` if `libnuma` is available.
 pub static NUMA: LazyLock<Option<Numa>> = LazyLock::new(|| {
     if !Numa::available() {
-        println!("info string NUMA is not available on this system.");
+        println!("info string NUMA is not available on this system");
+        println!("info string this is likely HIGHLY UNDESIRABLE and may indicate a bug");
         return None;
     }
 
-    println!("info string NUMA is available on this system.");
+    let numa = Numa(private::Token);
 
-    Some(Numa(private::Token))
+    println!("info string NUMA is available on this system");
+    println!(
+        "info string NUMA is available with {} configured nodes.",
+        numa.node_count()
+    );
+
+    Some(numa)
 });
 
 #[expect(clippy::undocumented_unsafe_blocks, clippy::unused_self)]
@@ -36,16 +43,6 @@ impl Numa {
         // Before any other calls in libnuma can be used, numa_available() must be called.
         // If it returns -1, all other functions in the library are undefined.
         unsafe { bindings::numa_available() != -1 }
-    }
-
-    pub fn num_configured_nodes(&self) -> i32 {
-        // numa_num_configured_nodes() returns the number of memory nodes in the system.
-        // This count includes any nodes that are currently disabled[^1].
-        // This count is derived from the node numbers in `/sys/devices/system/node`.
-        // (Depends on the kernel being configured with /sys (CONFIG_SYSFS)).
-        //
-        // [^1]: We don’t intend to cope with this.
-        unsafe { bindings::numa_num_configured_nodes() }
     }
 
     /// A mapping of NUMA nodes to CPU bitmasks, used for thread binding.
@@ -91,12 +88,12 @@ impl Numa {
     }
 
     /// Get the NUMA node for a given thread ID.
-    pub fn get_node(&self, id: u16) -> usize {
-        usize::from(id) % self.node_count()
+    pub fn get_node(&self, id: usize) -> usize {
+        id % self.node_count()
     }
 
     /// Bind the current thread to the NUMA node corresponding to the given thread ID.
-    pub fn bind_thread(&self, id: u16) {
+    pub fn bind_thread(&self, id: usize) {
         let map = self.thread_mapping();
         let node = self.get_node(id);
         let mask = &map[node];
@@ -124,6 +121,13 @@ pub struct NumaReplicated<T> {
     _marker: std::marker::PhantomData<T>,
 }
 
+// SAFETY: NumaReplicated is just a normal smart pointer
+// from a safety perspective.
+unsafe impl<T> Send for NumaReplicated<T> {}
+// SAFETY: NumaReplicated is just a normal smart pointer
+// from a safety perspective.
+unsafe impl<T> Sync for NumaReplicated<T> {}
+
 impl<T> Drop for NumaReplicated<T> {
     fn drop(&mut self) {
         if self.numa_allocated {
@@ -146,7 +150,14 @@ impl<T> Drop for NumaReplicated<T> {
     }
 }
 
-impl<T: Clone + Copy> NumaReplicated<T> {
+/// Equivalent to Copy, without risking a user making some huge type copyable.
+///
+/// # Safety
+///
+/// The implementor of this trait must be safely copyable via memcpy.
+pub unsafe trait NumaReplicable {}
+
+impl<T: NumaReplicable> NumaReplicated<T> {
     /// Create a new `NumaReplicated` by copying the given data to each NUMA node.
     pub fn new(data: &T) -> Self {
         let Some(numa) = &*NUMA else {
@@ -202,7 +213,7 @@ impl<T: Clone + Copy> NumaReplicated<T> {
     }
 
     /// Get a reference to the data for the current thread's NUMA node.
-    pub fn get(&self, id: u16) -> &T {
+    pub fn get(&self, id: usize) -> &T {
         let Some(numa) = &*NUMA else {
             // If NUMA is not available, just return the single copy of the data.
             // SAFETY: If NUMA is not available, we have a single copy of the data that

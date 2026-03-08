@@ -28,8 +28,7 @@ datagen = [
     "dep:ctrlc",
     "dep:bulletformat",
 ]
-zstd = ["dep:zstd"]
-final-release = ["zstd", "bindgen", "syzygy"]
+final-release = ["bindgen", "syzygy"]
 ft-record = []
 numa = []
 
@@ -56,9 +55,6 @@ arrayvec = "0.7.4"
 anyhow = "1.0.86"
 thiserror = "2.0.17"
 ruzstd = "0.8.1"
-
-# full-fat zstd for release builds
-zstd = { version = "0.13.2", optional = true }
 
 # for sharing network weights between processes
 memmap2 = "0.9.5"

@@ -42,6 +42,9 @@ mod transpositiontable;
 mod uci;
 mod util;
 
+#[cfg(feature = "numa")]
+use std::sync::LazyLock;
+
 #[cfg(feature = "datagen")]
 use cli::Subcommands::{Analyse, CountPositions, Datagen, Relabel, Rescale, Splat};
 use cli::Subcommands::{
@@ -55,12 +58,7 @@ pub static VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn main() -> anyhow::Result<()> {
     #[cfg(feature = "numa")]
-    if let Some(numa) = &*numa::NUMA {
-        println!(
-            "info string NUMA is available with {} configured nodes.",
-            numa.node_count()
-        );
-    }
+    LazyLock::force(&numa::NUMA);
 
     if std::env::args_os().len() == 1 {
         // fast path to UCI:

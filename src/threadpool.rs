@@ -107,17 +107,15 @@ impl<'scope, 'env> ScopeExt<'scope, 'env> for Scope<'scope, 'env> {
 }
 
 fn make_worker_thread(index: usize) -> WorkerThread {
-    let index: u16 = index
-        .try_into()
-        .expect("Too many threads: index exceeds u16::MAX");
-
     let (sender, receiver) = make_work_channel();
 
     let handle = std::thread::Builder::new()
         .name(format!("worker-{index}"))
         .spawn(move || {
             #[cfg(feature = "numa")]
-            crate::numa::NUMA.bind_thread(index);
+            crate::numa::NUMA
+                .as_ref()
+                .inspect(|numa| numa.bind_thread(index));
 
             while let Ok(work) = receiver.receiver.recv() {
                 work();
@@ -133,7 +131,6 @@ fn make_worker_thread(index: usize) -> WorkerThread {
     WorkerThread {
         handle,
         comms: sender,
-        index,
     }
 }
 
@@ -149,7 +146,6 @@ pub fn make_worker_threads(num_threads: usize) -> Vec1<WorkerThread> {
 pub struct WorkerThread {
     handle: std::thread::JoinHandle<()>,
     comms: WorkSender,
-    index: u16,
 }
 
 impl WorkerThread {

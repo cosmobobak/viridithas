@@ -13,6 +13,7 @@ use std::{
 use anyhow::Context;
 use arrayvec::ArrayVec;
 use memmap2::Mmap;
+use ruzstd::decoding::StreamingDecoder;
 
 use crate::{
     chess::{
@@ -173,6 +174,10 @@ pub struct NNUEParams {
     pub l3_weights: [[Align64<[f32; L3_SIZE]>; HEADS]; OUTPUT_BUCKETS],
     pub l3_bias:             [[f32; HEADS]; OUTPUT_BUCKETS],
 }
+
+// SAFETY: `NNUEParams` is POD.
+#[cfg(feature = "numa")]
+unsafe impl crate::numa::NumaReplicable for NNUEParams {}
 
 // const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = {
 //     let mut indices = [0; L1_SIZE / 2];
@@ -732,18 +737,48 @@ fn repermute_ft_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
     }
 }
 
-impl NNUEParams {
-    #[allow(clippy::too_many_lines)]
-    pub fn decompress_and_alloc() -> anyhow::Result<&'static Self> {
-        #[cfg(not(feature = "zstd"))]
-        type ZstdDecoder<R, D> = ruzstd::decoding::StreamingDecoder<R, D>;
-        #[cfg(feature = "zstd")]
-        type ZstdDecoder<'a, R> = zstd::stream::Decoder<'a, R>;
+pub enum CachedNetwork {
+    Verbatim(&'static NNUEParams),
+    Mmap(Mmap),
+    #[cfg(feature = "numa")]
+    Replicated(crate::numa::NumaReplicated<NNUEParams>),
+}
 
+impl CachedNetwork {
+    pub fn as_static_params(&'static self, thread_index: usize) -> &'static NNUEParams {
+        // If we’re NUMA-replicating, we should return the copy of the parameters
+        // that’s on the same NUMA node as the caller.
+        #[cfg(feature = "numa")]
+        let node = crate::numa::NUMA
+            .as_ref()
+            .map_or(0, |numa| numa.get_node(thread_index));
+        #[cfg(not(feature = "numa"))]
+        let _ = thread_index;
+
+        match self {
+            Self::Verbatim(params) => params,
+            // SAFETY: `self` is static, and we control the Mmap,
+            // so we can ensure that the reference lives long enough.
+            #[expect(clippy::cast_ptr_alignment)]
+            Self::Mmap(mmap) => unsafe { &*mmap.as_ptr().cast::<NNUEParams>() },
+            #[cfg(feature = "numa")]
+            Self::Replicated(rep) => rep.get(node),
+        }
+    }
+}
+
+impl NNUEParams {
+    #[cfg(test)]
+    pub fn get() -> &'static Self {
+        Self::decompress_and_alloc().unwrap().as_static_params(0)
+    }
+
+    #[allow(clippy::too_many_lines)]
+    pub fn decompress_and_alloc() -> anyhow::Result<&'static CachedNetwork> {
         // this function is not particularly happy about running in parallel.
         static LOCK: Mutex<()> = Mutex::new(());
         // additionally, we'd quite like to cache the results of this function.
-        static CACHED: OnceLock<Mmap> = OnceLock::new();
+        static CACHED: OnceLock<CachedNetwork> = OnceLock::new();
 
         if EMBEDDED_NNUE_VERBATIM {
             // if we're using the verbatim network, we don't need to decompress anything.
@@ -765,20 +800,42 @@ impl NNUEParams {
                     0,
                     "Embedded NNUE is not aligned to 64 bytes, ptr is {ptr:p}"
                 );
+
                 // SAFETY: We know that the pointer is valid and aligned.
-                return Ok(&*ptr.cast::<Self>());
+                let net = &*ptr.cast::<Self>();
+
+                CACHED.set(CachedNetwork::Verbatim(net)).map_err(|_| {
+                    anyhow::anyhow!(
+                        "Failed to set cached NNUE weights, another thread beat us to it"
+                    )
+                })?;
+
+                return Ok(CACHED.get().unwrap());
             }
         }
 
         let _guard = LOCK.lock().unwrap();
         // check if we've already loaded the weights
         if let Some(cached) = CACHED.get() {
-            // cast the mmap to a NNUEParams
-            // SAFETY: We check that the mmap is the right size and alignment.
-            #[allow(clippy::cast_ptr_alignment)]
-            let params: &'static Self = unsafe { &*cached.as_ptr().cast::<Self>() };
+            return Ok(cached);
+        }
 
-            return Ok(params);
+        let net = decompress_nnue()?;
+
+        // If we’re compiled with NUMA support, cache a replicated allocation:
+        #[cfg(feature = "numa")]
+        if crate::numa::NUMA.is_some() {
+            let replicated = crate::numa::NumaReplicated::new(&*net);
+
+            CACHED
+                .set(CachedNetwork::Replicated(replicated))
+                .map_err(|_| {
+                    anyhow::anyhow!(
+                        "Failed to set cached NNUE weights, another thread beat us to it"
+                    )
+                })?;
+
+            return Ok(CACHED.get().unwrap());
         }
 
         let weights_file_name = format!(
@@ -808,41 +865,12 @@ impl NNUEParams {
             })?;
 
             // store the mmap in the cache
-            CACHED.set(mmap).unwrap();
+            CACHED.set(CachedNetwork::Mmap(mmap)).map_err(|_| {
+                anyhow::anyhow!("Failed to set cached NNUE weights, another thread beat us to it")
+            })?;
 
-            // cast the mmap to a NNUEParams
-            // SAFETY: We check that the mmap is the right size and alignment.
-            #[allow(clippy::cast_ptr_alignment)]
-            let params: &'static Self = unsafe { &*CACHED.get().unwrap().as_ptr().cast::<Self>() };
-
-            return Ok(params);
+            return Ok(CACHED.get().unwrap());
         }
-
-        let mut net = QuantisedNetwork::zeroed();
-        // SAFETY: QN is POD and we only write to it.
-        let mut mem = unsafe {
-            std::slice::from_raw_parts_mut(
-                util::from_mut(net.as_mut()).cast::<u8>(),
-                size_of::<QuantisedNetwork>(),
-            )
-        };
-        let expected_bytes = mem.len() as u64;
-        let decoding_start = std::time::Instant::now();
-        let mut decoder = ZstdDecoder::new(EMBEDDED_NNUE)
-            .with_context(|| "Failed to construct zstd decoder for NNUE weights.")?;
-        let bytes_written = std::io::copy(&mut decoder, &mut mem)
-            .with_context(|| "Failed to decompress NNUE weights.")?;
-        let decoding_time = decoding_start.elapsed();
-        println!(
-            "info string decompressed NNUE weights in {}us",
-            decoding_time.as_micros()
-        );
-        anyhow::ensure!(
-            bytes_written == expected_bytes,
-            "encountered issue while decompressing NNUE weights, expected {expected_bytes} bytes, but got {bytes_written}"
-        );
-        let use_simd = cfg!(any(target_arch = "x86_64", target_feature = "neon"));
-        let net = net.permute(use_simd);
 
         // create a temporary file to store the weights
         // uses a path unique to our process to avoid
@@ -943,14 +971,11 @@ impl NNUEParams {
         })?;
 
         // store the mmap in the cache
-        CACHED.set(mmap).unwrap();
+        CACHED.set(CachedNetwork::Mmap(mmap)).map_err(|_| {
+            anyhow::anyhow!("Failed to set cached NNUE weights, another thread beat us to it")
+        })?;
 
-        // cast the mmap to a NNUEParams
-        // SAFETY: We check that the mmap is the right size and alignment.
-        #[allow(clippy::cast_ptr_alignment)]
-        let params: &'static Self = unsafe { &*CACHED.get().unwrap().as_ptr().cast::<Self>() };
-
-        Ok(params)
+        Ok(CACHED.get().unwrap())
     }
 
     fn map_weight_file(weights_path: &Path) -> anyhow::Result<Mmap> {
@@ -1054,6 +1079,39 @@ impl NNUEParams {
     }
 }
 
+fn decompress_nnue() -> Result<Box<NNUEParams>, anyhow::Error> {
+    const EXPECTED_BYTES: usize = size_of::<QuantisedNetwork>();
+
+    let mut net = QuantisedNetwork::zeroed();
+
+    // SAFETY: QN is POD and we only write to it.
+    let mut mem = unsafe {
+        std::slice::from_raw_parts_mut(util::from_mut(net.as_mut()).cast::<u8>(), EXPECTED_BYTES)
+    };
+
+    let decoding_start = std::time::Instant::now();
+
+    let mut decoder = StreamingDecoder::new(EMBEDDED_NNUE)
+        .with_context(|| "Failed to construct zstd decoder for NNUE weights.")?;
+    let bytes_written = std::io::copy(&mut decoder, &mut mem)
+        .with_context(|| "Failed to decompress NNUE weights.")?;
+
+    let decoding_time = decoding_start.elapsed();
+    println!(
+        "info string decompressed NNUE weights in {}us",
+        decoding_time.as_micros()
+    );
+
+    anyhow::ensure!(
+        bytes_written == EXPECTED_BYTES as u64,
+        "encountered issue while decompressing NNUE weights, expected {EXPECTED_BYTES} bytes, but got {bytes_written}"
+    );
+
+    let use_simd = cfg!(any(target_arch = "x86_64", target_feature = "neon"));
+
+    Ok(net.permute(use_simd))
+}
+
 pub fn quantise(input: &std::path::Path, output: &std::path::Path) -> anyhow::Result<()> {
     let input_file =
         File::open(input).with_context(|| format!("Failed to open file at {}", input.display()))?;
@@ -1088,7 +1146,7 @@ pub fn dump_verbatim(output: &std::path::Path) -> anyhow::Result<()> {
     // SAFETY: look,
     let slice = unsafe {
         std::slice::from_raw_parts(
-            util::from_ref::<NNUEParams>(network).cast::<u8>(),
+            util::from_ref::<NNUEParams>(network.as_static_params(0)).cast::<u8>(),
             size_of::<NNUEParams>(),
         )
     };
@@ -1120,7 +1178,7 @@ pub fn dry_run() -> anyhow::Result<()> {
     let start_pos = Board::startpos();
     println!("[#] Generating network parameters");
     let nnue_params = if EMBEDDED_NNUE_VERBATIM {
-        Static(NNUEParams::decompress_and_alloc()?)
+        Static(NNUEParams::decompress_and_alloc()?.as_static_params(0))
     } else {
         // create a zeroed network
         Boxed(NNUEParams::zeroed())
@@ -1611,7 +1669,7 @@ pub fn inference_benchmark(state: &NNUEState, nnue_params: &NNUEParams) {
 }
 
 pub fn visualise_nnue() -> anyhow::Result<()> {
-    let nnue_params = NNUEParams::decompress_and_alloc()?;
+    let nnue_params = NNUEParams::decompress_and_alloc()?.as_static_params(0);
     // create folder for the images
     let path = std::path::PathBuf::from("nnue-visualisations");
     std::fs::create_dir_all(&path)

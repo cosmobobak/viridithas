@@ -228,7 +228,7 @@ mod tests {
         let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
         tt.resize(MEGABYTE * 16, &pool);
-        let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
+        let nnue_params = NNUEParams::get();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
@@ -262,7 +262,7 @@ mod tests {
         let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
         tt.resize(MEGABYTE * 16, &pool);
-        let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
+        let nnue_params = NNUEParams::get();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
@@ -290,7 +290,7 @@ mod tests {
         let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
         tt.resize(MEGABYTE * 16, &pool);
-        let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
+        let nnue_params = NNUEParams::get();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
@@ -317,7 +317,7 @@ mod tests {
         let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
         tt.resize(MEGABYTE * 16, &pool);
-        let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
+        let nnue_params = NNUEParams::get();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
@@ -343,7 +343,7 @@ mod tests {
         let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
         tt.resize(MEGABYTE * 16, &pool);
-        let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
+        let nnue_params = NNUEParams::get();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
