@@ -27,35 +27,35 @@
 
 /// General compatibility for executing tablebase calls
 
-#define PYRRHIC_BLACK   0
-#define PYRRHIC_WHITE   1
+#define PYRRHIC_BLACK 0
+#define PYRRHIC_WHITE 1
 
 /// For providing Results arrays to tb_probe_root()
 
-#define TB_MAX_MOVES    256
+#define TB_MAX_MOVES 256
 
 /// Possible return values from a successful tb_probe_wdl()
 
-#define TB_LOSS         0  /* LOSS */
-#define TB_BLESSED_LOSS 1  /* LOSS but 50-move draw */
-#define TB_DRAW         2  /* DRAW */
-#define TB_CURSED_WIN   3  /* WIN but 50-move draw  */
-#define TB_WIN          4  /* WIN  */
+#define TB_LOSS 0         /* LOSS */
+#define TB_BLESSED_LOSS 1 /* LOSS but 50-move draw */
+#define TB_DRAW 2         /* DRAW */
+#define TB_CURSED_WIN 3   /* WIN but 50-move draw  */
+#define TB_WIN 4          /* WIN  */
 
 /// Possible return values from a failed tb_probe_wdl() or tb_probe_root()
 
-#define TB_RESULT_CHECKMATE     TB_SET_WDL(0, TB_WIN)
-#define TB_RESULT_STALEMATE     TB_SET_WDL(0, TB_DRAW)
-#define TB_RESULT_FAILED        0xFFFFFFFF
+#define TB_RESULT_CHECKMATE TB_SET_WDL(0, TB_WIN)
+#define TB_RESULT_STALEMATE TB_SET_WDL(0, TB_DRAW)
+#define TB_RESULT_FAILED 0xFFFFFFFF
 
 /// Decoding Tablebase Result -> Your Engine's Move Encoding, + WDL/DTZ data
 
-#define TB_RESULT_WDL(_res)       (((_res) & TB_RESULT_WDL_MASK     ) >> TB_RESULT_WDL_SHIFT     )
-#define TB_RESULT_DTZ(_res)       (((_res) & TB_RESULT_DTZ_MASK     ) >> TB_RESULT_DTZ_SHIFT     )
+#define TB_RESULT_WDL(_res) (((_res) & TB_RESULT_WDL_MASK) >> TB_RESULT_WDL_SHIFT)
+#define TB_RESULT_DTZ(_res) (((_res) & TB_RESULT_DTZ_MASK) >> TB_RESULT_DTZ_SHIFT)
 
-#define TB_RESULT_TO(_res)        (((_res) & TB_RESULT_TO_MASK      ) >> TB_RESULT_TO_SHIFT      )
-#define TB_RESULT_FROM(_res)      (((_res) & TB_RESULT_FROM_MASK    ) >> TB_RESULT_FROM_SHIFT    )
-#define TB_RESULT_IS_ENPASS(_res) (((_res) & TB_RESULT_EP_MASK      ) >> TB_RESULT_EP_SHIFT      )
+#define TB_RESULT_TO(_res) (((_res) & TB_RESULT_TO_MASK) >> TB_RESULT_TO_SHIFT)
+#define TB_RESULT_FROM(_res) (((_res) & TB_RESULT_FROM_MASK) >> TB_RESULT_FROM_SHIFT)
+#define TB_RESULT_IS_ENPASS(_res) (((_res) & TB_RESULT_EP_MASK) >> TB_RESULT_EP_SHIFT)
 
 #define TB_RESULT_IS_QPROMO(_res) (TB_GET_PROMOTES((_res)) == PYRRHIC_FLAG_QPROMO)
 #define TB_RESULT_IS_RPROMO(_res) (TB_GET_PROMOTES((_res)) == PYRRHIC_FLAG_RPROMO)
@@ -64,8 +64,8 @@
 
 /// Decoding PyrrhicMove -> Your Engine's Move Encoding
 
-#define PYRRHIC_MOVE_TO(x)    (((x) >> PYRRHIC_SHIFT_TO  ) & PYRRHIC_MASK_TO  )
-#define PYRRHIC_MOVE_FROM(x)  (((x) >> PYRRHIC_SHIFT_FROM) & PYRRHIC_MASK_FROM)
+#define PYRRHIC_MOVE_TO(x) (((x) >> PYRRHIC_SHIFT_TO) & PYRRHIC_MASK_TO)
+#define PYRRHIC_MOVE_FROM(x) (((x) >> PYRRHIC_SHIFT_FROM) & PYRRHIC_MASK_FROM)
 
 #define PYRRHIC_MOVE_IS_ENPASS(x) (PYRRHIC_MOVE_FLAGS((x)) == PYRRHIC_FLAG_ENPASS)
 #define PYRRHIC_MOVE_IS_QPROMO(x) (PYRRHIC_MOVE_FLAGS((x)) == PYRRHIC_FLAG_QPROMO)
@@ -87,40 +87,40 @@ struct TbRootMoves {
 
 /// Init/Deinit for Pyrrhic
 
-bool tb_init(const char *_path);
+bool tb_init(const char* _path);
 void tb_free(void);
 
 /// Pyrrhic Tablebase Probing Functions
 
 unsigned tb_probe_wdl(
-    uint64_t white,     uint64_t black,
-    uint64_t kings,     uint64_t queens,
-    uint64_t rooks,     uint64_t bishops,
-    uint64_t knights,   uint64_t pawns,
-    unsigned ep,        bool     turn);
+    uint64_t white, uint64_t black,
+    uint64_t kings, uint64_t queens,
+    uint64_t rooks, uint64_t bishops,
+    uint64_t knights, uint64_t pawns,
+    unsigned ep, bool turn);
 
 unsigned tb_probe_root(
-    uint64_t white,    uint64_t black,
-    uint64_t kings,    uint64_t queens,
-    uint64_t rooks,    uint64_t bishops,
-    uint64_t knights,  uint64_t pawns,
-    unsigned rule50,   unsigned ep,
-    bool     turn,     unsigned *results);
+    uint64_t white, uint64_t black,
+    uint64_t kings, uint64_t queens,
+    uint64_t rooks, uint64_t bishops,
+    uint64_t knights, uint64_t pawns,
+    unsigned rule50, unsigned ep,
+    bool turn, unsigned* results);
 
 int tb_probe_root_dtz(
-    uint64_t white,    uint64_t black,
-    uint64_t kings,    uint64_t queens,
-    uint64_t rooks,    uint64_t bishops,
-    uint64_t knights,  uint64_t pawns,
-    unsigned rule50,   unsigned ep,
-    bool     turn,     bool hasRepeated,
-    struct TbRootMoves *results);
+    uint64_t white, uint64_t black,
+    uint64_t kings, uint64_t queens,
+    uint64_t rooks, uint64_t bishops,
+    uint64_t knights, uint64_t pawns,
+    unsigned rule50, unsigned ep,
+    bool turn, bool hasRepeated,
+    struct TbRootMoves* results);
 
 int tb_probe_root_wdl(
-    uint64_t white,    uint64_t black,
-    uint64_t kings,    uint64_t queens,
-    uint64_t rooks,    uint64_t bishops,
-    uint64_t knights,  uint64_t pawns,
-    unsigned rule50,   unsigned ep,
-    bool     turn,     bool useRule50,
-    struct TbRootMoves *results);
+    uint64_t white, uint64_t black,
+    uint64_t kings, uint64_t queens,
+    uint64_t rooks, uint64_t bishops,
+    uint64_t knights, uint64_t pawns,
+    unsigned rule50, unsigned ep,
+    bool turn, bool useRule50,
+    struct TbRootMoves* results);

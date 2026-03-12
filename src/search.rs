@@ -94,6 +94,7 @@ const LMR_TT_CAPTURE_MUL: i32 = 999;
 const LMR_CHECK_MUL: i32 = 1361;
 const LMR_CORR_MUL: i32 = 448;
 const LMR_BASE_OFFSET: i32 = 226;
+const TTPV_LMR_DEPTH_MUL: i32 = 768;
 const MAIN_HISTORY: HistoryConfig = HistoryConfig::new(357, 226, 2241, 111, 561, 915);
 const CONT1_HISTORY: HistoryConfig = HistoryConfig::new(287, 150, 3729, 270, 267, 1178);
 const CONT2_HISTORY: HistoryConfig = HistoryConfig::new(177, 178, 1596, 280, 130, 943);
@@ -206,7 +207,7 @@ pub fn search_position(
             tablebases::probe::get_tablebase_move(&thread_headers[0].board)
     {
         let pv = &mut thread_headers[0].pvs[1];
-        pv.load_from(best_move, &PVariation::default());
+        pv.load_from(best_move, &PVariation::new());
         pv.score = score;
         thread_headers[0].info.tbhits.increment();
         thread_headers[0].info.tbhits.flush();
@@ -326,7 +327,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
         !ThTy::MAIN_THREAD || t.thread_id == 0,
         "main thread must have thread_id 0"
     );
-    let mut pv = PVariation::default();
+    let mut pv = PVariation::new();
     let max_depth = dyn_max_depth(t);
     let mut average_value = VALUE_NONE;
     'deepening: for iteration in 1..=max_depth {
@@ -507,7 +508,7 @@ pub fn quiescence<NT: NodeType>(
 
     let key = t.board.state.keys.zobrist ^ HM_CLOCK_KEYS[t.board.state.fifty_move_counter as usize];
 
-    let mut local_pv = PVariation::default();
+    let mut local_pv = PVariation::new();
     let l_pv = &mut local_pv;
 
     pv.moves.clear();
@@ -639,10 +640,12 @@ pub fn quiescence<NT: NodeType>(
             continue;
         }
         let is_tactical = t.board.is_tactical(m);
+        let gives_check = t.board.is_direct_check(m);
         let is_recapture = Some(m.to()) == t.ss[height - 1].searching.map(Move::to);
         if best_score > -MINIMUM_TB_WIN_SCORE
             && is_tactical
             && !in_check
+            && !gives_check
             && !is_recapture
             && futility <= alpha
             && !is_decisive(futility)
@@ -734,7 +737,7 @@ pub fn alpha_beta<NT: NodeType>(
     #[cfg(debug_assertions)]
     t.board.check_validity();
 
-    let mut local_pv = PVariation::default();
+    let mut local_pv = PVariation::new();
     let l_pv = &mut local_pv;
 
     let key = t.board.state.keys.zobrist ^ HM_CLOCK_KEYS[t.board.state.fifty_move_counter as usize];
@@ -996,13 +999,14 @@ pub fn alpha_beta<NT: NodeType>(
             -t.info.conf.eval_policy_update_max,
             t.info.conf.eval_policy_update_max,
         );
-        let val = t.main_hist.get_mut(
-            moved,
-            to,
-            threats.contains_square(from),
-            threats.contains_square(to),
-        );
+        let val = &mut t
+            .piece_to_hist
+            .get_mut(threats.contains_square(from), threats.contains_square(to))[moved][to];
+        let fact_val = &mut t
+            .from_to_hist
+            .get_mut(threats.contains_square(from), threats.contains_square(to))[from][to];
         update_history(val, delta);
+        update_history(fact_val, delta);
     }
 
     // "improving" is true when the current position has a better static evaluation than the one from a fullmove ago.
@@ -1240,8 +1244,10 @@ pub fn alpha_beta<NT: NodeType>(
                     t.ss[height].ttpv,
                 );
 
+                // if the value is a mate or TB-win, don't interpolate it.
+                // it's completely fine to return decisive scores here,
+                // as they lower-bound the true score.
                 if is_decisive(value) {
-                    // it's totally sound to return mates as cutoffs here.
                     return value;
                 }
 
@@ -1276,7 +1282,8 @@ pub fn alpha_beta<NT: NodeType>(
             continue;
         }
 
-        let lmr_reduction = t.info.lm_table.lm_reduction(depth, moves_made);
+        let mut lmr_reduction = t.info.lm_table.lm_reduction(depth, moves_made);
+        lmr_reduction += t.info.conf.ttpv_lmr_depth_mul * i32::from(t.ss[height].ttpv);
         let lmr_depth = std::cmp::max(depth - lmr_reduction / 1024, 0);
         let is_quiet = !t.board.is_tactical(m);
 
@@ -1287,7 +1294,7 @@ pub fn alpha_beta<NT: NodeType>(
         let from_threat = usize::from(threats.contains_square(from));
         let to_threat = usize::from(threats.contains_square(hist_to));
         let stat_score = if is_quiet {
-            get_quiet_history(t, height, hist_to, moved, from_threat, to_threat) / 32
+            get_quiet_history(t, height, from, hist_to, moved, from_threat, to_threat) / 32
         } else {
             get_tactical_history(t, hist_to, moved, to_threat, m) / 32
         };
@@ -1370,9 +1377,12 @@ pub fn alpha_beta<NT: NodeType>(
             let r_beta = tte.value - depth * 48 / 64;
             let r_depth = (depth - 1) / 2;
 
+            // execute a search of the position, pretending that
+            // the move `m` is unplayable, to determine how important
+            // that move is.
             t.ss[height].excluded = Some(m);
             let value = alpha_beta::<OffPV>(
-                &mut PVariation::default(),
+                &mut PVariation::new(),
                 t,
                 r_depth,
                 r_beta - 1,
@@ -1394,9 +1404,11 @@ pub fn alpha_beta<NT: NodeType>(
                     // normal singular extension
                     extension = 1;
                 }
-            } else if !NT::PV && value >= beta && !is_decisive(value) {
+            } else if !NT::PV && value >= beta {
                 // multi-cut: if a move other than the best one beats beta,
                 // then we can cut with relatively high confidence.
+                // it's completely fine to return decisive scores here,
+                // as they lower-bound the true score.
                 return value;
             } else if tte.value >= beta {
                 // a sort of light multi-cut.
@@ -1607,7 +1619,9 @@ pub fn alpha_beta<NT: NodeType>(
         // and the static eval needs moving in a direction, then update corrhist.
         let fresh_eval = adj_shuffle(t, raw_eval, clock) + t.correction();
         if !(in_check
-            || best_move.is_some_and(|m| t.board.is_tactical(m))
+            || best_move.is_some_and(|m| {
+                t.board.is_tactical(m) && static_exchange_eval(&t.board, &t.info.conf, m, 0)
+            })
             || flag == Bound::Lower && best_score <= fresh_eval
             || flag == Bound::Upper && best_score >= fresh_eval)
         {
@@ -1645,14 +1659,18 @@ fn get_tactical_history(
 fn get_quiet_history(
     t: &ThreadData<'_>,
     height: usize,
+    from: Square,
     hist_to: Square,
     moved: Piece,
     from_threat: usize,
     to_threat: usize,
 ) -> i32 {
     let mut stat_score = 0;
-    stat_score += i32::from(t.main_hist[from_threat][to_threat][moved][hist_to])
-        * t.info.conf.main_stat_score_mul;
+    let main = i32::midpoint(
+        i32::from(t.piece_to_hist[from_threat][to_threat][moved][hist_to]),
+        i32::from(t.from_to_hist[from_threat][to_threat][from][hist_to]),
+    );
+    stat_score += main * t.info.conf.main_stat_score_mul;
     stat_score += get_cont_history(t, height, hist_to, moved);
     stat_score
 }
@@ -1725,7 +1743,7 @@ pub fn is_forced(margin: i32, t: &mut ThreadData, m: Move, value: i32, depth: i3
     let pts_prev = t.info.print_to_stdout;
     t.info.print_to_stdout = false;
     let value = alpha_beta::<CheckForced>(
-        &mut PVariation::default(),
+        &mut PVariation::new(),
         t,
         r_depth,
         r_beta - 1,
@@ -1829,12 +1847,12 @@ pub fn static_exchange_eval(board: &Board, conf: &Config, m: Move, threshold: i3
             || next_victim == PieceType::Bishop
             || next_victim == PieceType::Queen
         {
-            attackers |= movegen::bishop_attacks(to, occupied) & diag_sliders;
+            attackers |= movegen::diag_attacks(to, occupied) & diag_sliders;
         }
 
         // orthogonal moves reveal rooks and queens:
         if next_victim == PieceType::Rook || next_victim == PieceType::Queen {
-            attackers |= movegen::rook_attacks(to, occupied) & orth_sliders;
+            attackers |= movegen::orth_attacks(to, occupied) & orth_sliders;
         }
 
         attackers &= occupied;
@@ -1884,31 +1902,95 @@ pub fn adj_shuffle(t: &ThreadData, raw_eval: i32, clock: u8) -> i32 {
 }
 
 pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadData<'a> {
-    let total_nodes = thread_headers[0].info.nodes.get_global();
+    #![expect(clippy::cast_possible_wrap)]
 
-    let (mut best_thread, rest) = thread_headers.split_first().unwrap();
+    let Some((mut best, rest @ [_next, ..])) = thread_headers.split_first() else {
+        // <2 threads, obvious case:
+        return &thread_headers[0];
+    };
+
+    // Thread voting: each thread votes for its best move,
+    // weighted by (score - min_score + OFFSET) * completed_depth.
+    let min_score = thread_headers
+        .iter()
+        .filter(|t| t.completed > 0)
+        .map(|t| t.pv().score())
+        .min()
+        .unwrap_or(0);
+
+    let vote_value =
+        |t: &ThreadData| -> i64 { i64::from(t.pv().score() - min_score + 10) * t.completed as i64 };
+
+    let mut vote_map = ArrayVec::<_, 256>::new();
+    for t in thread_headers {
+        if t.completed == 0 {
+            continue;
+        }
+        if let Some(&m) = t.pv().moves().first() {
+            let votes = vote_value(t);
+            if let Some(entry) = vote_map.iter_mut().find(|(k, _)| *k == m) {
+                entry.1 += votes;
+            } else {
+                vote_map.push((m, votes));
+            }
+        }
+    }
 
     for thread in rest {
-        let best_depth = best_thread.completed;
-        let best_score = best_thread.pvs[best_depth].score();
-        let this_depth = thread.completed;
-        let this_score = thread.pvs[this_depth].score();
-        if (this_depth == best_depth || this_score >= MINIMUM_TB_WIN_SCORE)
-            && this_score > best_score
-        {
-            best_thread = thread;
+        if thread.completed == 0 {
+            continue;
         }
-        if this_depth > best_depth && (this_score > best_score || best_score < MINIMUM_TB_WIN_SCORE)
+
+        let best_score = best.pv().score();
+        let this_score = thread.pv().score();
+
+        let best_move = best.pv().moves().first().copied();
+        let this_move = thread.pv().moves().first().copied();
+
+        // If the current best is decisive, only replace with a more accurate decisive score
+        // (larger absolute value = shorter line to the game-theoretic result).
+        //
+        // This does mean that we prefer to take shorter mates, even when those
+        // mates are bad for us. This is good from a “playing nice” POV, but might
+        // worsen performance if we ever produce spurious mate scores.
+        if is_decisive(best_score) {
+            if this_score.abs() > best_score.abs() {
+                best = thread;
+            }
+            continue;
+        }
+
+        // If this thread found a decisive win, take it.
+        if this_score >= MINIMUM_TB_WIN_SCORE {
+            best = thread;
+            continue;
+        }
+
+        let votes = |m| {
+            vote_map
+                .iter()
+                .find_map(|(k, v)| (*k == m).then_some(*v))
+                .unwrap()
+        };
+
+        // Otherwise, prefer the thread whose move has more total votes.
+        let best_votes = best_move.map_or(0, votes);
+        let this_votes = this_move.map_or(0, votes);
+
+        if this_votes > best_votes
+            || (this_votes == best_votes && vote_value(thread) > vote_value(best))
         {
-            best_thread = thread;
+            best = thread;
         }
     }
 
     // if we aren't using the main thread (thread 0) then we need to do
     // an extra uci info line to show the best move/score/pv
-    if best_thread.thread_id != 0 {
+    if best.thread_id != 0 {
+        let total_nodes = thread_headers[0].info.nodes.get_global();
+
         readout_info(
-            best_thread,
+            best,
             &thread_headers[0].info,
             Bound::Exact,
             total_nodes,
@@ -1916,7 +1998,7 @@ pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadD
         );
     }
 
-    best_thread
+    best
 }
 
 /// Print the info about an iteration of the search.
@@ -2041,18 +2123,16 @@ pub struct LMTable {
 }
 
 impl LMTable {
-    pub const NULL: Self = Self {
-        lm_reduction_table: [[0; 64]; 64],
-        lmp_movecount_table: [[0; 12]; 2],
-    };
-
     pub fn new(config: &Config) -> Self {
         #![allow(
             clippy::cast_possible_truncation,
             clippy::cast_precision_loss,
             clippy::cast_sign_loss
         )]
-        let mut out = Self::NULL;
+        let mut out = Self {
+            lm_reduction_table: [[0; 64]; 64],
+            lmp_movecount_table: [[0; 12]; 2],
+        };
         let (base, division) = (
             config.lmr_base / 100.0 * 1024.0,
             config.lmr_division / 100.0 / 1024.0,
@@ -2080,11 +2160,5 @@ impl LMTable {
     pub fn lmp_movecount(&self, depth: i32, improving: bool) -> usize {
         let depth: usize = depth.clamp(0, 11).try_into().unwrap_or_default();
         self.lmp_movecount_table[usize::from(improving)][depth]
-    }
-}
-
-impl Default for LMTable {
-    fn default() -> Self {
-        Self::new(&Config::default())
     }
 }

@@ -1,0 +1,9 @@
+I would like to thank notable contributors to Viridithas (listed in alphabetical order):
+
+Archishou, for optimisations to quiescence search and his work on enhanced aspiration windows.
+Chef, for improving tooling and devising the pinned SEE algorithm.
+Ciekce, for his work on time management, board representation, and threat history.
+Johan, for his fantastic work keeping SweHosting running, and for generously advancing chess programming with his donations of hardware-time.
+Lily, for her comments and observations on null search.
+Sp00ph, for making viri Stacked Borrows-compliant, and for writing assembly for NEON.
+Typo, for rich conversation on lazy symmetric multi-processing.
