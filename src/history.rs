@@ -19,22 +19,19 @@ impl ThreadData<'_> {
     /// Update the history counters of a batch of moves.
     pub fn update_history(&mut self, moves_to_adjust: &[Move], best_move: Move, depth: i32) {
         let threats = self.board.state.threats.all;
+        let bonus = history_bonus(&self.info.conf.main_history, depth);
+        let malus = -history_malus(&self.info.conf.main_history, depth);
         for &m in moves_to_adjust {
+            let delta = if m == best_move { bonus } else { malus };
             let from = m.from();
-            let piece_moved = self.board.state.mailbox[from];
+            let piece_moved = self.board.state.mailbox[from].unwrap();
             let to = m.history_to_square();
-            let val = self.main_hist.get_mut(
-                piece_moved.unwrap(),
-                to,
-                threats.contains_square(from),
-                threats.contains_square(to),
-            );
-            let delta = if m == best_move {
-                history_bonus(&self.info.conf.main_history, depth)
-            } else {
-                -history_malus(&self.info.conf.main_history, depth)
-            };
-            update_history(val, delta);
+            let ft = threats.contains_square(from);
+            let tt = threats.contains_square(to);
+            let piece_to = &mut self.piece_to_hist.get_mut(ft, tt)[piece_moved][to];
+            let from_to = &mut self.from_to_hist.get_mut(ft, tt)[from][to];
+            update_history(piece_to, delta);
+            update_history(from_to, delta);
         }
     }
 
@@ -53,13 +50,12 @@ impl ThreadData<'_> {
         } else {
             -history_malus(&self.info.conf.main_history, depth)
         };
-        let val = self.main_hist.get_mut(
-            moved,
-            to,
-            threats.contains_square(from),
-            threats.contains_square(to),
-        );
+        let ft = threats.contains_square(from);
+        let tt = threats.contains_square(to);
+        let val = &mut self.piece_to_hist.get_mut(ft, tt)[moved][to];
+        let fact_val = &mut self.from_to_hist.get_mut(ft, tt)[from][to];
         update_history(val, delta);
+        update_history(fact_val, delta);
     }
 
     /// Update the pawn-structure history counters of a batch of moves.

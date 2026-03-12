@@ -4,7 +4,7 @@
 //! exposes movegen functions to C code.
 
 use crate::chess::{
-    board::movegen::{bishop_attacks, king_attacks, knight_attacks, rook_attacks},
+    board::movegen::{diag_attacks, king_attacks, knight_attacks, orth_attacks},
     squareset::SquareSet,
     types::Square,
 };
@@ -64,7 +64,7 @@ pub extern "C" fn viridithas_bishop_attacks(sq: u32, occupied: u64) -> u64 {
     };
 
     let blockers = SquareSet::from_inner(occupied);
-    bishop_attacks(square, blockers).inner()
+    diag_attacks(square, blockers).inner()
 }
 
 #[unsafe(no_mangle)]
@@ -74,7 +74,7 @@ pub extern "C" fn viridithas_rook_attacks(sq: u32, occupied: u64) -> u64 {
     };
 
     let blockers = SquareSet::from_inner(occupied);
-    rook_attacks(square, blockers).inner()
+    orth_attacks(square, blockers).inner()
 }
 
 #[unsafe(no_mangle)]
@@ -84,8 +84,8 @@ pub extern "C" fn viridithas_queen_attacks(sq: u32, occupied: u64) -> u64 {
     };
 
     let blockers = SquareSet::from_inner(occupied);
-    let bishop = bishop_attacks(square, blockers);
-    let rook = rook_attacks(square, blockers);
+    let bishop = diag_attacks(square, blockers);
+    let rook = orth_attacks(square, blockers);
     (bishop | rook).inner()
 }
 

@@ -15,6 +15,7 @@ use crate::{
         HISTORY_PRUNING_MARGIN, LMR_BASE, LMR_BASE_OFFSET, LMR_CHECK_MUL, LMR_CORR_MUL,
         LMR_CUT_NODE_MUL, LMR_DIVISION, LMR_NON_IMPROVING_MUL, LMR_NON_PV_MUL, LMR_REFUTATION_MUL,
         LMR_TT_CAPTURE_MUL, LMR_TTPV_MUL, MAIN_HISTORY, MAIN_SEE_BOUND, MAIN_STAT_SCORE_MUL,
+        TTPV_LMR_DEPTH_MUL,
         MAJOR_CORRHIST_WEIGHT, MINOR_CORRHIST_WEIGHT, NMP_DEPTH_MUL, NMP_IMPROVING_MARGIN,
         NMP_REDUCTION_EVAL_DIVISOR, NONPAWN_CORRHIST_WEIGHT, OPTIMISM_MATERIAL_BASE,
         OPTIMISM_OFFSET, PAWN_CORRHIST_WEIGHT, PAWN_HISTORY, PROBCUT_ADA_DIV, PROBCUT_ADA_OFFSET,
@@ -142,6 +143,7 @@ pub struct Config {
     pub optimism_mat_base: i32,
     pub eval_policy_update_max: i32,
     pub probcut_see_scale: i32,
+    pub ttpv_lmr_depth_mul: i32,
 }
 
 impl Config {
@@ -227,6 +229,7 @@ impl Config {
             optimism_mat_base: OPTIMISM_MATERIAL_BASE,
             eval_policy_update_max: EVAL_POLICY_UPDATE_MAX,
             probcut_see_scale: PROBCUT_SEE_SCALE,
+            ttpv_lmr_depth_mul: TTPV_LMR_DEPTH_MUL,
         }
     }
 }
@@ -381,7 +384,8 @@ impl Config {
             OPTIMISM_OFFSET = [self.optimism_offset],
             OPTIMISM_MATERIAL_BASE = [self.optimism_mat_base],
             EVAL_POLICY_UPDATE_MAX = [self.eval_policy_update_max],
-            PROBCUT_SEE_SCALE = [self.probcut_see_scale]
+            PROBCUT_SEE_SCALE = [self.probcut_see_scale],
+            TTPV_LMR_DEPTH_MUL = [self.ttpv_lmr_depth_mul]
         ]
     }
 
@@ -506,7 +510,8 @@ impl Config {
             OPTIMISM_OFFSET = [self.optimism_offset, -4096, 4096, 16],
             OPTIMISM_MATERIAL_BASE = [self.optimism_mat_base, 1, 8192, 256],
             EVAL_POLICY_UPDATE_MAX = [self.eval_policy_update_max, 1, 4096, 8],
-            PROBCUT_SEE_SCALE = [self.probcut_see_scale, 1, 1024, 16]
+            PROBCUT_SEE_SCALE = [self.probcut_see_scale, 1, 1024, 16],
+            TTPV_LMR_DEPTH_MUL = [self.ttpv_lmr_depth_mul, 1, 2048, 48]
         ]
     }
 

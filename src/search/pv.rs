@@ -14,17 +14,13 @@ pub struct PVariation {
     pub(crate) moves: ArrayVec<Move, MAX_DEPTH>,
 }
 
-impl Default for PVariation {
-    fn default() -> Self {
-        Self::EMPTY
-    }
-}
-
 impl PVariation {
-    const EMPTY: Self = Self {
-        score: 0,
-        moves: ArrayVec::new_const(),
-    };
+    pub fn new() -> Self {
+        Self {
+            score: 0,
+            moves: ArrayVec::new(),
+        }
+    }
 
     pub fn moves(&self) -> &[Move] {
         &self.moves
@@ -32,10 +28,6 @@ impl PVariation {
 
     pub const fn score(&self) -> i32 {
         self.score
-    }
-
-    pub const fn default_const() -> Self {
-        Self::EMPTY
     }
 
     pub(crate) fn load_from(&mut self, m: Move, rest: &Self) {

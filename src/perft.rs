@@ -234,7 +234,7 @@ mod tests {
         let tbhits = AtomicU64::new(0);
         let mut t = ThreadData::new(
             0,
-            Board::default(),
+            Board::startpos(),
             tt.view(),
             nnue_params,
             &stopped,
@@ -258,7 +258,7 @@ mod tests {
     fn perft_movepicker_start_position() {
         use super::*;
 
-        let pos = Board::default();
+        let pos = Board::startpos();
         let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
         tt.resize(MEGABYTE * 16, &pool);

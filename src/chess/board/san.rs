@@ -359,7 +359,7 @@ mod tests {
 
     #[test]
     fn simple_pawn_move() {
-        let board = Board::default();
+        let board = Board::startpos();
         let m = board.parse_san("e4").unwrap();
         assert_eq!(m.from(), Square::E2);
         assert_eq!(m.to(), Square::E4);
@@ -367,7 +367,7 @@ mod tests {
 
     #[test]
     fn pawn_single_push() {
-        let board = Board::default();
+        let board = Board::startpos();
         let m = board.parse_san("e3").unwrap();
         assert_eq!(m.from(), Square::E2);
         assert_eq!(m.to(), Square::E3);
@@ -375,7 +375,7 @@ mod tests {
 
     #[test]
     fn knight_move() {
-        let board = Board::default();
+        let board = Board::startpos();
         let m = board.parse_san("Nf3").unwrap();
         assert_eq!(m.from(), Square::G1);
         assert_eq!(m.to(), Square::F3);
@@ -534,7 +534,7 @@ mod tests {
 
     #[test]
     fn invalid() {
-        let board = Board::default();
+        let board = Board::startpos();
         assert!(board.parse_san("Ze4").is_err());
         assert!(board.parse_san("").is_err());
         assert!(board.parse_san("xxxx").is_err());
@@ -542,7 +542,7 @@ mod tests {
 
     #[test]
     fn illegal_move() {
-        let board = Board::default();
+        let board = Board::startpos();
         // Can't move pawn to e5 in one move from starting position
         assert!(matches!(
             board.parse_san("e5"),
@@ -578,7 +578,7 @@ mod tests {
     #[test]
     fn fully_specified_move() {
         // Test fully specified notation like "Ng1f3"
-        let board = Board::default();
+        let board = Board::startpos();
         let m = board.parse_san("Ng1f3").unwrap();
         assert_eq!(m.from(), Square::G1);
         assert_eq!(m.to(), Square::F3);
