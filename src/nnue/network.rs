@@ -51,7 +51,7 @@ pub const SCALE: i32 = 240;
 /// The number of neurons in the input to L1.
 pub const L1_SIZE: usize = 2560;
 /// The number of neurons in the input to L2.
-pub const L2_SIZE: usize = 16;
+pub const L2_SIZE: usize = 32;
 /// The number of neurons in the input to L3.
 pub const L3_SIZE: usize = 32;
 /// The number of neurons in the input to L4.
@@ -1575,35 +1575,26 @@ impl NNUEState {
             (&acc.black, &acc.white)
         };
 
-        let mut l1_outputs = Align64([0.0; L2_SIZE]);
-        let mut l2_outputs = Align64([0.0; L3_SIZE]);
-        let mut l3_outputs = Align64([0.0; L4_SIZE]);
+        const {
+            assert!(32 == L2_SIZE && 32 == L3_SIZE && 32 == L4_SIZE);
+        }
+        let mut stream = Align64([0.0; 32]);
 
         layers::activate_ft_and_propagate_l1(
             us,
             them,
             &nn.l1_weights[out],
             &nn.l1_bias[out],
-            &mut l1_outputs,
+            &mut stream,
         );
-        layers::propagate_l2(
-            &l1_outputs,
-            &nn.l2_weights[out],
-            &nn.l2_bias[out],
-            &mut l2_outputs,
-        );
-        layers::propagate_l3(
-            &l2_outputs,
-            &nn.l3_weights[out],
-            &nn.l3_bias[out],
-            &mut l3_outputs,
-        );
+        layers::propagate_l2(&mut stream, &nn.l2_weights[out], &nn.l2_bias[out]);
+        layers::propagate_l3(&mut stream, &nn.l3_weights[out], &nn.l3_bias[out]);
 
         if HEADS == 1 {
             let mut l4_output = 0.0;
 
             layers::propagate_l4(
-                &l3_outputs,
+                &stream,
                 &nn.l4_weights[out][0],
                 nn.l4_bias[out][0],
                 &mut l4_output,
@@ -1618,7 +1609,7 @@ impl NNUEState {
                 .zip(nn.l4_bias[out])
                 .zip(&mut l4_output_logits)
             {
-                layers::propagate_l4(&l3_outputs, w, b, o);
+                layers::propagate_l4(&stream, w, b, o);
             }
 
             // softmax

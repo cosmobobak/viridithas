@@ -524,10 +524,9 @@ mod simd {
 
     #[allow(clippy::needless_range_loop, clippy::cast_ptr_alignment)]
     pub fn propagate_l2(
-        inputs: &Align64<[f32; L2_SIZE]>,
+        stream: &mut Align64<[f32; L2_SIZE]>,
         weights: &Align64<[f32; L2_SIZE * L3_SIZE * 2]>,
         biases: &Align64<[f32; L3_SIZE * 2]>,
-        output: &mut Align64<[f32; L3_SIZE]>,
     ) {
         // SAFETY: Breaking it down by unsafe operations:
         // 1. get_unchecked[_mut] / .as[_mut]_ptr().add(): We only ever index at most (L3_SIZE * 2 / F32_CHUNK - 1) * F32_CHUNK
@@ -544,7 +543,7 @@ mod simd {
 
             // affine transform
             for i in 0..L2_SIZE {
-                let activation = simd::splat_f32(*inputs.get_unchecked(i));
+                let activation = simd::splat_f32(*stream.get_unchecked(i));
                 for j in 0..L3_SIZE * 2 / F32_CHUNK {
                     let acc = simd::load_f32(sums.as_ptr().add(j * F32_CHUNK));
                     let weight =
@@ -567,17 +566,19 @@ mod simd {
                     simd::min_f32(simd::max_f32(simd::add_f32(gate_preact, half_k), zero), k);
                 let swish = simd::mul_f32(simd::mul_f32(gate_preact, clamped), inv_k);
                 let act = simd::mul_f32(swish, id_preact);
-                simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK), act);
+                let ptr = stream.as_mut_ptr().add(i * F32_CHUNK);
+                let acc = simd::load_f32(ptr);
+                let res = simd::add_f32(acc, act);
+                simd::store_f32(ptr, res);
             }
         }
     }
 
     #[allow(clippy::needless_range_loop, clippy::cast_ptr_alignment)]
     pub fn propagate_l3(
-        inputs: &Align64<[f32; L3_SIZE]>,
+        stream: &mut Align64<[f32; L3_SIZE]>,
         weights: &Align64<[f32; L3_SIZE * L4_SIZE * 2]>,
         biases: &Align64<[f32; L4_SIZE * 2]>,
-        output: &mut Align64<[f32; L4_SIZE]>,
     ) {
         // SAFETY: Breaking it down by unsafe operations:
         // 1. get_unchecked[_mut] / .as[_mut]_ptr().add(): We only ever index at most (L4_SIZE * 2 / F32_CHUNK - 1) * F32_CHUNK
@@ -594,7 +595,7 @@ mod simd {
 
             // affine transform
             for i in 0..L3_SIZE {
-                let activation = simd::splat_f32(*inputs.get_unchecked(i));
+                let activation = simd::splat_f32(*stream.get_unchecked(i));
                 for j in 0..L4_SIZE * 2 / F32_CHUNK {
                     let acc = simd::load_f32(sums.as_ptr().add(j * F32_CHUNK));
                     let weight =
@@ -617,7 +618,10 @@ mod simd {
                     simd::min_f32(simd::max_f32(simd::add_f32(gate_preact, half_k), zero), k);
                 let swish = simd::mul_f32(simd::mul_f32(gate_preact, clamped), inv_k);
                 let act = simd::mul_f32(swish, id_preact);
-                simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK), act);
+                let ptr = stream.as_mut_ptr().add(i * F32_CHUNK);
+                let acc = simd::load_f32(ptr);
+                let res = simd::add_f32(acc, act);
+                simd::store_f32(ptr, res);
             }
         }
     }
