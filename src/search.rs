@@ -628,8 +628,8 @@ pub fn quiescence<NT: NodeType>(
     let mut best_score = stand_pat;
 
     let mut moves_made = 0;
-    let mut move_picker =
-        MovePicker::new(tt_hit.and_then(|e| e.mov), None, t.info.conf.qs_see_bound);
+    let tt_move = tt_hit.and_then(|e| e.mov);
+    let mut move_picker = MovePicker::new(tt_move, None, t.info.conf.qs_see_bound);
     move_picker.skip_quiets = !in_check;
 
     let futility = stand_pat + t.info.conf.qs_futility;
@@ -642,19 +642,24 @@ pub fn quiescence<NT: NodeType>(
         let is_tactical = t.board.is_tactical(m);
         let gives_check = t.board.is_direct_check(m);
         let is_recapture = Some(m.to()) == t.ss[height - 1].searching.map(Move::to);
-        if best_score > -MINIMUM_TB_WIN_SCORE
-            && is_tactical
-            && !in_check
-            && !gives_check
-            && !is_recapture
-            && futility <= alpha
-            && !is_decisive(futility)
-            && !static_exchange_eval(&t.board, &t.info.conf, m, 1)
-        {
-            if best_score < futility {
-                best_score = futility;
+        if best_score > -MINIMUM_TB_WIN_SCORE {
+            if is_tactical
+                && !in_check
+                && !gives_check
+                && !is_recapture
+                && futility <= alpha
+                && !is_decisive(futility)
+                && !static_exchange_eval(&t.board, &t.info.conf, m, 1)
+            {
+                if best_score < futility {
+                    best_score = futility;
+                }
+                continue;
             }
-            continue;
+
+            if moves_made >= 2 {
+                break;
+            }
         }
         t.ss[height].searching = Some(m);
         t.ss[height].searching_tactical = is_tactical;
