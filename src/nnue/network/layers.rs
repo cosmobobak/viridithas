@@ -111,13 +111,23 @@ mod generic {
         propagate_l1(&ft_outputs, weights, biases, output);
     }
 
-    #[allow(clippy::needless_range_loop)]
+    #[allow(clippy::needless_range_loop, clippy::cast_precision_loss)]
     pub fn propagate_l2(
         inputs: &Align64<[f32; L2_SIZE]>,
         weights: &Align64<[f32; L2_SIZE * L3_SIZE * 2]>,
         biases: &Align64<[f32; L3_SIZE * 2]>,
         output: &mut Align64<[f32; L3_SIZE]>,
     ) {
+        // RMSNorm: normalise inputs before affine transform
+        let mut sum_sq = 0.0f32;
+        for i in 0..L2_SIZE {
+            unsafe {
+                let v = *inputs.get_unchecked(i);
+                sum_sq = v.mul_add(v, sum_sq);
+            }
+        }
+        let inv_rms = 1.0 / (sum_sq / L2_SIZE as f32 + 1e-6).sqrt();
+
         // this is just autovec'd for the moment.
         let mut sums = biases.clone();
 
@@ -127,7 +137,7 @@ mod generic {
             // and `weights` is `L2_SIZE * L3_SIZE * 2` long. As such, the
             // indices that we construct are valid.
             unsafe {
-                let input = *inputs.get_unchecked(i);
+                let input = *inputs.get_unchecked(i) * inv_rms;
                 for j in 0..L3_SIZE * 2 {
                     let sum = *sums.get_unchecked(j);
                     let w = *weights.get_unchecked(i * L3_SIZE * 2 + j);
@@ -522,7 +532,11 @@ mod simd {
         }
     }
 
-    #[allow(clippy::needless_range_loop, clippy::cast_ptr_alignment)]
+    #[allow(
+        clippy::needless_range_loop,
+        clippy::cast_ptr_alignment,
+        clippy::cast_precision_loss
+    )]
     pub fn propagate_l2(
         stream: &mut Align64<[f32; L2_SIZE]>,
         weights: &Align64<[f32; L2_SIZE * L3_SIZE * 2]>,
@@ -539,11 +553,20 @@ mod simd {
         // into `sums`, which is in bounds as `sums` has length L3_SIZE * 2.
         // 2. SIMD instructions: All of our loads and stores are aligned.
         unsafe {
+            // RMSNorm: normalise stream before affine transform
+            const NUM_SUMS: usize = AVX512CHUNK / F32_CHUNK;
+            let mut sq_vecs = [simd::zero_f32(); NUM_SUMS];
+            for i in 0..L2_SIZE / F32_CHUNK {
+                let val = simd::load_f32(stream.as_ptr().add(i * F32_CHUNK));
+                sq_vecs[i % NUM_SUMS] = simd::madd_f32(val, val, sq_vecs[i % NUM_SUMS]);
+            }
+            let inv_rms = 1.0 / (simd::reduce_add_f32s(&sq_vecs) / L2_SIZE as f32 + 1e-6).sqrt();
+
             let mut sums = biases.clone();
 
             // affine transform
             for i in 0..L2_SIZE {
-                let activation = simd::splat_f32(*stream.get_unchecked(i));
+                let activation = simd::splat_f32(*stream.get_unchecked(i) * inv_rms);
                 for j in 0..L3_SIZE * 2 / F32_CHUNK {
                     let acc = simd::load_f32(sums.as_ptr().add(j * F32_CHUNK));
                     let weight =
@@ -574,7 +597,11 @@ mod simd {
         }
     }
 
-    #[allow(clippy::needless_range_loop, clippy::cast_ptr_alignment)]
+    #[allow(
+        clippy::needless_range_loop,
+        clippy::cast_ptr_alignment,
+        clippy::cast_precision_loss
+    )]
     pub fn propagate_l3(
         stream: &mut Align64<[f32; L3_SIZE]>,
         weights: &Align64<[f32; L3_SIZE * L4_SIZE * 2]>,
@@ -591,11 +618,20 @@ mod simd {
         // into `sums`, which is in bounds as `sums` has length L4_SIZE * 2.
         // 2. SIMD instructions: All of our loads and stores are aligned.
         unsafe {
+            // RMSNorm: normalise stream before affine transform
+            const NUM_SUMS: usize = AVX512CHUNK / F32_CHUNK;
+            let mut sq_vecs = [simd::zero_f32(); NUM_SUMS];
+            for i in 0..L3_SIZE / F32_CHUNK {
+                let val = simd::load_f32(stream.as_ptr().add(i * F32_CHUNK));
+                sq_vecs[i % NUM_SUMS] = simd::madd_f32(val, val, sq_vecs[i % NUM_SUMS]);
+            }
+            let inv_rms = 1.0 / (simd::reduce_add_f32s(&sq_vecs) / L3_SIZE as f32 + 1e-6).sqrt();
+
             let mut sums = biases.clone();
 
             // affine transform
             for i in 0..L3_SIZE {
-                let activation = simd::splat_f32(*stream.get_unchecked(i));
+                let activation = simd::splat_f32(*stream.get_unchecked(i) * inv_rms);
                 for j in 0..L4_SIZE * 2 / F32_CHUNK {
                     let acc = simd::load_f32(sums.as_ptr().add(j * F32_CHUNK));
                     let weight =
