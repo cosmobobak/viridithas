@@ -50,12 +50,14 @@ pub const INPUT: usize = (12 - MERGE_KING_PLANES as usize) * 64;
 pub const SCALE: i32 = 240;
 /// The number of neurons in the input to L1.
 pub const L1_SIZE: usize = 2560;
-/// The number of neurons in the input to L2.
+/// The number of neurons in the residual stream (L1 output / L2,L3 input/output).
 pub const L2_SIZE: usize = 32;
-/// The number of neurons in the input to L3.
-pub const L3_SIZE: usize = 32;
-/// The number of neurons in the input to L4.
-pub const L4_SIZE: usize = 32;
+/// Alias for the residual stream width.
+pub const L3_SIZE: usize = L2_SIZE;
+/// Alias for the residual stream width.
+pub const L4_SIZE: usize = L2_SIZE;
+/// The internal width of the experts (post-activation, pre-down-proj).
+pub const HIDDEN_SIZE: usize = 64;
 /// The number of output heads.
 pub const HEADS: usize = 1;
 /// The quantisation factor for the feature transformer weights.
@@ -122,16 +124,20 @@ struct UnquantisedNetwork {
     l0_biases:     [f32; L1_SIZE],
     l1_weights:  [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:    [[f32; L2_SIZE]; OUTPUT_BUCKETS],
-    l2x_weights: [[[f32; L3_SIZE * 2]; OUTPUT_BUCKETS]; L2_SIZE],
-    l2f_weights:  [[f32; L3_SIZE * 2]; L2_SIZE],
-    l2x_biases:   [[f32; L3_SIZE * 2]; OUTPUT_BUCKETS],
-    l2f_biases:    [f32; L3_SIZE * 2],
-    l3x_weights: [[[f32; L4_SIZE * 2]; OUTPUT_BUCKETS]; L3_SIZE],
-    l3f_weights:  [[f32; L4_SIZE * 2]; L3_SIZE],
-    l3x_biases:   [[f32; L4_SIZE * 2]; OUTPUT_BUCKETS],
-    l3f_biases:    [f32; L4_SIZE * 2],
-    l4x_weights: [[[f32;   HEADS]; OUTPUT_BUCKETS]; L4_SIZE],
-    l4f_weights:  [[f32;   HEADS]; L4_SIZE],
+    l2x_weights: [[[f32; HIDDEN_SIZE * 2]; OUTPUT_BUCKETS]; L2_SIZE],
+    l2f_weights:  [[f32; HIDDEN_SIZE * 2]; L2_SIZE],
+    l2x_biases:   [[f32; HIDDEN_SIZE * 2]; OUTPUT_BUCKETS],
+    l2f_biases:    [f32; HIDDEN_SIZE * 2],
+    l2d_weights:  [[f32; L2_SIZE]; HIDDEN_SIZE],
+    l2d_biases:    [f32; L2_SIZE],
+    l3x_weights: [[[f32; HIDDEN_SIZE * 2]; OUTPUT_BUCKETS]; L2_SIZE],
+    l3f_weights:  [[f32; HIDDEN_SIZE * 2]; L2_SIZE],
+    l3x_biases:   [[f32; HIDDEN_SIZE * 2]; OUTPUT_BUCKETS],
+    l3f_biases:    [f32; HIDDEN_SIZE * 2],
+    l3d_weights:  [[f32; L2_SIZE]; HIDDEN_SIZE],
+    l3d_biases:    [f32; L2_SIZE],
+    l4x_weights: [[[f32;   HEADS]; OUTPUT_BUCKETS]; L2_SIZE],
+    l4f_weights:  [[f32;   HEADS]; L2_SIZE],
     l4x_biases:   [[f32;   HEADS]; OUTPUT_BUCKETS],
     l4f_biases:    [f32;   HEADS],
 }
@@ -144,11 +150,15 @@ struct MergedNetwork {
     l0_biases:    [f32; L1_SIZE],
     l1_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
-    l2_weights: [[[f32; L3_SIZE * 2]; OUTPUT_BUCKETS]; L2_SIZE],
-    l2_biases:   [[f32; L3_SIZE * 2]; OUTPUT_BUCKETS],
-    l3_weights: [[[f32; L4_SIZE * 2]; OUTPUT_BUCKETS]; L3_SIZE],
-    l3_biases:   [[f32; L4_SIZE * 2]; OUTPUT_BUCKETS],
-    l4_weights: [[[f32;   HEADS]; OUTPUT_BUCKETS]; L4_SIZE],
+    l2_weights: [[[f32; HIDDEN_SIZE * 2]; OUTPUT_BUCKETS]; L2_SIZE],
+    l2_biases:   [[f32; HIDDEN_SIZE * 2]; OUTPUT_BUCKETS],
+    l2d_weights: [[f32; L2_SIZE]; HIDDEN_SIZE],
+    l2d_biases:   [f32; L2_SIZE],
+    l3_weights: [[[f32; HIDDEN_SIZE * 2]; OUTPUT_BUCKETS]; L2_SIZE],
+    l3_biases:   [[f32; HIDDEN_SIZE * 2]; OUTPUT_BUCKETS],
+    l3d_weights: [[f32; L2_SIZE]; HIDDEN_SIZE],
+    l3d_biases:   [f32; L2_SIZE],
+    l4_weights: [[[f32;   HEADS]; OUTPUT_BUCKETS]; L2_SIZE],
     l4_biases:   [[f32;   HEADS]; OUTPUT_BUCKETS],
 }
 
@@ -161,11 +171,15 @@ struct QuantisedNetwork {
     l0_biases:    [i16; L1_SIZE],
     l1_weights: [[[ i8; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
-    l2_weights: [[[f32; L3_SIZE * 2]; OUTPUT_BUCKETS]; L2_SIZE],
-    l2_biases:   [[f32; L3_SIZE * 2]; OUTPUT_BUCKETS],
-    l3_weights: [[[f32; L4_SIZE * 2]; OUTPUT_BUCKETS]; L3_SIZE],
-    l3_biases:   [[f32; L4_SIZE * 2]; OUTPUT_BUCKETS],
-    l4_weights: [[[f32;   HEADS]; OUTPUT_BUCKETS]; L4_SIZE],
+    l2_weights: [[[f32; HIDDEN_SIZE * 2]; OUTPUT_BUCKETS]; L2_SIZE],
+    l2_biases:   [[f32; HIDDEN_SIZE * 2]; OUTPUT_BUCKETS],
+    l2d_weights: [[f32; L2_SIZE]; HIDDEN_SIZE],
+    l2d_biases:   [f32; L2_SIZE],
+    l3_weights: [[[f32; HIDDEN_SIZE * 2]; OUTPUT_BUCKETS]; L2_SIZE],
+    l3_biases:   [[f32; HIDDEN_SIZE * 2]; OUTPUT_BUCKETS],
+    l3d_weights: [[f32; L2_SIZE]; HIDDEN_SIZE],
+    l3d_biases:   [f32; L2_SIZE],
+    l4_weights: [[[f32;   HEADS]; OUTPUT_BUCKETS]; L2_SIZE],
     l4_biases:   [[f32;   HEADS]; OUTPUT_BUCKETS],
 }
 
@@ -178,11 +192,15 @@ pub struct NNUEParams {
     pub l0_biases:    Align64<[i16; L1_SIZE]>,
     pub l1_weights:  [Align64<[ i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
     pub l1_bias:     [Align64<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
-    pub l2_weights:  [Align64<[f32; L2_SIZE * L3_SIZE * 2]>; OUTPUT_BUCKETS],
-    pub l2_bias:     [Align64<[f32; L3_SIZE * 2]>; OUTPUT_BUCKETS],
-    pub l3_weights:  [Align64<[f32; L3_SIZE * L4_SIZE * 2]>; OUTPUT_BUCKETS],
-    pub l3_bias:     [Align64<[f32; L4_SIZE * 2]>; OUTPUT_BUCKETS],
-    pub l4_weights: [[Align64<[f32; L4_SIZE]>; HEADS]; OUTPUT_BUCKETS],
+    pub l2_weights:  [Align64<[f32; L2_SIZE * HIDDEN_SIZE * 2]>; OUTPUT_BUCKETS],
+    pub l2_bias:     [Align64<[f32; HIDDEN_SIZE * 2]>; OUTPUT_BUCKETS],
+    pub l2d_weights:  Align64<[f32; HIDDEN_SIZE * L2_SIZE]>,
+    pub l2d_bias:     Align64<[f32; L2_SIZE]>,
+    pub l3_weights:  [Align64<[f32; L2_SIZE * HIDDEN_SIZE * 2]>; OUTPUT_BUCKETS],
+    pub l3_bias:     [Align64<[f32; HIDDEN_SIZE * 2]>; OUTPUT_BUCKETS],
+    pub l3d_weights:  Align64<[f32; HIDDEN_SIZE * L2_SIZE]>,
+    pub l3d_bias:     Align64<[f32; L2_SIZE]>,
+    pub l4_weights: [[Align64<[f32; L2_SIZE]>; HEADS]; OUTPUT_BUCKETS],
     pub l4_bias:             [[f32; HEADS]; OUTPUT_BUCKETS],
 }
 
@@ -319,36 +337,42 @@ impl UnquantisedNetwork {
                 net.l1_biases[bucket][i] = self.l1_biases[bucket][i];
             }
         }
-        // copy the L2 weights
+        // copy the L2 up-proj weights (merge bucketed + shared)
         for i in 0..L2_SIZE {
             for bucket in 0..OUTPUT_BUCKETS {
-                for j in 0..L3_SIZE * 2 {
+                for j in 0..HIDDEN_SIZE * 2 {
                     net.l2_weights[i][bucket][j] =
                         self.l2x_weights[i][bucket][j] + self.l2f_weights[i][j];
                 }
             }
         }
-        // copy the L2 biases
-        for i in 0..L3_SIZE * 2 {
+        // copy the L2 up-proj biases
+        for i in 0..HIDDEN_SIZE * 2 {
             for bucket in 0..OUTPUT_BUCKETS {
                 net.l2_biases[bucket][i] = self.l2x_biases[bucket][i] + self.l2f_biases[i];
             }
         }
-        // copy the L3 weights
-        for i in 0..L3_SIZE {
+        // copy the L2 down-proj weights and biases (shared, no merge needed)
+        net.l2d_weights = self.l2d_weights;
+        net.l2d_biases = self.l2d_biases;
+        // copy the L3 up-proj weights (merge bucketed + shared)
+        for i in 0..L2_SIZE {
             for bucket in 0..OUTPUT_BUCKETS {
-                for j in 0..L4_SIZE * 2 {
+                for j in 0..HIDDEN_SIZE * 2 {
                     net.l3_weights[i][bucket][j] =
                         self.l3x_weights[i][bucket][j] + self.l3f_weights[i][j];
                 }
             }
         }
-        // copy the L3 biases
-        for i in 0..L4_SIZE * 2 {
+        // copy the L3 up-proj biases
+        for i in 0..HIDDEN_SIZE * 2 {
             for bucket in 0..OUTPUT_BUCKETS {
                 net.l3_biases[bucket][i] = self.l3x_biases[bucket][i] + self.l3f_biases[i];
             }
         }
+        // copy the L3 down-proj weights and biases (shared, no merge needed)
+        net.l3d_weights = self.l3d_weights;
+        net.l3d_biases = self.l3d_biases;
         // copy the L4 weights
         for i in 0..L4_SIZE {
             for bucket in 0..OUTPUT_BUCKETS {
@@ -392,12 +416,24 @@ impl UnquantisedNetwork {
         println!("L2 weight range: [{l2w_min}, {l2w_max}]");
         println!("L2 bias range: [{l2b_min}, {l2b_max}]");
 
+        let l2d_weights_flat = net.l2d_weights.as_flattened();
+        let (l2dw_min, l2dw_max) = range(l2d_weights_flat);
+        let (l2db_min, l2db_max) = range(&net.l2d_biases);
+        println!("L2d weight range: [{l2dw_min}, {l2dw_max}]");
+        println!("L2d bias range: [{l2db_min}, {l2db_max}]");
+
         let l3_weights_flat = net.l3_weights.as_flattened().as_flattened();
         let l3_biases_flat = net.l3_biases.as_flattened();
         let (l3w_min, l3w_max) = range(l3_weights_flat);
         let (l3b_min, l3b_max) = range(l3_biases_flat);
         println!("L3 weight range: [{l3w_min}, {l3w_max}]");
         println!("L3 bias range: [{l3b_min}, {l3b_max}]");
+
+        let l3d_weights_flat = net.l3d_weights.as_flattened();
+        let (l3dw_min, l3dw_max) = range(l3d_weights_flat);
+        let (l3db_min, l3db_max) = range(&net.l3d_biases);
+        println!("L3d weight range: [{l3dw_min}, {l3dw_max}]");
+        println!("L3d bias range: [{l3db_min}, {l3db_max}]");
 
         let l4_weights_flat = net.l4_weights.as_flattened().as_flattened();
         let l4_biases_flat = net.l4_biases.as_flattened();
@@ -472,8 +508,12 @@ impl MergedNetwork {
         dump_layer!("l1b", self.l1_biases);
         dump_layer!("l2w", self.l2_weights);
         dump_layer!("l2b", self.l2_biases);
+        dump_layer!("l2dw", self.l2d_weights);
+        dump_layer!("l2db", self.l2d_biases);
         dump_layer!("l3w", self.l3_weights);
         dump_layer!("l3b", self.l3_biases);
+        dump_layer!("l3dw", self.l3d_weights);
+        dump_layer!("l3db", self.l3d_biases);
 
         Ok(())
     }
@@ -552,8 +592,12 @@ impl MergedNetwork {
         net.l1_biases = self.l1_biases;
         net.l2_weights = self.l2_weights;
         net.l2_biases = self.l2_biases;
+        net.l2d_weights = self.l2d_weights;
+        net.l2d_biases = self.l2d_biases;
         net.l3_weights = self.l3_weights;
         net.l3_biases = self.l3_biases;
+        net.l3d_weights = self.l3d_weights;
+        net.l3d_biases = self.l3d_biases;
         net.l4_weights = self.l4_weights;
         net.l4_biases = self.l4_biases;
 
@@ -678,32 +722,32 @@ impl QuantisedNetwork {
                 net.l1_bias[bucket][i] = self.l1_biases[bucket][i];
             }
 
-            // transpose the L2 weights
+            // transpose the L2 up-proj weights
             for i in 0..L2_SIZE {
-                for j in 0..L3_SIZE * 2 {
-                    net.l2_weights[bucket][i * L3_SIZE * 2 + j] = self.l2_weights[i][bucket][j];
+                for j in 0..HIDDEN_SIZE * 2 {
+                    net.l2_weights[bucket][i * HIDDEN_SIZE * 2 + j] = self.l2_weights[i][bucket][j];
                 }
             }
 
-            // transfer the L2 biases
-            for i in 0..L3_SIZE * 2 {
+            // transfer the L2 up-proj biases
+            for i in 0..HIDDEN_SIZE * 2 {
                 net.l2_bias[bucket][i] = self.l2_biases[bucket][i];
             }
 
-            // transpose the L3 weights
-            for i in 0..L3_SIZE {
-                for j in 0..L4_SIZE * 2 {
-                    net.l3_weights[bucket][i * L4_SIZE * 2 + j] = self.l3_weights[i][bucket][j];
+            // transpose the L3 up-proj weights
+            for i in 0..L2_SIZE {
+                for j in 0..HIDDEN_SIZE * 2 {
+                    net.l3_weights[bucket][i * HIDDEN_SIZE * 2 + j] = self.l3_weights[i][bucket][j];
                 }
             }
 
-            // transfer the L3 biases
-            for i in 0..L4_SIZE * 2 {
+            // transfer the L3 up-proj biases
+            for i in 0..HIDDEN_SIZE * 2 {
                 net.l3_bias[bucket][i] = self.l3_biases[bucket][i];
             }
 
             // transfer the L4 weights
-            for i in 0..L4_SIZE {
+            for i in 0..L2_SIZE {
                 for head in 0..HEADS {
                     net.l4_weights[bucket][head][i] = self.l4_weights[i][bucket][head];
                 }
@@ -712,6 +756,22 @@ impl QuantisedNetwork {
             // transfer the L4 biases
             net.l4_bias[bucket] = self.l4_biases[bucket];
         }
+
+        // transpose the L2 down-proj weights (shared, not per-bucket)
+        for i in 0..HIDDEN_SIZE {
+            for j in 0..L2_SIZE {
+                net.l2d_weights[i * L2_SIZE + j] = self.l2d_weights[i][j];
+            }
+        }
+        net.l2d_bias = Align64(self.l2d_biases);
+
+        // transpose the L3 down-proj weights (shared, not per-bucket)
+        for i in 0..HIDDEN_SIZE {
+            for j in 0..L2_SIZE {
+                net.l3d_weights[i * L2_SIZE + j] = self.l3d_weights[i][j];
+            }
+        }
+        net.l3d_bias = Align64(self.l3d_biases);
 
         net
     }
@@ -1587,8 +1647,20 @@ impl NNUEState {
             &nn.l1_bias[out],
             &mut stream,
         );
-        layers::propagate_l2(&mut stream, &nn.l2_weights[out], &nn.l2_bias[out]);
-        layers::propagate_l3(&mut stream, &nn.l3_weights[out], &nn.l3_bias[out]);
+        layers::propagate_block(
+            &mut stream,
+            &nn.l2_weights[out],
+            &nn.l2_bias[out],
+            &nn.l2d_weights,
+            &nn.l2d_bias,
+        );
+        layers::propagate_block(
+            &mut stream,
+            &nn.l3_weights[out],
+            &nn.l3_bias[out],
+            &nn.l3d_weights,
+            &nn.l3d_bias,
+        );
 
         if HEADS == 1 {
             let mut l4_output = 0.0;
