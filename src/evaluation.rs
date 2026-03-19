@@ -129,6 +129,7 @@ pub fn evaluate(t: &mut ThreadData, nodes: u64) -> i32 {
             -draw_score(t, nodes, t.board.turn())
         };
     }
+    return 0;
     // apply all in-waiting updates to generate a valid
     // neural network accumulator state.
     t.nnue.force(&t.board, t.nnue_params);
