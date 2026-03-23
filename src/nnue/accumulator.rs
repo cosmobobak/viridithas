@@ -1,6 +1,8 @@
 use crate::{
     chess::piece::Colour,
-    nnue::network::{INPUT, L1_SIZE, MovedPiece, UpdateBuffer, feature::FeatureIndex},
+    nnue::network::{
+        L1_SIZE, MovedPiece, PSQT_FEATURES, PsqtUpdateBuffer, feature::PsqtFeatureIndex,
+    },
     util::Align64,
 };
 
@@ -10,7 +12,7 @@ pub struct Accumulator {
     pub black: Align64<[i16; L1_SIZE]>,
 
     pub mv: MovedPiece,
-    pub update_buffer: UpdateBuffer,
+    pub update_buffer: PsqtUpdateBuffer,
     pub correct: [bool; 2],
 }
 
@@ -50,15 +52,15 @@ unsafe fn slice_to_aligned(slice: &[i16]) -> &Align64<[i16; L1_SIZE]> {
 mod simd {
     use arrayvec::ArrayVec;
 
-    use super::{Align64, FeatureIndex, INPUT, L1_SIZE, slice_to_aligned};
+    use super::{Align64, L1_SIZE, PSQT_FEATURES, PsqtFeatureIndex, slice_to_aligned};
     use crate::nnue::simd::{self, I16_CHUNK};
 
     /// Apply add/subtract updates in place.
     pub fn vector_update_inplace(
         input: &mut Align64<[i16; L1_SIZE]>,
-        bucket: &Align64<[i16; INPUT * L1_SIZE]>,
-        adds: &[FeatureIndex],
-        subs: &[FeatureIndex],
+        bucket: &Align64<[i16; PSQT_FEATURES * L1_SIZE]>,
+        adds: &[PsqtFeatureIndex],
+        subs: &[PsqtFeatureIndex],
     ) {
         const REGISTERS: usize = 16;
         const UNROLL: usize = I16_CHUNK * REGISTERS;
@@ -110,9 +112,9 @@ mod simd {
     pub fn vector_add_sub(
         input: &Align64<[i16; L1_SIZE]>,
         output: &mut Align64<[i16; L1_SIZE]>,
-        bucket: &Align64<[i16; INPUT * L1_SIZE]>,
-        add: FeatureIndex,
-        sub: FeatureIndex,
+        bucket: &Align64<[i16; PSQT_FEATURES * L1_SIZE]>,
+        add: PsqtFeatureIndex,
+        sub: PsqtFeatureIndex,
     ) {
         let offset_add = add.index() * L1_SIZE;
         let offset_sub = sub.index() * L1_SIZE;
@@ -142,10 +144,10 @@ mod simd {
     pub fn vector_add_sub2(
         input: &Align64<[i16; L1_SIZE]>,
         output: &mut Align64<[i16; L1_SIZE]>,
-        bucket: &Align64<[i16; INPUT * L1_SIZE]>,
-        add: FeatureIndex,
-        sub1: FeatureIndex,
-        sub2: FeatureIndex,
+        bucket: &Align64<[i16; PSQT_FEATURES * L1_SIZE]>,
+        add: PsqtFeatureIndex,
+        sub1: PsqtFeatureIndex,
+        sub2: PsqtFeatureIndex,
     ) {
         let offset_add = add.index() * L1_SIZE;
         let offset_sub1 = sub1.index() * L1_SIZE;
@@ -180,11 +182,11 @@ mod simd {
     pub fn vector_add2_sub2(
         input: &Align64<[i16; L1_SIZE]>,
         output: &mut Align64<[i16; L1_SIZE]>,
-        bucket: &Align64<[i16; INPUT * L1_SIZE]>,
-        add1: FeatureIndex,
-        add2: FeatureIndex,
-        sub1: FeatureIndex,
-        sub2: FeatureIndex,
+        bucket: &Align64<[i16; PSQT_FEATURES * L1_SIZE]>,
+        add1: PsqtFeatureIndex,
+        add2: PsqtFeatureIndex,
+        sub1: PsqtFeatureIndex,
+        sub2: PsqtFeatureIndex,
     ) {
         let offset_add1 = add1.index() * L1_SIZE;
         let offset_add2 = add2.index() * L1_SIZE;
@@ -230,9 +232,9 @@ mod generic {
     /// Apply add/subtract updates in place.
     pub fn vector_update_inplace(
         input: &mut Align64<[i16; L1_SIZE]>,
-        bucket: &Align64<[i16; INPUT * L1_SIZE]>,
-        adds: &[FeatureIndex],
-        subs: &[FeatureIndex],
+        bucket: &Align64<[i16; PSQT_FEATURES * L1_SIZE]>,
+        adds: &[PsqtFeatureIndex],
+        subs: &[PsqtFeatureIndex],
     ) {
         const REGISTERS: usize = 16;
         const UNROLL: usize = REGISTERS;
@@ -282,9 +284,9 @@ mod generic {
     pub fn vector_add_sub(
         input: &Align64<[i16; L1_SIZE]>,
         output: &mut Align64<[i16; L1_SIZE]>,
-        bucket: &Align64<[i16; INPUT * L1_SIZE]>,
-        add: FeatureIndex,
-        sub: FeatureIndex,
+        bucket: &Align64<[i16; PSQT_FEATURES * L1_SIZE]>,
+        add: PsqtFeatureIndex,
+        sub: PsqtFeatureIndex,
     ) {
         let offset_add = add.index() * L1_SIZE;
         let offset_sub = sub.index() * L1_SIZE;
@@ -314,10 +316,10 @@ mod generic {
     pub fn vector_add_sub2(
         input: &Align64<[i16; L1_SIZE]>,
         output: &mut Align64<[i16; L1_SIZE]>,
-        bucket: &Align64<[i16; INPUT * L1_SIZE]>,
-        add: FeatureIndex,
-        sub1: FeatureIndex,
-        sub2: FeatureIndex,
+        bucket: &Align64<[i16; PSQT_FEATURES * L1_SIZE]>,
+        add: PsqtFeatureIndex,
+        sub1: PsqtFeatureIndex,
+        sub2: PsqtFeatureIndex,
     ) {
         let offset_add = add.index() * L1_SIZE;
         let offset_sub1 = sub1.index() * L1_SIZE;
@@ -352,11 +354,11 @@ mod generic {
     pub fn vector_add2_sub2(
         input: &Align64<[i16; L1_SIZE]>,
         output: &mut Align64<[i16; L1_SIZE]>,
-        bucket: &Align64<[i16; INPUT * L1_SIZE]>,
-        add1: FeatureIndex,
-        add2: FeatureIndex,
-        sub1: FeatureIndex,
-        sub2: FeatureIndex,
+        bucket: &Align64<[i16; PSQT_FEATURES * L1_SIZE]>,
+        add1: PsqtFeatureIndex,
+        add2: PsqtFeatureIndex,
+        sub1: PsqtFeatureIndex,
+        sub2: PsqtFeatureIndex,
     ) {
         let offset_add1 = add1.index() * L1_SIZE;
         let offset_add2 = add2.index() * L1_SIZE;

@@ -42,14 +42,16 @@ const _: () = assert!(!EMBEDDED_NNUE_VERBATIM || EMBEDDED_NNUE.len() == size_of:
 pub const MERGE_KING_PLANES: bool = true;
 /// Whether the unquantised network has a feature factoriser.
 pub const UNQUANTISED_HAS_FACTORISER: bool = false;
-/// The size of the input layer of the network.
-pub const INPUT: usize = (12 - MERGE_KING_PLANES as usize) * 64;
+/// The number of features present in PSQT part of the input.
+pub const PSQT_FEATURES: usize = (12 - MERGE_KING_PLANES as usize) * 64;
+/// The number of features present in the threat part of the input.
+pub const THREAT_FEATURES: usize = 60144;
 /// The amount to scale the output of the network by.
 /// This is to allow for the sigmoid activation to differentiate positions with
 /// a small difference in evaluation.
 pub const SCALE: i32 = 240;
 /// The size of one-half of the hidden layer of the network.
-pub const L1_SIZE: usize = 2560;
+pub const L1_SIZE: usize = 768;
 /// The size of the second layer of the network.
 pub const L2_SIZE: usize = 16;
 /// The size of the third layer of the network.
@@ -117,6 +119,7 @@ pub fn nnue_checksum() -> u64 {
 struct UnquantisedNetwork {
     // extra bucket for the feature-factoriser.
     l0_weights:    [f32; 12 * 64 * L1_SIZE * (BUCKETS + UNQUANTISED_HAS_FACTORISER as usize)],
+    l0_threat:     [f32; THREAT_FEATURES * L1_SIZE],
     l0_biases:     [f32; L1_SIZE],
     l1_weights:  [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:    [[f32; L2_SIZE]; OUTPUT_BUCKETS],
@@ -135,6 +138,7 @@ struct UnquantisedNetwork {
 #[repr(C)]
 struct MergedNetwork {
     l0_weights:   [f32; 12 * 64 * L1_SIZE * BUCKETS],
+    l0_threat:    [f32; THREAT_FEATURES * L1_SIZE],
     l0_biases:    [f32; L1_SIZE],
     l1_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
@@ -149,7 +153,8 @@ struct MergedNetwork {
 #[repr(C)]
 #[derive(PartialEq, Debug)]
 struct QuantisedNetwork {
-    l0_weights:   [i16; INPUT * L1_SIZE * BUCKETS],
+    l0_weights:   [i16; PSQT_FEATURES * L1_SIZE * BUCKETS],
+    l0_threat:    [ i8; THREAT_FEATURES * L1_SIZE],
     l0_biases:    [i16; L1_SIZE],
     l1_weights: [[[ i8; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
@@ -164,7 +169,8 @@ struct QuantisedNetwork {
 #[rustfmt::skip]
 #[repr(C)]
 pub struct NNUEParams {
-    pub l0_weights:   Align64<[i16; INPUT * L1_SIZE * BUCKETS]>,
+    pub l0_weights:   Align64<[i16; PSQT_FEATURES * L1_SIZE * BUCKETS]>,
+    pub l0_threat:    Align64<[ i8; THREAT_FEATURES * L1_SIZE]>,
     pub l0_biases:    Align64<[i16; L1_SIZE]>,
     pub l1_weights:  [Align64<[ i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
     pub l1_bias:     [Align64<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
@@ -174,88 +180,88 @@ pub struct NNUEParams {
     pub l3_bias:             [[f32; HEADS]; OUTPUT_BUCKETS],
 }
 
-// const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = {
-//     let mut indices = [0; L1_SIZE / 2];
-//     let mut i = 0;
-//     while i < L1_SIZE / 2 {
-//         indices[i] = i;
-//         i += 1;
-//     }
-//     indices
-// };
+const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = {
+    let mut indices = [0; L1_SIZE / 2];
+    let mut i = 0;
+    while i < L1_SIZE / 2 {
+        indices[i] = i;
+        i += 1;
+    }
+    indices
+};
 
-const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = [
-    554, 67, 32, 168, 35, 990, 288, 189, 376, 120, 273, 166, 984, 406, 616, 187, 962, 236, 783,
-    460, 472, 518, 15, 1012, 695, 186, 762, 205, 973, 753, 244, 608, 118, 898, 638, 791, 664, 211,
-    364, 337, 600, 687, 0, 635, 640, 1007, 328, 653, 609, 268, 456, 375, 631, 623, 583, 498, 826,
-    822, 688, 998, 528, 342, 1006, 757, 122, 522, 327, 985, 927, 73, 401, 703, 573, 694, 289, 997,
-    689, 955, 297, 568, 243, 530, 693, 492, 357, 908, 720, 805, 854, 51, 405, 932, 871, 992, 575,
-    764, 719, 1018, 560, 91, 811, 126, 316, 20, 829, 60, 957, 792, 466, 399, 679, 109, 794, 502,
-    233, 776, 367, 894, 586, 499, 446, 994, 862, 228, 347, 14, 592, 939, 101, 928, 610, 987, 271,
-    801, 407, 705, 646, 301, 537, 1169, 373, 515, 1011, 989, 771, 1019, 572, 672, 617, 117, 982,
-    910, 836, 742, 566, 956, 103, 983, 624, 815, 813, 238, 856, 710, 606, 169, 1001, 563, 882, 770,
-    872, 510, 106, 511, 920, 503, 31, 162, 217, 178, 81, 370, 386, 713, 113, 1002, 716, 818, 506,
-    272, 146, 269, 102, 180, 322, 431, 923, 50, 147, 298, 196, 369, 40, 452, 300, 455, 176, 521,
-    423, 270, 158, 377, 947, 353, 8, 296, 250, 161, 656, 915, 234, 667, 877, 206, 144, 177, 917,
-    358, 99, 1004, 383, 632, 167, 715, 562, 253, 291, 523, 491, 57, 321, 183, 55, 319, 278, 461,
-    425, 105, 481, 659, 324, 463, 38, 509, 832, 152, 851, 310, 198, 34, 450, 313, 435, 974, 70,
-    182, 338, 394, 417, 175, 433, 403, 495, 210, 245, 419, 197, 507, 218, 978, 199, 747, 318, 48,
-    333, 846, 385, 448, 212, 332, 365, 655, 254, 283, 634, 916, 308, 652, 946, 765, 531, 893, 517,
-    262, 986, 619, 921, 943, 809, 906, 729, 579, 599, 478, 933, 993, 668, 970, 1020, 975, 633, 541,
-    875, 61, 275, 123, 108, 257, 235, 329, 29, 945, 224, 977, 544, 131, 172, 484, 717, 459, 966,
-    396, 585, 850, 673, 351, 220, 841, 259, 124, 22, 759, 265, 756, 251, 415, 133, 625, 305, 350,
-    7, 954, 439, 494, 485, 931, 93, 258, 390, 860, 914, 490, 171, 77, 594, 192, 464, 315, 438, 266,
-    488, 550, 449, 395, 698, 193, 493, 360, 486, 690, 58, 248, 489, 6, 227, 148, 806, 868, 722,
-    514, 976, 12, 5, 570, 69, 317, 589, 612, 1008, 416, 150, 590, 426, 1023, 53, 1017, 734, 858,
-    382, 935, 85, 602, 712, 354, 525, 766, 582, 727, 890, 730, 814, 420, 823, 967, 487, 749, 380,
-    840, 979, 937, 164, 789, 831, 869, 896, 626, 1252, 768, 700, 642, 516, 837, 533, 922, 934, 392,
-    249, 779, 408, 497, 926, 18, 620, 339, 462, 110, 378, 129, 213, 802, 699, 536, 372, 799, 482,
-    940, 42, 849, 519, 534, 648, 115, 33, 780, 145, 760, 680, 524, 195, 255, 778, 944, 958, 723,
-    274, 864, 744, 793, 863, 670, 574, 584, 215, 671, 795, 571, 393, 160, 683, 90, 79, 736, 320,
-    285, 1005, 479, 658, 451, 738, 323, 96, 277, 480, 496, 548, 75, 221, 552, 64, 334, 649, 46,
-    735, 637, 1010, 578, 214, 261, 855, 959, 246, 904, 159, 404, 240, 94, 239, 49, 204, 551, 859,
-    925, 312, 467, 112, 577, 769, 475, 895, 711, 141, 68, 343, 36, 972, 474, 135, 414, 911, 964,
-    650, 345, 886, 595, 188, 622, 379, 363, 286, 852, 292, 418, 280, 200, 513, 19, 362, 409, 231,
-    330, 662, 154, 293, 344, 2, 100, 134, 225, 888, 501, 361, 397, 191, 56, 643, 306, 892, 825,
-    223, 569, 157, 76, 125, 444, 808, 706, 535, 745, 830, 865, 309, 555, 665, 216, 596, 477, 731,
-    644, 538, 876, 918, 843, 743, 287, 242, 89, 203, 883, 473, 138, 797, 349, 827, 95, 174, 740,
-    153, 867, 540, 647, 41, 913, 878, 796, 755, 996, 900, 119, 725, 714, 28, 232, 83, 201, 588,
-    561, 341, 952, 746, 331, 170, 559, 155, 669, 685, 151, 434, 580, 209, 750, 428, 98, 838, 857,
-    549, 173, 591, 676, 654, 527, 359, 45, 848, 782, 47, 697, 682, 282, 302, 787, 71, 696, 692, 27,
-    615, 165, 819, 704, 567, 981, 611, 629, 781, 542, 678, 26, 880, 651, 1014, 924, 618, 834, 263,
-    677, 960, 613, 628, 546, 558, 897, 520, 969, 641, 902, 471, 726, 833, 627, 885, 657, 995, 752,
-    828, 702, 790, 899, 1129, 1112, 1265, 1048, 1243, 1069, 1091, 1040, 1198, 1190, 1047, 1125,
-    1065, 1276, 1228, 1240, 1051, 1271, 1149, 1177, 1179, 1044, 1085, 1099, 1178, 1103, 1213, 1035,
-    1272, 1187, 1090, 1158, 1088, 1216, 1025, 1078, 1159, 1067, 1080, 1245, 1204, 1239, 1046, 1024,
-    1208, 1043, 1106, 1145, 1262, 1101, 1274, 1155, 1186, 1156, 1231, 1111, 1122, 1116, 1100, 1029,
-    1134, 1068, 1182, 1206, 1128, 1259, 1138, 1199, 1242, 1214, 1257, 1098, 1210, 1219, 1260, 1119,
-    1164, 1279, 1246, 1063, 1256, 1221, 1136, 1121, 1146, 1165, 1087, 1188, 1073, 1209, 1227, 1254,
-    1055, 1118, 1120, 1225, 1195, 1167, 1042, 1127, 1027, 1264, 1052, 1191, 1096, 1097, 1143, 1062,
-    1175, 1110, 1193, 1277, 1034, 1084, 1230, 1131, 1033, 1173, 1079, 1207, 1070, 1197, 1086, 1039,
-    1154, 1026, 1166, 1172, 1076, 1081, 1168, 1253, 1137, 1093, 1223, 1114, 1105, 1030, 1144, 1235,
-    1180, 1104, 1095, 1192, 1236, 1163, 1157, 1056, 1152, 1028, 1247, 1148, 1162, 1226, 1232, 1184,
-    1142, 1049, 1107, 1075, 1258, 1074, 1141, 1147, 1113, 1135, 1250, 1054, 1109, 1126, 1224, 1263,
-    1203, 1212, 1241, 1234, 1181, 1268, 1153, 1196, 1218, 1037, 1036, 1160, 1171, 1238, 1139, 1053,
-    1229, 1222, 1071, 1038, 1189, 1092, 1050, 1066, 1032, 1059, 1194, 1261, 1072, 1201, 1269, 1205,
-    1094, 1102, 1041, 1176, 1082, 1270, 1117, 1233, 1057, 1237, 1133, 1123, 1089, 1273, 1185, 1220,
-    1130, 1202, 1266, 1183, 1151, 1275, 1077, 1045, 1061, 1244, 1200, 1267, 1170, 1150, 1278, 1211,
-    1083, 1058, 1108, 1217, 1255, 1124, 1140, 1249, 1031, 1174, 1251, 1248, 1060, 1115, 1215, 1132,
-    1064, 1161, 942, 758, 557, 961, 812, 553, 773, 1016, 733, 565, 847, 887, 442, 821, 593, 874,
-    371, 421, 564, 581, 663, 543, 839, 732, 754, 1003, 816, 909, 440, 545, 701, 907, 674, 891, 988,
-    614, 941, 598, 949, 470, 1000, 666, 86, 870, 137, 930, 884, 226, 853, 866, 346, 905, 1021, 844,
-    92, 597, 281, 601, 78, 971, 381, 11, 963, 219, 483, 52, 127, 929, 767, 97, 807, 207, 39, 355,
-    447, 748, 411, 237, 785, 1009, 30, 24, 951, 798, 88, 325, 208, 845, 786, 1, 314, 80, 59, 260,
-    774, 391, 737, 999, 116, 605, 143, 279, 547, 968, 87, 948, 256, 661, 603, 500, 761, 645, 728,
-    437, 181, 402, 43, 163, 294, 639, 788, 398, 44, 777, 800, 724, 604, 1015, 142, 304, 149, 63,
-    326, 476, 607, 458, 410, 436, 1022, 784, 529, 139, 684, 9, 739, 576, 307, 709, 241, 1013, 508,
-    202, 252, 388, 817, 938, 72, 229, 505, 190, 824, 587, 132, 247, 772, 340, 3, 65, 140, 413, 4,
-    311, 336, 82, 441, 630, 741, 422, 352, 775, 469, 532, 539, 707, 37, 62, 675, 454, 873, 889,
-    412, 901, 429, 881, 681, 114, 348, 512, 366, 751, 718, 136, 156, 965, 636, 556, 804, 427, 284,
-    903, 21, 950, 953, 504, 387, 919, 368, 107, 54, 465, 389, 861, 290, 356, 25, 374, 980, 128,
-    721, 10, 991, 912, 660, 299, 303, 179, 276, 468, 104, 820, 295, 23, 335, 443, 84, 230, 763,
-    432, 424, 384, 130, 13, 526, 17, 66, 708, 691, 267, 185, 194, 264, 453, 457, 184, 400, 621,
-    121, 879, 686, 111, 16, 936, 810, 803, 222, 445, 842, 74, 835, 430,
-];
+// const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = [
+//     554, 67, 32, 168, 35, 990, 288, 189, 376, 120, 273, 166, 984, 406, 616, 187, 962, 236, 783,
+//     460, 472, 518, 15, 1012, 695, 186, 762, 205, 973, 753, 244, 608, 118, 898, 638, 791, 664, 211,
+//     364, 337, 600, 687, 0, 635, 640, 1007, 328, 653, 609, 268, 456, 375, 631, 623, 583, 498, 826,
+//     822, 688, 998, 528, 342, 1006, 757, 122, 522, 327, 985, 927, 73, 401, 703, 573, 694, 289, 997,
+//     689, 955, 297, 568, 243, 530, 693, 492, 357, 908, 720, 805, 854, 51, 405, 932, 871, 992, 575,
+//     764, 719, 1018, 560, 91, 811, 126, 316, 20, 829, 60, 957, 792, 466, 399, 679, 109, 794, 502,
+//     233, 776, 367, 894, 586, 499, 446, 994, 862, 228, 347, 14, 592, 939, 101, 928, 610, 987, 271,
+//     801, 407, 705, 646, 301, 537, 1169, 373, 515, 1011, 989, 771, 1019, 572, 672, 617, 117, 982,
+//     910, 836, 742, 566, 956, 103, 983, 624, 815, 813, 238, 856, 710, 606, 169, 1001, 563, 882, 770,
+//     872, 510, 106, 511, 920, 503, 31, 162, 217, 178, 81, 370, 386, 713, 113, 1002, 716, 818, 506,
+//     272, 146, 269, 102, 180, 322, 431, 923, 50, 147, 298, 196, 369, 40, 452, 300, 455, 176, 521,
+//     423, 270, 158, 377, 947, 353, 8, 296, 250, 161, 656, 915, 234, 667, 877, 206, 144, 177, 917,
+//     358, 99, 1004, 383, 632, 167, 715, 562, 253, 291, 523, 491, 57, 321, 183, 55, 319, 278, 461,
+//     425, 105, 481, 659, 324, 463, 38, 509, 832, 152, 851, 310, 198, 34, 450, 313, 435, 974, 70,
+//     182, 338, 394, 417, 175, 433, 403, 495, 210, 245, 419, 197, 507, 218, 978, 199, 747, 318, 48,
+//     333, 846, 385, 448, 212, 332, 365, 655, 254, 283, 634, 916, 308, 652, 946, 765, 531, 893, 517,
+//     262, 986, 619, 921, 943, 809, 906, 729, 579, 599, 478, 933, 993, 668, 970, 1020, 975, 633, 541,
+//     875, 61, 275, 123, 108, 257, 235, 329, 29, 945, 224, 977, 544, 131, 172, 484, 717, 459, 966,
+//     396, 585, 850, 673, 351, 220, 841, 259, 124, 22, 759, 265, 756, 251, 415, 133, 625, 305, 350,
+//     7, 954, 439, 494, 485, 931, 93, 258, 390, 860, 914, 490, 171, 77, 594, 192, 464, 315, 438, 266,
+//     488, 550, 449, 395, 698, 193, 493, 360, 486, 690, 58, 248, 489, 6, 227, 148, 806, 868, 722,
+//     514, 976, 12, 5, 570, 69, 317, 589, 612, 1008, 416, 150, 590, 426, 1023, 53, 1017, 734, 858,
+//     382, 935, 85, 602, 712, 354, 525, 766, 582, 727, 890, 730, 814, 420, 823, 967, 487, 749, 380,
+//     840, 979, 937, 164, 789, 831, 869, 896, 626, 1252, 768, 700, 642, 516, 837, 533, 922, 934, 392,
+//     249, 779, 408, 497, 926, 18, 620, 339, 462, 110, 378, 129, 213, 802, 699, 536, 372, 799, 482,
+//     940, 42, 849, 519, 534, 648, 115, 33, 780, 145, 760, 680, 524, 195, 255, 778, 944, 958, 723,
+//     274, 864, 744, 793, 863, 670, 574, 584, 215, 671, 795, 571, 393, 160, 683, 90, 79, 736, 320,
+//     285, 1005, 479, 658, 451, 738, 323, 96, 277, 480, 496, 548, 75, 221, 552, 64, 334, 649, 46,
+//     735, 637, 1010, 578, 214, 261, 855, 959, 246, 904, 159, 404, 240, 94, 239, 49, 204, 551, 859,
+//     925, 312, 467, 112, 577, 769, 475, 895, 711, 141, 68, 343, 36, 972, 474, 135, 414, 911, 964,
+//     650, 345, 886, 595, 188, 622, 379, 363, 286, 852, 292, 418, 280, 200, 513, 19, 362, 409, 231,
+//     330, 662, 154, 293, 344, 2, 100, 134, 225, 888, 501, 361, 397, 191, 56, 643, 306, 892, 825,
+//     223, 569, 157, 76, 125, 444, 808, 706, 535, 745, 830, 865, 309, 555, 665, 216, 596, 477, 731,
+//     644, 538, 876, 918, 843, 743, 287, 242, 89, 203, 883, 473, 138, 797, 349, 827, 95, 174, 740,
+//     153, 867, 540, 647, 41, 913, 878, 796, 755, 996, 900, 119, 725, 714, 28, 232, 83, 201, 588,
+//     561, 341, 952, 746, 331, 170, 559, 155, 669, 685, 151, 434, 580, 209, 750, 428, 98, 838, 857,
+//     549, 173, 591, 676, 654, 527, 359, 45, 848, 782, 47, 697, 682, 282, 302, 787, 71, 696, 692, 27,
+//     615, 165, 819, 704, 567, 981, 611, 629, 781, 542, 678, 26, 880, 651, 1014, 924, 618, 834, 263,
+//     677, 960, 613, 628, 546, 558, 897, 520, 969, 641, 902, 471, 726, 833, 627, 885, 657, 995, 752,
+//     828, 702, 790, 899, 1129, 1112, 1265, 1048, 1243, 1069, 1091, 1040, 1198, 1190, 1047, 1125,
+//     1065, 1276, 1228, 1240, 1051, 1271, 1149, 1177, 1179, 1044, 1085, 1099, 1178, 1103, 1213, 1035,
+//     1272, 1187, 1090, 1158, 1088, 1216, 1025, 1078, 1159, 1067, 1080, 1245, 1204, 1239, 1046, 1024,
+//     1208, 1043, 1106, 1145, 1262, 1101, 1274, 1155, 1186, 1156, 1231, 1111, 1122, 1116, 1100, 1029,
+//     1134, 1068, 1182, 1206, 1128, 1259, 1138, 1199, 1242, 1214, 1257, 1098, 1210, 1219, 1260, 1119,
+//     1164, 1279, 1246, 1063, 1256, 1221, 1136, 1121, 1146, 1165, 1087, 1188, 1073, 1209, 1227, 1254,
+//     1055, 1118, 1120, 1225, 1195, 1167, 1042, 1127, 1027, 1264, 1052, 1191, 1096, 1097, 1143, 1062,
+//     1175, 1110, 1193, 1277, 1034, 1084, 1230, 1131, 1033, 1173, 1079, 1207, 1070, 1197, 1086, 1039,
+//     1154, 1026, 1166, 1172, 1076, 1081, 1168, 1253, 1137, 1093, 1223, 1114, 1105, 1030, 1144, 1235,
+//     1180, 1104, 1095, 1192, 1236, 1163, 1157, 1056, 1152, 1028, 1247, 1148, 1162, 1226, 1232, 1184,
+//     1142, 1049, 1107, 1075, 1258, 1074, 1141, 1147, 1113, 1135, 1250, 1054, 1109, 1126, 1224, 1263,
+//     1203, 1212, 1241, 1234, 1181, 1268, 1153, 1196, 1218, 1037, 1036, 1160, 1171, 1238, 1139, 1053,
+//     1229, 1222, 1071, 1038, 1189, 1092, 1050, 1066, 1032, 1059, 1194, 1261, 1072, 1201, 1269, 1205,
+//     1094, 1102, 1041, 1176, 1082, 1270, 1117, 1233, 1057, 1237, 1133, 1123, 1089, 1273, 1185, 1220,
+//     1130, 1202, 1266, 1183, 1151, 1275, 1077, 1045, 1061, 1244, 1200, 1267, 1170, 1150, 1278, 1211,
+//     1083, 1058, 1108, 1217, 1255, 1124, 1140, 1249, 1031, 1174, 1251, 1248, 1060, 1115, 1215, 1132,
+//     1064, 1161, 942, 758, 557, 961, 812, 553, 773, 1016, 733, 565, 847, 887, 442, 821, 593, 874,
+//     371, 421, 564, 581, 663, 543, 839, 732, 754, 1003, 816, 909, 440, 545, 701, 907, 674, 891, 988,
+//     614, 941, 598, 949, 470, 1000, 666, 86, 870, 137, 930, 884, 226, 853, 866, 346, 905, 1021, 844,
+//     92, 597, 281, 601, 78, 971, 381, 11, 963, 219, 483, 52, 127, 929, 767, 97, 807, 207, 39, 355,
+//     447, 748, 411, 237, 785, 1009, 30, 24, 951, 798, 88, 325, 208, 845, 786, 1, 314, 80, 59, 260,
+//     774, 391, 737, 999, 116, 605, 143, 279, 547, 968, 87, 948, 256, 661, 603, 500, 761, 645, 728,
+//     437, 181, 402, 43, 163, 294, 639, 788, 398, 44, 777, 800, 724, 604, 1015, 142, 304, 149, 63,
+//     326, 476, 607, 458, 410, 436, 1022, 784, 529, 139, 684, 9, 739, 576, 307, 709, 241, 1013, 508,
+//     202, 252, 388, 817, 938, 72, 229, 505, 190, 824, 587, 132, 247, 772, 340, 3, 65, 140, 413, 4,
+//     311, 336, 82, 441, 630, 741, 422, 352, 775, 469, 532, 539, 707, 37, 62, 675, 454, 873, 889,
+//     412, 901, 429, 881, 681, 114, 348, 512, 366, 751, 718, 136, 156, 965, 636, 556, 804, 427, 284,
+//     903, 21, 950, 953, 504, 387, 919, 368, 107, 54, 465, 389, 861, 290, 356, 25, 374, 980, 128,
+//     721, 10, 991, 912, 660, 299, 303, 179, 276, 468, 104, 820, 295, 23, 335, 443, 84, 230, 763,
+//     432, 424, 384, 130, 13, 526, 17, 66, 708, 691, 267, 185, 194, 264, 453, 457, 184, 400, 621,
+//     121, 879, 686, 111, 16, 936, 810, 803, 222, 445, 842, 74, 835, 430,
+// ];
 
 impl UnquantisedNetwork {
     /// Convert a parameter file generated by bullet into a merged parameter set,
@@ -278,10 +284,16 @@ impl UnquantisedNetwork {
         {
             for piece in Piece::all() {
                 for sq in Square::all() {
-                    let i =
-                        feature::index_full(Colour::White, Square::A1, FeatureUpdate { sq, piece });
-                    let j =
-                        feature::index_full(Colour::White, Square::A1, FeatureUpdate { sq, piece });
+                    let i = feature::psqt_index_full(
+                        Colour::White,
+                        Square::A1,
+                        PsqtFeatureUpdate { sq, piece },
+                    );
+                    let j = feature::psqt_index_full(
+                        Colour::White,
+                        Square::A1,
+                        PsqtFeatureUpdate { sq, piece },
+                    );
                     let src = &src_bucket[i * L1_SIZE..i * L1_SIZE + L1_SIZE];
                     let fac_src = &factoriser[i * L1_SIZE..i * L1_SIZE + L1_SIZE];
                     let tgt = &mut tgt_bucket[j * L1_SIZE..j * L1_SIZE + L1_SIZE];
@@ -290,6 +302,11 @@ impl UnquantisedNetwork {
                     }
                 }
             }
+        }
+
+        // copy the threat weights
+        for i in 0..THREAT_FEATURES * L1_SIZE {
+            net.l0_threat[i] = self.l0_threat[i];
         }
 
         // copy the biases
@@ -455,7 +472,7 @@ impl MergedNetwork {
         let buckets = self.l0_weights.chunks_exact(12 * 64 * L1_SIZE);
 
         for (bucket_idx, (src_bucket, tgt_bucket)) in buckets
-            .zip(net.l0_weights.chunks_exact_mut(INPUT * L1_SIZE))
+            .zip(net.l0_weights.chunks_exact_mut(PSQT_FEATURES * L1_SIZE))
             .enumerate()
         {
             // for repermuting the weights.
@@ -471,10 +488,17 @@ impl MergedNetwork {
                     if MERGE_KING_PLANES && !in_bucket && piece == Piece::WK {
                         continue;
                     }
-                    let i =
-                        feature::index_full(Colour::White, Square::A1, FeatureUpdate { sq, piece });
-                    let j = feature::index(Colour::White, Square::A1, FeatureUpdate { sq, piece })
-                        .index();
+                    let i = feature::psqt_index_full(
+                        Colour::White,
+                        Square::A1,
+                        PsqtFeatureUpdate { sq, piece },
+                    );
+                    let j = feature::psqt_index(
+                        Colour::White,
+                        Square::A1,
+                        PsqtFeatureUpdate { sq, piece },
+                    )
+                    .index();
                     assert!(
                         MERGE_KING_PLANES || i == j,
                         "if not merging the king planes, indices should match"
@@ -489,7 +513,17 @@ impl MergedNetwork {
                     things_written += 1;
                 }
             }
-            assert_eq!(INPUT, things_written);
+            assert_eq!(PSQT_FEATURES, things_written);
+        }
+
+        // transfer the threat plane weights:
+        for (src, tgt) in self.l0_threat.iter().zip(net.l0_threat.iter_mut()) {
+            let scaled = *src * f32::from(QA);
+            if scaled.abs() > QA_BOUND {
+                eprintln!("threat plane weight {scaled} is too large (max = {QA_BOUND})");
+            }
+            // directly hard-quantised to i8.
+            *tgt = scaled.clamp(i8::MIN as f32, i8::MAX as f32).round() as i8;
         }
 
         // quantise the FT biases
@@ -536,8 +570,8 @@ impl QuantisedNetwork {
     fn permute(&self, use_simd: bool) -> Box<NNUEParams> {
         let mut net = NNUEParams::zeroed();
         // permute the feature transformer weights
-        let src_buckets = self.l0_weights.chunks_exact(INPUT * L1_SIZE);
-        let tgt_buckets = net.l0_weights.chunks_exact_mut(INPUT * L1_SIZE);
+        let src_buckets = self.l0_weights.chunks_exact(PSQT_FEATURES * L1_SIZE);
+        let tgt_buckets = net.l0_weights.chunks_exact_mut(PSQT_FEATURES * L1_SIZE);
         for (src_bucket, tgt_bucket) in src_buckets.zip(tgt_buckets) {
             repermute_ft_bucket(tgt_bucket, src_bucket);
         }
@@ -547,19 +581,19 @@ impl QuantisedNetwork {
 
         // transpose FT weights and biases so that packus transposes it back to the intended order
         if use_simd {
-            type PermChunk = [i16; 8];
+            type PermChunk<I> = [I; 8];
             // reinterpret as data of size __m128i
-            let mut weights: Vec<&mut PermChunk> = net
+            let mut weights: Vec<&mut PermChunk<i16>> = net
                 .l0_weights
                 .chunks_exact_mut(8)
                 .map(|a| a.try_into().unwrap())
                 .collect();
-            let mut biases: Vec<&mut PermChunk> = net
+            let mut biases: Vec<&mut PermChunk<i16>> = net
                 .l0_biases
                 .chunks_exact_mut(8)
                 .map(|a| a.try_into().unwrap())
                 .collect();
-            let num_chunks = size_of::<PermChunk>() / size_of::<i16>();
+            let num_chunks = size_of::<PermChunk<i16>>() / size_of::<i16>();
 
             #[cfg(target_feature = "avx512f")]
             let num_regs = 8;
@@ -593,7 +627,7 @@ impl QuantisedNetwork {
             let mut regs = vec![[0i16; 8]; num_regs];
 
             // transpose weights
-            for i in (0..INPUT * L1_SIZE * BUCKETS / num_chunks).step_by(num_regs) {
+            for i in (0..PSQT_FEATURES * L1_SIZE * BUCKETS / num_chunks).step_by(num_regs) {
                 for j in 0..num_regs {
                     regs[j] = *weights[i + j];
                 }
@@ -611,6 +645,21 @@ impl QuantisedNetwork {
 
                 for j in 0..num_regs {
                     *biases[i + j] = regs[order[j]];
+                }
+            }
+
+            let mut i8_regs = vec![[0i8; 8]; num_regs];
+
+            // now the same for the threat plane weights
+            let mut threat_weights: Vec<&mut PermChunk<i8>> =
+                net.l0_threat.as_chunks_mut::<8>().0.iter_mut().collect();
+            for i in (0..THREAT_FEATURES * L1_SIZE / num_chunks).step_by(num_regs) {
+                for j in 0..num_regs {
+                    i8_regs[j] = *threat_weights[i + j];
+                }
+
+                for j in 0..num_regs {
+                    *threat_weights[i + j] = i8_regs[order[j]];
                 }
             }
         }
@@ -713,7 +762,7 @@ fn repermute_ft_bias(feature_bias: &mut [i16; L1_SIZE], unsorted: &[i16]) {
 
 fn repermute_ft_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
     // for each input feature,
-    for i in 0..INPUT {
+    for i in 0..PSQT_FEATURES {
         // for each neuron in the layer,
         for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
             // get the neuron's corresponding weight in the unsorted bucket,
@@ -1033,11 +1082,14 @@ impl NNUEParams {
         }
     }
 
-    pub fn select_feature_weights(&self, bucket: usize) -> &Align64<[i16; INPUT * L1_SIZE]> {
+    pub fn select_feature_weights(
+        &self,
+        bucket: usize,
+    ) -> &Align64<[i16; PSQT_FEATURES * L1_SIZE]> {
         // handle mirroring
         let bucket = bucket % BUCKETS;
-        let start = bucket * INPUT * L1_SIZE;
-        let end = start + INPUT * L1_SIZE;
+        let start = bucket * PSQT_FEATURES * L1_SIZE;
+        let end = start + PSQT_FEATURES * L1_SIZE;
         let slice = &self.l0_weights[start..end];
         // SAFETY: The resulting slice is indeed INPUT * LAYER_1_SIZE long,
         // and we check that the slice is aligned to 64 bytes.
@@ -1138,42 +1190,51 @@ const ACC_STACK_SIZE: usize = MAX_DEPTH + 1;
 
 /// Struct representing some unmaterialised feature update made as part of a move.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct FeatureUpdate {
+pub struct PsqtFeatureUpdate {
     pub sq: Square,
     pub piece: Piece,
 }
 
-impl Display for FeatureUpdate {
+/// Struct representing some unmaterialised threat update made as part of a move.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct ThreatFeatureUpdate {
+    pub attacker: Piece,
+    pub victim: Piece,
+    pub from: Square,
+    pub to: Square,
+}
+
+impl Display for PsqtFeatureUpdate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{piece} on {sq}", piece = self.piece, sq = self.sq)
     }
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, Default)]
-pub struct UpdateBuffer {
-    add: ArrayVec<FeatureUpdate, 2>,
-    sub: ArrayVec<FeatureUpdate, 2>,
+pub struct PsqtUpdateBuffer {
+    add: ArrayVec<PsqtFeatureUpdate, 2>,
+    sub: ArrayVec<PsqtFeatureUpdate, 2>,
 }
 
-impl UpdateBuffer {
+impl PsqtUpdateBuffer {
     pub fn move_piece(&mut self, from: Square, to: Square, piece: Piece) {
-        self.add.push(FeatureUpdate { sq: to, piece });
-        self.sub.push(FeatureUpdate { sq: from, piece });
+        self.add.push(PsqtFeatureUpdate { sq: to, piece });
+        self.sub.push(PsqtFeatureUpdate { sq: from, piece });
     }
 
     pub fn clear_piece(&mut self, sq: Square, piece: Piece) {
-        self.sub.push(FeatureUpdate { sq, piece });
+        self.sub.push(PsqtFeatureUpdate { sq, piece });
     }
 
     pub fn add_piece(&mut self, sq: Square, piece: Piece) {
-        self.add.push(FeatureUpdate { sq, piece });
+        self.add.push(PsqtFeatureUpdate { sq, piece });
     }
 
-    pub fn adds(&self) -> &[FeatureUpdate] {
+    pub fn adds(&self) -> &[PsqtFeatureUpdate] {
         &self.add[..]
     }
 
-    pub fn subs(&self) -> &[FeatureUpdate] {
+    pub fn subs(&self) -> &[PsqtFeatureUpdate] {
         &self.sub[..]
     }
 }
@@ -1206,7 +1267,7 @@ impl BucketAccumulatorCache {
         let mut adds = ArrayVec::<_, 32>::new();
         let mut subs = ArrayVec::<_, 32>::new();
         self.board_states[colour][bucket].update_iter(board_state, |sq, piece, is_add| {
-            let index = feature::index(colour, king, FeatureUpdate { sq, piece });
+            let index = feature::psqt_index(colour, king, PsqtFeatureUpdate { sq, piece });
             if is_add {
                 adds.push(index);
             } else {
@@ -1232,11 +1293,27 @@ pub struct MovedPiece {
     pub piece: Piece,
 }
 
+trait AccUpdateType {
+    const PSQT: bool;
+}
+
+struct PsqtUpdate;
+impl AccUpdateType for PsqtUpdate {
+    const PSQT: bool = true;
+}
+
+struct ThreatUpdate;
+impl AccUpdateType for ThreatUpdate {
+    const PSQT: bool = false;
+}
+
 /// State of the partial activations of the NNUE network.
 #[allow(clippy::upper_case_acronyms)]
 pub struct NNUEState {
-    /// Accumulators for the first layer.
-    pub accumulators: [Accumulator; ACC_STACK_SIZE],
+    /// Board-state accumulators for the first layer.
+    pub psqt_accumulators: [Accumulator; ACC_STACK_SIZE],
+    /// Threat-state accumulators for the first layer.
+    pub threat_accumulators: [Accumulator; ACC_STACK_SIZE],
     /// Index of the current accumulator.
     pub current_acc: usize,
     /// Cache of last-seen accumulators for each bucket.
@@ -1295,7 +1372,7 @@ impl NNUEState {
                 nnue_params,
                 board.state.bbs,
                 colour,
-                &mut self.accumulators[0],
+                &mut self.psqt_accumulators[0],
             );
         }
     }
@@ -1312,7 +1389,7 @@ impl NNUEState {
         let mut curr_idx = self.current_acc;
         loop {
             curr_idx -= 1;
-            let curr = &self.accumulators[curr_idx];
+            let curr = &self.psqt_accumulators[curr_idx];
 
             let mv = curr.mv;
             let from = mv.from.relative_to(colour);
@@ -1328,12 +1405,23 @@ impl NNUEState {
         }
     }
 
-    fn apply_lazy_updates(&mut self, nnue_params: &NNUEParams, board: &Board, colour: Colour) {
+    fn apply_lazy_updates<A: AccUpdateType>(
+        &mut self,
+        nnue_params: &NNUEParams,
+        board: &Board,
+        colour: Colour,
+    ) {
+        let stack = if A::PSQT {
+            &mut self.psqt_accumulators
+        } else {
+            &mut self.threat_accumulators
+        };
+
         let mut curr_index = self.current_acc;
         loop {
             curr_index -= 1;
 
-            if self.accumulators[curr_index].correct[colour] {
+            if stack[curr_index].correct[colour] {
                 break;
             }
         }
@@ -1341,9 +1429,9 @@ impl NNUEState {
         let king = board.state.bbs.king_sq(colour);
 
         loop {
-            self.materialise_new_acc_from(king, colour, curr_index + 1, nnue_params);
+            Self::materialise_new_acc_from(stack, king, colour, curr_index + 1, nnue_params);
 
-            self.accumulators[curr_index + 1].correct[colour] = true;
+            stack[curr_index + 1].correct[colour] = true;
 
             curr_index += 1;
             if curr_index == self.current_acc {
@@ -1355,16 +1443,18 @@ impl NNUEState {
     /// Apply all in-flight updates, generating all the accumulators up to the current one.
     pub fn force(&mut self, board: &Board, nnue_params: &NNUEParams) {
         for colour in Colour::all() {
-            if !self.accumulators[self.current_acc].correct[colour] {
+            if !self.psqt_accumulators[self.current_acc].correct[colour] {
                 if self.can_efficiently_update(colour) {
-                    self.apply_lazy_updates(nnue_params, board, colour);
+                    self.apply_lazy_updates::<PsqtUpdate>(nnue_params, board, colour);
+                    self.apply_lazy_updates::<ThreatUpdate>(nnue_params, board, colour);
                 } else {
                     self.bucket_cache.load_accumulator_for_position(
                         nnue_params,
                         board.state.bbs,
                         colour,
-                        &mut self.accumulators[self.current_acc],
+                        &mut self.psqt_accumulators[self.current_acc],
                     );
+                    self.apply_lazy_updates::<ThreatUpdate>(nnue_params, board, colour);
                 }
             }
         }
@@ -1380,14 +1470,14 @@ impl NNUEState {
         pos: &Board,
         nnue_params: &NNUEParams,
     ) {
-        if self.accumulators[self.current_acc].correct[C::COLOUR] {
+        if self.psqt_accumulators[self.current_acc].correct[C::COLOUR] {
             return;
         }
 
         let oldest = self.try_find_computed_accumulator::<C>(pos);
 
         if let Some(source) = oldest {
-            assert!(self.accumulators[source].correct[C::COLOUR]);
+            assert!(self.psqt_accumulators[source].correct[C::COLOUR]);
             // directly construct the top accumulator from the last-known-good one
             let mut curr_index = source;
             let king = pos.state.bbs.king_sq(C::COLOUR);
@@ -1397,11 +1487,11 @@ impl NNUEState {
             let mut subs = ArrayVec::<_, 32>::new();
 
             loop {
-                for &add in self.accumulators[curr_index].update_buffer.adds() {
-                    adds.push(feature::index(C::COLOUR, king, add));
+                for &add in self.psqt_accumulators[curr_index].update_buffer.adds() {
+                    adds.push(feature::psqt_index(C::COLOUR, king, add));
                 }
-                for &sub in self.accumulators[curr_index].update_buffer.subs() {
-                    subs.push(feature::index(C::COLOUR, king, sub));
+                for &sub in self.psqt_accumulators[curr_index].update_buffer.subs() {
+                    subs.push(feature::psqt_index(C::COLOUR, king, sub));
                 }
 
                 curr_index += 1;
@@ -1411,21 +1501,21 @@ impl NNUEState {
                 }
             }
 
-            *self.accumulators[self.current_acc].select_mut(C::COLOUR) =
-                self.accumulators[source].select_mut(C::COLOUR).clone();
+            *self.psqt_accumulators[self.current_acc].select_mut(C::COLOUR) =
+                self.psqt_accumulators[source].select_mut(C::COLOUR).clone();
             accumulator::vector_update_inplace(
-                self.accumulators[self.current_acc].select_mut(C::COLOUR),
+                self.psqt_accumulators[self.current_acc].select_mut(C::COLOUR),
                 weights,
                 &adds,
                 &subs,
             );
-            self.accumulators[self.current_acc].correct[C::COLOUR] = true;
+            self.psqt_accumulators[self.current_acc].correct[C::COLOUR] = true;
         } else {
             self.bucket_cache.load_accumulator_for_position(
                 nnue_params,
                 pos.state.bbs,
                 C::COLOUR,
-                &mut self.accumulators[self.current_acc],
+                &mut self.psqt_accumulators[self.current_acc],
             );
         }
     }
@@ -1440,8 +1530,8 @@ impl NNUEState {
     fn try_find_computed_accumulator<C: Col>(&self, pos: &Board) -> Option<usize> {
         let mut idx = self.current_acc;
         let mut budget = pos.state.bbs.occupied().count() as i32;
-        while idx > 0 && !self.accumulators[idx].correct[C::COLOUR] {
-            let curr = &self.accumulators[idx - 1];
+        while idx > 0 && !self.psqt_accumulators[idx].correct[C::COLOUR] {
+            let curr = &self.psqt_accumulators[idx - 1];
             if curr.mv.piece.colour() == C::COLOUR
                 && Self::requires_refresh(
                     curr.mv.piece,
@@ -1459,7 +1549,7 @@ impl NNUEState {
             }
             idx -= 1;
         }
-        if self.accumulators[idx].correct[C::COLOUR] {
+        if self.psqt_accumulators[idx].correct[C::COLOUR] {
             Some(idx)
         } else {
             None
@@ -1467,13 +1557,13 @@ impl NNUEState {
     }
 
     pub fn materialise_new_acc_from(
-        &mut self,
+        stack: &mut [Accumulator; ACC_STACK_SIZE],
         king: Square,
         colour: Colour,
         create_at_idx: usize,
         nnue_params: &NNUEParams,
     ) {
-        let (front, back) = self.accumulators.split_at_mut(create_at_idx);
+        let (front, back) = stack.split_at_mut(create_at_idx);
         let src_acc = front.last().unwrap();
         let tgt_acc = back.first_mut().unwrap();
 
@@ -1487,23 +1577,23 @@ impl NNUEState {
         match (src_acc.update_buffer.adds(), src_acc.update_buffer.subs()) {
             // quiet or promotion
             (&[add], &[sub]) => {
-                let add = feature::index(colour, king, add);
-                let sub = feature::index(colour, king, sub);
+                let add = feature::psqt_index(colour, king, add);
+                let sub = feature::psqt_index(colour, king, sub);
                 accumulator::vector_add_sub(src, tgt, bucket, add, sub);
             }
             // capture
             (&[add], &[sub1, sub2]) => {
-                let add = feature::index(colour, king, add);
-                let sub1 = feature::index(colour, king, sub1);
-                let sub2 = feature::index(colour, king, sub2);
+                let add = feature::psqt_index(colour, king, add);
+                let sub1 = feature::psqt_index(colour, king, sub1);
+                let sub2 = feature::psqt_index(colour, king, sub2);
                 accumulator::vector_add_sub2(src, tgt, bucket, add, sub1, sub2);
             }
             // castling
             (&[add1, add2], &[sub1, sub2]) => {
-                let add1 = feature::index(colour, king, add1);
-                let add2 = feature::index(colour, king, add2);
-                let sub1 = feature::index(colour, king, sub1);
-                let sub2 = feature::index(colour, king, sub2);
+                let add1 = feature::psqt_index(colour, king, add1);
+                let add2 = feature::psqt_index(colour, king, add2);
+                let sub1 = feature::psqt_index(colour, king, sub1);
+                let sub2 = feature::psqt_index(colour, king, sub2);
                 accumulator::vector_add2_sub2(src, tgt, bucket, add1, add2, sub1, sub2);
             }
             (_, _) => panic!("invalid update buffer: {:?}", src_acc.update_buffer),
@@ -1518,7 +1608,7 @@ impl NNUEState {
         let stm = board.turn();
         let out = output_bucket(board);
 
-        let acc = &self.accumulators[self.current_acc];
+        let acc = &self.psqt_accumulators[self.current_acc];
 
         debug_assert!(acc.correct[0] && acc.correct[1]);
 
@@ -1645,11 +1735,11 @@ impl NNUEParams {
             for piece_type in PieceType::all() {
                 for square in Square::all() {
                     let white_king = Square::H1;
-                    let f = FeatureUpdate {
+                    let f = PsqtFeatureUpdate {
                         sq: square,
                         piece: Piece::new(colour, piece_type),
                     };
-                    let feature_index = feature::index(Colour::White, white_king, f);
+                    let feature_index = feature::psqt_index(Colour::White, white_king, f);
                     let index = feature_index.index() * L1_SIZE + starting_idx;
                     slice.push(self.l0_weights[index]);
                 }

@@ -16,7 +16,7 @@ use crate::{
             DIAG_ATTACKS, DIAG_REL_BITS, DIAG_TABLE, ORTH_ATTACKS, ORTH_REL_BITS, ORTH_TABLE,
             diag_attacks_slow, orth_attacks_slow, set_occupancy,
         },
-        piece::{Black, Col, Colour, PieceType, White},
+        piece::{Black, Col, Colour, Piece, PieceType, White},
         squareset::SquareSet,
         types::{Rank, Square},
     },
@@ -202,31 +202,36 @@ pub static RAY_FULL: [[SquareSet; 64]; 64] = {
 
 const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [SquareSet; 64] {
     let mut attacks = [SquareSet::EMPTY; 64];
-    let deltas = if IS_KNIGHT {
-        &[17, 15, 10, 6, -17, -15, -10, -6]
-    } else {
-        &[9, 8, 7, 1, -9, -8, -7, -1]
-    };
 
     cfor!(let mut sq = Square::A1; true; sq = sq.saturating_add(1); {
-        let mut attacks_bb = 0;
-        cfor!(let mut idx = 0; idx < 8; idx += 1; {
-            let delta = deltas[idx];
-            let attacked_sq = sq.signed_inner() + delta;
-            #[allow(clippy::cast_sign_loss)]
-            if 0 <= attacked_sq && attacked_sq < 64 && Square::distance(
-                sq,
-                Square::new_clamped(attacked_sq as u8)) <= 2 {
-                attacks_bb |= 1 << attacked_sq;
-            }
-        });
-        attacks[sq.index()] = SquareSet::from_inner(attacks_bb);
+        let bb = jumping_attacks_slow::<IS_KNIGHT>(sq);
+        attacks[sq.index()] = bb;
         if matches!(sq, Square::H8) {
             break;
         }
     });
 
     attacks
+}
+
+const fn jumping_attacks_slow<const IS_KNIGHT: bool>(sq: Square) -> SquareSet {
+    let deltas = if IS_KNIGHT {
+        &[17, 15, 10, 6, -17, -15, -10, -6]
+    } else {
+        &[9, 8, 7, 1, -9, -8, -7, -1]
+    };
+    let mut attacks_bb = 0;
+    cfor!(let mut idx = 0; idx < 8; idx += 1; {
+        let delta = deltas[idx];
+        let attacked_sq = sq.signed_inner() + delta;
+        #[allow(clippy::cast_sign_loss)]
+        if 0 <= attacked_sq && attacked_sq < 64 && Square::distance(
+            sq,
+            Square::new_clamped(attacked_sq as u8)) <= 2 {
+            attacks_bb |= 1 << attacked_sq;
+        }
+    });
+    SquareSet::from_inner(attacks_bb)
 }
 
 pub fn init_sliders_attacks() -> Result<(), std::io::Error> {
@@ -313,6 +318,12 @@ pub fn king_attacks(sq: Square) -> SquareSet {
     static KING_ATTACKS: [SquareSet; 64] = init_jumping_attacks::<false>();
     KING_ATTACKS[sq]
 }
+pub const fn knight_attacks_slow(sq: Square) -> SquareSet {
+    jumping_attacks_slow::<true>(sq)
+}
+pub const fn king_attacks_slow(sq: Square) -> SquareSet {
+    jumping_attacks_slow::<false>(sq)
+}
 pub fn pawn_attacks<C: Col>(bb: SquareSet) -> SquareSet {
     if C::WHITE {
         bb.north_east_one() | bb.north_west_one()
@@ -320,11 +331,11 @@ pub fn pawn_attacks<C: Col>(bb: SquareSet) -> SquareSet {
         bb.south_east_one() | bb.south_west_one()
     }
 }
-pub fn pawn_attacks_by(bb: SquareSet, colour: Colour) -> SquareSet {
-    if colour == Colour::White {
-        bb.north_east_one() | bb.north_west_one()
+pub const fn pawn_attacks_by(bb: SquareSet, colour: Colour) -> SquareSet {
+    if matches!(colour, Colour::White) {
+        bb.north_east_one().union(bb.north_west_one())
     } else {
-        bb.south_east_one() | bb.south_west_one()
+        bb.south_east_one().union(bb.south_west_one())
     }
 }
 
@@ -339,6 +350,17 @@ pub fn attacks_by_type(pt: PieceType, sq: Square, blockers: SquareSet) -> Square
         PieceType::Rook => orth_attacks(sq, blockers),
         PieceType::Queen => diag_attacks(sq, blockers) | orth_attacks(sq, blockers),
         PieceType::King => king_attacks(sq),
+    }
+}
+
+pub const fn attacks_by_type_slow(piece: Piece, sq: Square, blockers: SquareSet) -> SquareSet {
+    match piece.piece_type() {
+        PieceType::Pawn => pawn_attacks_by(sq.as_set(), piece.colour()),
+        PieceType::Knight => knight_attacks_slow(sq),
+        PieceType::Bishop => diag_attacks_slow(sq, blockers),
+        PieceType::Rook => orth_attacks_slow(sq, blockers),
+        PieceType::Queen => diag_attacks_slow(sq, blockers).union(orth_attacks_slow(sq, blockers)),
+        PieceType::King => king_attacks_slow(sq),
     }
 }
 

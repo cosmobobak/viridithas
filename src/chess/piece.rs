@@ -255,6 +255,11 @@ impl Piece {
     pub const fn inner(self) -> u8 {
         self as u8
     }
+
+    pub const fn flip_colour(self) -> Self {
+        // SAFETY: flipping the colour bit of a valid piece always results in a valid piece.
+        unsafe { std::mem::transmute(self as u8 ^ 1) }
+    }
 }
 
 impl<T> Index<Colour> for [T; 2] {

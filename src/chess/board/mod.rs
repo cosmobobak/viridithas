@@ -24,7 +24,7 @@ use crate::{
     cuckoo,
     errors::MoveParseError,
     lookups::{CASTLE_KEYS, EP_KEYS, HM_CLOCK_KEYS, PIECE_KEYS, SIDE_KEY},
-    nnue::network::{FeatureUpdate, MovedPiece, NNUEState, UpdateBuffer},
+    nnue::network::{MovedPiece, NNUEState, PsqtFeatureUpdate, PsqtUpdateBuffer},
     search::pv::PVariation,
 };
 
@@ -733,11 +733,11 @@ impl Board {
     }
 
     pub fn make_move_simple(&mut self, m: Move) {
-        self.make_move_base(m, &mut UpdateBuffer::default());
+        self.make_move_base(m, &mut PsqtUpdateBuffer::default());
     }
 
     #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
-    pub fn make_move_base(&mut self, m: Move, update_buffer: &mut UpdateBuffer) {
+    pub fn make_move_base(&mut self, m: Move, update_buffer: &mut PsqtUpdateBuffer) {
         debug_assert!(self.is_pseudo_legal(m));
         debug_assert!(self.is_legal(m));
 
@@ -875,7 +875,7 @@ impl Board {
 
         // apply all the updates to the zobrist hash
         self.state.keys.zobrist ^= SIDE_KEY;
-        for &FeatureUpdate { sq, piece } in update_buffer.subs() {
+        for &PsqtFeatureUpdate { sq, piece } in update_buffer.subs() {
             self.state.mailbox[sq] = None;
             let piece_key = PIECE_KEYS[piece][sq];
             self.state.keys.zobrist ^= piece_key;
@@ -893,7 +893,7 @@ impl Board {
                 }
             }
         }
-        for &FeatureUpdate { sq, piece } in update_buffer.adds() {
+        for &PsqtFeatureUpdate { sq, piece } in update_buffer.adds() {
             self.state.mailbox[sq] = Some(piece);
             let piece_key = PIECE_KEYS[piece][sq];
             self.state.keys.zobrist ^= piece_key;
@@ -996,19 +996,19 @@ impl Board {
     }
 
     pub fn make_move_nnue(&mut self, m: Move, nnue: &mut NNUEState) {
-        let mut update_buffer = UpdateBuffer::default();
+        let mut update_buffer = PsqtUpdateBuffer::default();
         let piece = self.state.mailbox[m.from()].unwrap();
 
         self.make_move_base(m, &mut update_buffer);
 
-        nnue.accumulators[nnue.current_acc].mv = MovedPiece {
+        nnue.psqt_accumulators[nnue.current_acc].mv = MovedPiece {
             from: m.from(),
             to: m.to(),
             piece,
         };
-        nnue.accumulators[nnue.current_acc].update_buffer = update_buffer;
+        nnue.psqt_accumulators[nnue.current_acc].update_buffer = update_buffer;
         nnue.current_acc += 1;
-        nnue.accumulators[nnue.current_acc].correct = [false; 2];
+        nnue.psqt_accumulators[nnue.current_acc].correct = [false; 2];
     }
 
     pub fn unmake_move_nnue(&mut self, nnue: &mut NNUEState) {

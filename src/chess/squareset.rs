@@ -179,29 +179,45 @@ impl SquareSet {
         }
     }
 
-    pub fn north_east_one(self) -> Self {
-        (self << 9) & !Self::FILE_A
+    pub const fn north_east_one(self) -> Self {
+        Self {
+            inner: self.inner << 9 & !Self::FILE_A.inner,
+        }
     }
-    pub fn north_west_one(self) -> Self {
-        (self << 7) & !Self::FILE_H
+    pub const fn north_west_one(self) -> Self {
+        Self {
+            inner: self.inner << 7 & !Self::FILE_H.inner,
+        }
     }
-    pub fn south_east_one(self) -> Self {
-        (self >> 7) & !Self::FILE_A
+    pub const fn south_east_one(self) -> Self {
+        Self {
+            inner: self.inner >> 7 & !Self::FILE_A.inner,
+        }
     }
-    pub fn south_west_one(self) -> Self {
-        (self >> 9) & !Self::FILE_H
+    pub const fn south_west_one(self) -> Self {
+        Self {
+            inner: self.inner >> 9 & !Self::FILE_H.inner,
+        }
     }
-    pub fn east_one(self) -> Self {
-        (self << 1) & !Self::FILE_A
+    pub const fn east_one(self) -> Self {
+        Self {
+            inner: self.inner << 1 & !Self::FILE_A.inner,
+        }
     }
-    pub fn west_one(self) -> Self {
-        (self >> 1) & !Self::FILE_H
+    pub const fn west_one(self) -> Self {
+        Self {
+            inner: self.inner >> 1 & !Self::FILE_H.inner,
+        }
     }
-    pub fn north_one(self) -> Self {
-        self << 8
+    pub const fn north_one(self) -> Self {
+        Self {
+            inner: self.inner << 8,
+        }
     }
-    pub fn south_one(self) -> Self {
-        self >> 8
+    pub const fn south_one(self) -> Self {
+        Self {
+            inner: self.inner >> 8,
+        }
     }
 
     pub fn isolate_lsb(self) -> Self {
