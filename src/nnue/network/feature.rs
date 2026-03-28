@@ -104,9 +104,9 @@ impl ThreatFeatureIndex {
 /// whereby we use the direction of the threat to conditionally filter it.
 /// (c.f. documentation of “forwards” and “backwards” threats in `threat_index`).
 /// 
-/// If `PIECE_TARGET_MAP[i][j]` is non-negative, it is an index into a further
-/// lookup, allowing us to compress things nicely. I realise this is somewhat
-/// unclear.
+/// If non-negative, it is a dense index for this victim type within the attacker’s
+/// list of allowed targets – used as a component of the stride into the flat feature
+/// array (see `ATTACK_INDEX`).
 #[rustfmt::skip]
 const PIECE_TARGET_MAP: [[i32; 6]; 6] = [
     [ 0,  1, -1,  2, -1, -1],
@@ -150,36 +150,36 @@ const fn generate_piece_index(piece: Piece) -> [[u8; 64]; 64] {
             // We then create a mask of all the places this piece attacks
             // that intersect with the squares *prior* to the second square.
             // e.g. if we have a queen in the center of the board, on D5:
-            // \ . . | . . /
-            // . \ . | . / .
-            // . . \ | / . .
-            // — — — Q — — —
-            // . . / | \ . .
-            // . / . | . \ .
-            // / . . | . . \
-            // . . . | . . .
+            // \ . . | . . / .
+            // . \ . | . / . .
+            // . . \ | / . . .
+            // — — — Q — — — —
+            // . . / | \ . . .
+            // . / . | . \ . .
+            // / . . | . . \ .
+            // . . . | . . . \
             // and we select D4 as our `to_index`, we get this mask:
             // D4 = 27, D4.as_set() = 0x8000000, and subtracting one,
             // we get the mask 0x7ffffff, which looks like this:
-            // . . . . . . .
-            // . . . . . . .
-            // . . . Q . . .
-            // X X X T . . .
-            // X X X X X X X
-            // X X X X X X X
-            // X X X X X X X
+            // . . . . . . . .
+            // . . . . . . . .
+            // . . . Q . . . .
+            // X X X T . . . .
+            // X X X X X X X X
+            // X X X X X X X X
+            // X X X X X X X X
             // as such, for [QUEEN][D5][D4], we have this:
-            // . . . . . . .
-            // . . . . . . .
-            // . . . . . . .
-            // . . . Q . . .
-            // . . / . . . .
-            // . / . | . \ .
-            // / . . | . . \
-            // . . . | . . .
+            // . . . . . . . .
+            // . . . . . . . .
+            // . . . . . . . .
+            // . . . Q . . . .
+            // . . / . . . . .
+            // . / . | . \ . .
+            // / . . | . . \ .
+            // . . . | . . . \
             let mask = pseudo_attacks.inner() & ((1u64 << to_index) - 1);
             // We then store the number of active squares, which in
-            // the case of our example, is 3 + 3 + 2 = 8.
+            // the case of our example, is 3 + 3 + 3 = 9.
             table[from.index()][to_index] = mask.count_ones() as u8;
         });
     });
@@ -198,22 +198,22 @@ const fn generate_piece_index(piece: Piece) -> [[u8; 64]; 64] {
 ///
 /// For example, given `[QUEEN][D5][D4]`
 /// ```text
-/// . . . . . . . 8
-/// . . . . . . . 7
-/// . . . . . . . 6
-/// . . . Q . . . 5
-/// . . / T . . . 4
-/// . / . | . \ . 3
-/// / . . | . . \ 2
-/// . . . | . . . 1
-/// A B C D E F G
+/// . . . . . . . . 8
+/// . . . . . . . . 7
+/// . . . . . . . . 6
+/// . . . Q . . . . 5
+/// . . / T . . . . 4
+/// . / . | . \ . . 3
+/// / . . | . . \ . 2
+/// . . . | . . . \ 1
+/// A B C D E F G H
 /// ```
-/// The victim squares are C3, B3, D3, F3, A2, D2, H2, D1.
-/// This table thus compresses those down to indices in 0–7.
+/// The victim squares are C4, B3, D3, F3, A2, D2, G2, D1, H1.
+/// This table thus compresses those down to indices in 0–8.
 ///
 /// This is achieved by storing the *number of attackable
 /// squares prior to the to-square* – so for D4, as in the
-/// example, the index is 8, as there are 8 squares prior
+/// example, the index is 9, as there are 9 squares prior
 /// to D4 that the Queen could attack.
 static PIECE_INDEX: [[[u8; 64]; 64]; 12] = {
     let mut table = [[[0; 64]; 64]; 12];
@@ -232,7 +232,7 @@ static PIECE_INDEX: [[[u8; 64]; 64]; 12] = {
 pub struct Offset {
     /// `indices[piece]` is a tuple `(piece_offset, offset)` where:
     /// - `piece_offset` is the total number of attack
-    ///   squares for the last square of this piece.
+    ///   squares for this piece, summed across all 64 squares.
     /// - offset is the running global offset into the flat
     ///   feature array, accumulated over all prior pieces.
     ///   This is computed by summing `PIECE_TARGET_COUNT[pt] * piece_offset`
@@ -304,11 +304,11 @@ static ATTACK_INDEX: [[[u32; 2]; 12]; 12] = {
             let (piece_offset, offset) = OFFSET.indices[attacker as usize];
 
             // `colour_base` accounts for victim colour, shifting up
-            // by half the target space when black / ntm.
+            // by half the target space when black.
             let colour_base = victim.colour() as i32 * (PIECE_TARGET_COUNT[attacker.piece_type() as usize] / 2);
             // map is the local target index from PIECE_TARGET_MAP,
             // i.e. which sort of attacker → victim interaction we’re doing.
-            // mutiplying by piece_offset then strides us along.
+            // multiplying by piece_offset then strides us along.
             let feature = offset + (colour_base + map) * piece_offset;
             assert!(full_excluded || feature >= 0, "all permitted features must be non-negative");
             #[expect(clippy::cast_sign_loss)]
@@ -359,7 +359,6 @@ pub fn threat_index(
     // of the same type, and one is attacking t’other. As such,
     // some feature indices are eliminable, and whether the attack
     // is “forwards” on the board is used to spot this kind of situation.
-    // Obviously this does not hold for pawns.
     let forwards = from.index() < to.index();
 
     // `ATTACK_INDEX` selects the block for this
