@@ -1313,6 +1313,7 @@ pub fn alpha_beta<NT: NodeType>(
                 && (Some(m) != killer)
                 && lmr_depth < 7
                 && stat_score < t.info.conf.history_pruning_margin * (depth - 1)
+                && !t.board.gives_check(m)
             {
                 move_picker.skip_quiets = true;
                 continue;
