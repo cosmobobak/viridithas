@@ -4,9 +4,9 @@ use crate::{
         board::movegen::{attacks_by_type, attacks_by_type_slow},
         piece::{Colour, Piece, PieceType},
         squareset::SquareSet,
-        types::{File, Square},
+        types::{File, Rank, Square},
     },
-    nnue::network::{MERGE_KING_PLANES, PSQT_FEATURES, PsqtFeatureUpdate},
+    nnue::network::{MERGE_KING_PLANES, PSQT_FEATURES, PsqtFeatureUpdate, THREAT_FEATURES},
 };
 
 /// wrapper to enforce bounds.
@@ -87,19 +87,57 @@ impl ThreatFeatureIndex {
     }
 }
 
+/// `PIECE_TARGET_MAP[i][j]` is –1 if the interaction between piece-types
+/// `i` and `j` is fully excluded from the feature-set. At time of writing,
+/// all interactions involving kings are fully-excluded, as are
+/// 
+/// - PAWN   → BISHOP
+/// - PAWN   → QUEEN
+/// - BISHOP → QUEEN
+/// - ROOK   → QUEEN
+/// 
+/// One might imagine that the diagonal (sans pawns) ought to be
+/// fully-excluded too, since if symmetric-piece A attacks same-type B,
+/// then B attacks A, and so the feature is redundant – but setting the diagonal to
+/// –1 in this instance would remove *both* the forward and backward features.
+/// Instead, we use “semi-exclusion” later in the feature-indexing process,
+/// whereby we use the direction of the threat to conditionally filter it.
+/// (c.f. documentation of “forwards” and “backwards” threats in `threat_index`).
+/// 
+/// If `PIECE_TARGET_MAP[i][j]` is non-negative, it is an index TKTK
 #[rustfmt::skip]
 const PIECE_TARGET_MAP: [[i32; 6]; 6] = [
-    [0,  1, -1,  2, -1, -1],
-    [0,  1,  2,  3,  4, -1],
-    [0,  1,  2,  3, -1, -1],
-    [0,  1,  2,  3, -1, -1],
-    [0,  1,  2,  3,  4, -1],
-    [1, -1, -1, -1, -1, -1],
+    [ 0,  1, -1,  2, -1, -1],
+    [ 0,  1,  2,  3,  4, -1],
+    [ 0,  1,  2,  3, -1, -1],
+    [ 0,  1,  2,  3, -1, -1],
+    [ 0,  1,  2,  3,  4, -1],
+    [-1, -1, -1, -1, -1, -1],
 ];
 
-const PIECE_TARGET_COUNT: [i32; 6] = [6, 10, 8, 8, 10, 0];
+/// `PIECE_TARGET_COUNT[i]` is the number of pieces that piece-type `i` can threaten,
+/// according to `PIECE_TARGET_MAP`. This is the number of `Piece`s, not `PieceType`s,
+/// so it can exceed 6.
+const PIECE_TARGET_COUNT: [i32; 6] = {
+    let mut count = [0; 6];
+    cfor!(let mut i = 0; i < 6; i += 1; {
+        let mut c = 0;
+        cfor!(let mut j = 0; j < 6; j += 1; {
+            if PIECE_TARGET_MAP[i][j] != -1 {
+                c += 1;
+            }
+        });
+        count[i] = 2 * c;
+    });
+    count
+};
 
+/// Given a piece, generate the table mapping a from-square and a to-square to
+/// the number of squares attacked by that piece from the from-square that are
+/// “backwards” from the to-square.
 const fn generate_piece_index(piece: Piece) -> [[u8; 64]; 64] {
+    #![expect(clippy::cast_possible_truncation)]
+
     let mut table = [[0; 64]; 64];
 
     cfor!(let mut from_index = 0; from_index < 64; from_index += 1; {
@@ -163,12 +201,73 @@ static PIECE_INDEX: [[[u8; 64]; 64]; 12] = {
     table
 };
 
-static ATTACK_INDEX: [[[u32; 2]; 12]; 12] = {
-    todo!();
+pub struct Offset {
+    pub indices: [(i32, i32); 12],
+    pub offsets: [[u32; 64]; 12],
+}
+
+static OFFSET: Offset = {
+    let mut dst = Offset {
+        indices: [(0, 0); 12],
+        offsets: [[0; 64]; 12],
+    };
+
+    let mut offset = 0;
+
+    cfor!(let mut colour = 0; colour < 2; colour += 1; {
+        let colour = Colour::new(colour != 0);
+        cfor!(let mut pt_idx = 0; pt_idx < 6; pt_idx += 1; {
+            let piece_type = PieceType::new(pt_idx).unwrap();
+            let piece = Piece::new(colour, piece_type);
+            let mut piece_offset = 0;
+            cfor!(let mut sq_idx = 0; sq_idx < 64; sq_idx += 1; {
+                let sq = Square::new_clamped(sq_idx);
+                dst.offsets[piece as usize][sq as usize] = piece_offset;
+                if !matches!((piece_type, sq.rank()), (PieceType::Pawn, Rank::One | Rank::Eight)) {
+                    let attacks = attacks_by_type_slow(piece, sq, SquareSet::EMPTY);
+                    piece_offset += attacks.count();
+                }
+            });
+            dst.indices[piece as usize] = (piece_offset as i32, offset);
+            offset += PIECE_TARGET_COUNT[piece_type as usize] * piece_offset as i32;
+        });
+    });
+
+    dst
 };
 
-static OFFSET: [[u32; 64]; 12] = {
-    todo!();
+static ATTACK_INDEX: [[[u32; 2]; 12]; 12] = {
+    #[expect(clippy::cast_possible_truncation)]
+    const FEATURES: u32 = THREAT_FEATURES as u32;
+
+    let mut dst = [[[0; 2]; 12]; 12];
+
+    cfor!(let mut attacker_idx = 0; attacker_idx < 12; attacker_idx += 1; {
+        let attacker = Piece::from_index(attacker_idx).unwrap();
+        cfor!(let mut victim_idx = 0; victim_idx < 12; victim_idx += 1; {
+            let victim = Piece::from_index(victim_idx).unwrap();
+
+            let opposed = attacker.colour() as u8 != victim.colour() as u8;
+            let map = PIECE_TARGET_MAP[attacker.piece_type() as usize][victim.piece_type() as usize];
+
+            let semi_excluded = attacker.piece_type() as u8 == victim.piece_type() as u8
+                && (opposed || attacker.piece_type() as u8 != PieceType::Pawn as u8);
+            let full_excluded = map == -1;
+
+            let (piece_offset, offset) = OFFSET.indices[attacker as usize];
+
+            let x = victim.colour().flip() as i32 * (PIECE_TARGET_COUNT[attacker.piece_type() as usize] / 2);
+            assert!(x >= 0);
+            let feature = offset + (x + map) * piece_offset;
+            // assert!(feature >= 0); // failing for some reason
+            let feature = feature as u32;
+
+            dst[attacker as usize][victim as usize][0] = if full_excluded { FEATURES } else { feature };
+            dst[attacker as usize][victim as usize][1] = if full_excluded || semi_excluded { FEATURES } else { feature };
+        });
+    });
+
+    dst
 };
 
 /// Compute an index from 0 to 60143 representing the given threat, for use in the NNUE feature transformer.
@@ -209,8 +308,8 @@ pub fn threat_index(
     let forwards = from.index() < to.index();
 
     let attack_index = ATTACK_INDEX[attacker][victim][usize::from(forwards)];
-    let offset = OFFSET[attacker][from];
-    let piece_index = PIECE_INDEX[attacker][from][to];
+    let offset = OFFSET.offsets[attacker][from];
+    let piece_index = u32::from(PIECE_INDEX[attacker][from][to]);
 
     // SAFETY: important invariant being upheld here!!
     assert!(
