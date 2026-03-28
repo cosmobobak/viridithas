@@ -161,8 +161,8 @@ const fn generate_piece_index(piece: Piece) -> [[u8; 64]; 64] {
             // we get the mask 0x7ffffff, which looks like this:
             // . . . . . . .
             // . . . . . . .
-            // . . . . . . .
-            // X X X . . . .
+            // . . . Q . . .
+            // X X X T . . .
             // X X X X X X X
             // X X X X X X X
             // X X X X X X X
@@ -170,7 +170,7 @@ const fn generate_piece_index(piece: Piece) -> [[u8; 64]; 64] {
             // . . . . . . .
             // . . . . . . .
             // . . . . . . .
-            // . . . . . . .
+            // . . . Q . . .
             // . . / . . . .
             // . / . | . \ .
             // / . . | . . \
@@ -188,6 +188,28 @@ const fn generate_piece_index(piece: Piece) -> [[u8; 64]; 64] {
 /// This table stores, given a piece, a from-square, and a to-square,
 /// the number of squares that piece attacks from the from-square that
 /// are “backward” from the to-square.
+///
+/// This table is responsible for compressing victim squares down from
+/// the full 0–63 range down to whatever range is actually relevant
+/// for distinguishing victims – i.e. only a subset of to-squares are
+/// actually attackable from the from-square, so they can be compressed.
+///
+/// For example, given [QUEEN][D5][D4]
+/// . . . . . . .
+/// . . . . . . .
+/// . . . . . . .
+/// . . . Q . . .
+/// . . / T . . .
+/// . / . | . \ .
+/// / . . | . . \
+/// . . . | . . .
+/// The victim squares are C3, B3, D3, F3, A2, D2, H2, D1.
+/// This table thus compresses those down to indices in 0–7.
+///
+/// This is achieved by storing the *number of attackable
+/// squares prior to the to-square* – so for D4, as in the
+/// example, the index is 8, as there are 8 squares prior
+/// to D4 that the Queen could attack.
 static PIECE_INDEX: [[[u8; 64]; 64]; 12] = {
     let mut table = [[[0; 64]; 64]; 12];
 
@@ -201,11 +223,25 @@ static PIECE_INDEX: [[[u8; 64]; 64]; 12] = {
     table
 };
 
+/// An offset into a piece-square block of the feature array.
 pub struct Offset {
+    /// `indices[piece]` is a tuple `(piece_offset, offset)` where:
+    /// - `piece_offset` is the total number of attack
+    ///   squares for the last square of this piece.
+    /// - offset is the running global offset into the flat
+    ///   feature array, accumulated over all prior pieces.
+    ///   This is computed by summing `PIECE_TARGET_COUNT[pt] * piece_offset`
+    ///   for each preceding piece in the `(colour, piece_type)` iteration order.
     pub indices: [(i32, i32); 12],
+    /// `offsets[piece][sq]` is the cumulative count of
+    /// attack squares for `piece` over all squares prior to `sq`.
+    /// This converts a `(piece, square)` pair into a flat
+    /// offset within that piece's block of the feature array.
+    /// Pawns on ranks 1/8 contribute 0 (they can't exist there).
     pub offsets: [[u32; 64]; 12],
 }
 
+/// Stores offsets of `(piece, from_square)` blocks.
 static OFFSET: Offset = {
     let mut dst = Offset {
         indices: [(0, 0); 12],
@@ -228,14 +264,20 @@ static OFFSET: Offset = {
                     piece_offset += attacks.count();
                 }
             });
-            dst.indices[piece as usize] = (piece_offset as i32, offset);
-            offset += PIECE_TARGET_COUNT[piece_type as usize] * piece_offset as i32;
+            dst.indices[piece as usize] = (piece_offset.cast_signed(), offset);
+            offset += PIECE_TARGET_COUNT[piece_type as usize] * piece_offset.cast_signed();
         });
     });
 
     dst
 };
 
+/// `ATTACK_INDEX[attacker][victim][forwards]` gives the
+/// base feature index for a given (attacker, victim, direction)
+/// combination, or `THREAT_FEATURES` (60144 atow)
+/// as a sentinel meaning “excluded”.
+///
+/// The [forwards] dimension handles semi-exclusion.
 static ATTACK_INDEX: [[[u32; 2]; 12]; 12] = {
     #[expect(clippy::cast_possible_truncation)]
     const FEATURES: u32 = THREAT_FEATURES as u32;
@@ -254,14 +296,22 @@ static ATTACK_INDEX: [[[u32; 2]; 12]; 12] = {
                 && (opposed || attacker.piece_type() as u8 != PieceType::Pawn as u8);
             let full_excluded = map == -1;
 
+            // `offset` is a global offset for this attacker piece.
             let (piece_offset, offset) = OFFSET.indices[attacker as usize];
 
-            let x = victim.colour().flip() as i32 * (PIECE_TARGET_COUNT[attacker.piece_type() as usize] / 2);
-            assert!(x >= 0);
-            let feature = offset + (x + map) * piece_offset;
-            // assert!(feature >= 0); // failing for some reason
+            // `colour_base` accounts for victim colour, shifting up
+            // by half the target space when black / ntm.
+            let colour_base = victim.colour() as i32 * (PIECE_TARGET_COUNT[attacker.piece_type() as usize] / 2);
+            // map is the local target index from PIECE_TARGET_MAP,
+            // i.e. which sort of attacker → victim interaction we’re doing.
+            // mutiplying by piece_offset then strides us along.
+            let feature = offset + (colour_base + map) * piece_offset;
+            assert!(full_excluded || feature >= 0, "all permitted features must be non-negative");
+            #[expect(clippy::cast_sign_loss)]
             let feature = feature as u32;
 
+            // some of the above work has been done on garbage values,
+            // but gets screened out here.
             dst[attacker as usize][victim as usize][0] = if full_excluded { FEATURES } else { feature };
             dst[attacker as usize][victim as usize][1] = if full_excluded || semi_excluded { FEATURES } else { feature };
         });
@@ -270,7 +320,8 @@ static ATTACK_INDEX: [[[u32; 2]; 12]; 12] = {
     dst
 };
 
-/// Compute an index from 0 to 60143 representing the given threat, for use in the NNUE feature transformer.
+/// Compute an index from 0 to `THREAT_FEATURES` representing the given threat,
+/// for use in the NNUE feature transformer.
 pub fn threat_index(
     colour: Colour,
     // The king’s position is relevant for horizontal mirroring, but is not part of the feature index itself.
@@ -307,8 +358,18 @@ pub fn threat_index(
     // Obviously this does not hold for pawns.
     let forwards = from.index() < to.index();
 
+    // `ATTACK_INDEX` selects the block for this
+    // `(attacker, victim, direction)` combination
+    // (or signals exclusion if index = THREAT_FEATURES)
+    // TODO: check that!
     let attack_index = ATTACK_INDEX[attacker][victim][usize::from(forwards)];
+    // `OFFSET.offsets` selects the sub-block for the attacker’s
+    // from-square within that attacker’s feature space.
     let offset = OFFSET.offsets[attacker][from];
+    // The number of squares the attacker strikes when standing
+    // upon `from` that are “backward” from `to`. This can be
+    // viewed as *compressing* the range of `to` from 0..64 down
+    // to 0..<relevant number of distinct victim squares>
     let piece_index = u32::from(PIECE_INDEX[attacker][from][to]);
 
     // SAFETY: important invariant being upheld here!!
