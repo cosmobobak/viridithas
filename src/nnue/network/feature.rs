@@ -196,15 +196,18 @@ const fn generate_piece_index(piece: Piece) -> [[u8; 64]; 64] {
 /// for distinguishing victims – i.e. only a subset of to-squares are
 /// actually attackable from the from-square, so they can be compressed.
 ///
-/// For example, given [QUEEN][D5][D4]
-/// . . . . . . .
-/// . . . . . . .
-/// . . . . . . .
-/// . . . Q . . .
-/// . . / T . . .
-/// . / . | . \ .
-/// / . . | . . \
-/// . . . | . . .
+/// For example, given `[QUEEN][D5][D4]`
+/// ```text
+/// . . . . . . . 8
+/// . . . . . . . 7
+/// . . . . . . . 6
+/// . . . Q . . . 5
+/// . . / T . . . 4
+/// . / . | . \ . 3
+/// / . . | . . \ 2
+/// . . . | . . . 1
+/// A B C D E F G
+/// ```
 /// The victim squares are C3, B3, D3, F3, A2, D2, H2, D1.
 /// This table thus compresses those down to indices in 0–7.
 ///
@@ -239,7 +242,6 @@ pub struct Offset {
     /// attack squares for `piece` over all squares prior to `sq`.
     /// This converts a `(piece, square)` pair into a flat
     /// offset within that piece's block of the feature array.
-    /// Pawns on ranks 1/8 contribute 0 (they can't exist there).
     pub offsets: [[u32; 64]; 12],
 }
 
