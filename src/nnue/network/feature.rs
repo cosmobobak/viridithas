@@ -104,7 +104,9 @@ impl ThreatFeatureIndex {
 /// whereby we use the direction of the threat to conditionally filter it.
 /// (c.f. documentation of “forwards” and “backwards” threats in `threat_index`).
 /// 
-/// If `PIECE_TARGET_MAP[i][j]` is non-negative, it is an index TKTK
+/// If `PIECE_TARGET_MAP[i][j]` is non-negative, it is an index into a further
+/// lookup, allowing us to compress things nicely. I realise this is somewhat
+/// unclear.
 #[rustfmt::skip]
 const PIECE_TARGET_MAP: [[i32; 6]; 6] = [
     [ 0,  1, -1,  2, -1, -1],
