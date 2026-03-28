@@ -640,7 +640,7 @@ pub fn quiescence<NT: NodeType>(
             continue;
         }
         let is_tactical = t.board.is_tactical(m);
-        let gives_check = t.board.is_direct_check(m);
+        let gives_check = t.board.gives_check(m);
         let is_recapture = Some(m.to()) == t.ss[height - 1].searching.map(Move::to);
         if best_score > -MINIMUM_TB_WIN_SCORE
             && is_tactical
@@ -1323,7 +1323,11 @@ pub fn alpha_beta<NT: NodeType>(
             let fp_margin = lmr_depth * t.info.conf.futility_coeff_1
                 + t.info.conf.futility_coeff_0
                 + stat_score / 128;
-            if is_quiet && lmr_depth < 6 && static_eval + fp_margin <= alpha {
+            if is_quiet
+                && lmr_depth < 6
+                && static_eval + fp_margin <= alpha
+                && !t.board.gives_check(m)
+            {
                 move_picker.skip_quiets = true;
             }
         }
