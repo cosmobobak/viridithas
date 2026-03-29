@@ -1,10 +1,23 @@
+// #[cfg(target_feature = "avx512vbmi")]
+mod vbmi;
+#[cfg(target_feature = "avx512vbmi")]
+pub use vbmi::*;
+
+// #[cfg(all(target_feature = "avx2", not(target_feature = "avx512vbmi")))]
 mod avx2;
+#[cfg(all(target_feature = "avx2", not(target_feature = "avx512vbmi")))]
+pub use avx2::*;
+
+// #[cfg(target_feature = "neon")]
+mod neon;
+#[cfg(target_feature = "neon")]
+pub use neon::*;
 
 use crate::{cfor, chess::piece::Piece};
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
-struct Bit(u8);
+pub(crate) struct Bit(u8);
 
 #[rustfmt::skip]
 impl Bit {
@@ -19,9 +32,9 @@ impl Bit {
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
-struct BitRays(u64);
+pub struct BitRays(pub u64);
 
-const PERMUTATION: [[u8; 64]; 64] = {
+pub const PERMUTATION: [[u8; 64]; 64] = {
     let offsets = [
         0x1F, 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, // N
         0x21, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, // NE
@@ -48,7 +61,7 @@ const PERMUTATION: [[u8; 64]; 64] = {
     permutations
 };
 
-const PIECE_TO_BIT: [Bit; 16] = {
+pub const PIECE_TO_BIT: [Bit; 16] = {
     let mut lut = [Bit(0); 16];
 
     lut[Piece::WP as usize] = Bit::WHITE_PAWN;
@@ -71,8 +84,8 @@ const OUTGOING_THREATS: [BitRays; 12] = {
     let mut lut = [BitRays(0); 12];
     lut[Piece::WP as usize].0 = 0x02_00_00_00_00_00_02_00;
     lut[Piece::BP as usize].0 = 0x00_00_02_00_02_00_00_00;
-    lut[Piece::WK as usize].0 = 0x01_01_01_01_01_01_01_01;
-    lut[Piece::BK as usize].0 = 0x01_01_01_01_01_01_01_01;
+    lut[Piece::WN as usize].0 = 0x01_01_01_01_01_01_01_01;
+    lut[Piece::BN as usize].0 = 0x01_01_01_01_01_01_01_01;
     lut[Piece::WB as usize].0 = 0xFE_00_FE_00_FE_00_FE_00;
     lut[Piece::BB as usize].0 = 0xFE_00_FE_00_FE_00_FE_00;
     lut[Piece::WR as usize].0 = 0x00_FE_00_FE_00_FE_00_FE;
@@ -84,7 +97,7 @@ const OUTGOING_THREATS: [BitRays; 12] = {
     lut
 };
 
-const INCOMING_THREATS_MASK: [Bit; 64] = {
+pub const INCOMING_THREATS_MASK: [Bit; 64] = {
     const HORS: Bit = Bit::KNIGHT;
     const ORTH: Bit = Bit(Bit::QUEEN.0 | Bit::ROOK.0);
     const DIAG: Bit = Bit(Bit::QUEEN.0 | Bit::BISHOP.0);
@@ -104,7 +117,7 @@ const INCOMING_THREATS_MASK: [Bit; 64] = {
     ]
 };
 
-const INCOMING_SLIDERS_MASK: [Bit; 64] = {
+pub const INCOMING_SLIDERS_MASK: [Bit; 64] = {
     const ORTH: Bit = Bit(Bit::QUEEN.0 | Bit::ROOK.0);
     const DIAG: Bit = Bit(Bit::QUEEN.0 | Bit::BISHOP.0);
     const NULL: Bit = Bit(0x80);
@@ -120,3 +133,14 @@ const INCOMING_SLIDERS_MASK: [Bit; 64] = {
         NULL, DIAG, DIAG, DIAG, DIAG, DIAG, DIAG, DIAG, // NW
     ]
 };
+
+#[inline]
+pub fn ray_fill(mut br: BitRays) -> BitRays {
+    br.0 = (br.0.wrapping_add(0x7E_7E_7E_7E_7E_7E_7E_7E)) & 0x80_80_80_80_80_80_80_80;
+    BitRays(br.0.wrapping_sub(br.0 >> 7))
+}
+
+#[inline]
+pub fn outgoing_threats(piece: Piece, closest: BitRays) -> BitRays {
+    BitRays(OUTGOING_THREATS[piece as usize].0 & closest.0)
+}
