@@ -16,13 +16,14 @@ use memmap2::Mmap;
 
 use crate::{
     chess::{
-        board::Board,
+        board::{Board, movegen::attacks_by_type},
         piece::{Black, Col, Colour, Piece, PieceType, White},
         piecelayout::PieceLayout,
+        squareset::SquareSet,
         types::Square,
     },
     image::{self, Image},
-    nnue,
+    nnue::{self, network::feature::threat_index},
     util::{self, Align64, MAX_DEPTH},
 };
 
@@ -51,7 +52,7 @@ pub const THREAT_FEATURES: usize = 60144;
 /// a small difference in evaluation.
 pub const SCALE: i32 = 240;
 /// The size of one-half of the hidden layer of the network.
-pub const L1_SIZE: usize = 768;
+pub const L1_SIZE: usize = 1024;
 /// The size of the second layer of the network.
 pub const L2_SIZE: usize = 16;
 /// The size of the third layer of the network.
@@ -523,7 +524,7 @@ impl MergedNetwork {
                 eprintln!("threat plane weight {scaled} is too large (max = {QA_BOUND})");
             }
             // directly hard-quantised to i8.
-            *tgt = scaled.clamp(i8::MIN as f32, i8::MAX as f32).round() as i8;
+            *tgt = scaled.clamp(f32::from(i8::MIN), f32::from(i8::MAX)).round() as i8;
         }
 
         // quantise the FT biases
@@ -1239,6 +1240,22 @@ impl PsqtUpdateBuffer {
     }
 }
 
+#[derive(PartialEq, Eq, Clone, Debug, Default)]
+pub struct ThreatUpdateBuffer {
+    add: ArrayVec<ThreatFeatureUpdate, 128>,
+    sub: ArrayVec<ThreatFeatureUpdate, 128>,
+}
+
+impl ThreatUpdateBuffer {
+    pub fn adds(&self) -> &[ThreatFeatureUpdate] {
+        &self.add[..]
+    }
+
+    pub fn subs(&self) -> &[ThreatFeatureUpdate] {
+        &self.sub[..]
+    }
+}
+
 /// Stores last-seen accumulators for each bucket, so that we can hopefully avoid
 /// having to completely recompute the accumulator for a position, instead
 /// partially reconstructing it from the last-seen accumulator.
@@ -1377,15 +1394,22 @@ impl NNUEState {
         }
     }
 
-    fn requires_refresh(piece: Piece, from: Square, to: Square) -> bool {
+    fn requires_refresh<A: AccUpdateType>(piece: Piece, from: Square, to: Square) -> bool {
         if piece.piece_type() != PieceType::King {
             return false;
         }
 
-        BUCKET_MAP[from] != BUCKET_MAP[to]
+        // Threat features are not king-bucketed:
+        if A::PSQT {
+            BUCKET_MAP[from] != BUCKET_MAP[to]
+        } else {
+            // do we cross the mid-line?
+            // [0,1,2,3,4,5,6,7] ⇒ [0,0,0,0,1,1,1,1]
+            from.file() as u8 / 4 != to.file() as u8 / 4
+        }
     }
 
-    fn can_efficiently_update(&self, colour: Colour) -> bool {
+    fn can_efficiently_update<A: AccUpdateType>(&self, colour: Colour) -> bool {
         let mut curr_idx = self.current_acc;
         loop {
             curr_idx -= 1;
@@ -1396,7 +1420,7 @@ impl NNUEState {
             let to = mv.to.relative_to(colour);
             let piece = mv.piece;
 
-            if piece.colour() == colour && Self::requires_refresh(piece, from, to) {
+            if piece.colour() == colour && Self::requires_refresh::<A>(piece, from, to) {
                 return false;
             }
             if curr.correct[colour] {
@@ -1444,9 +1468,8 @@ impl NNUEState {
     pub fn force(&mut self, board: &Board, nnue_params: &NNUEParams) {
         for colour in Colour::all() {
             if !self.psqt_accumulators[self.current_acc].correct[colour] {
-                if self.can_efficiently_update(colour) {
+                if self.can_efficiently_update::<PsqtUpdate>(colour) {
                     self.apply_lazy_updates::<PsqtUpdate>(nnue_params, board, colour);
-                    self.apply_lazy_updates::<ThreatUpdate>(nnue_params, board, colour);
                 } else {
                     self.bucket_cache.load_accumulator_for_position(
                         nnue_params,
@@ -1454,7 +1477,36 @@ impl NNUEState {
                         colour,
                         &mut self.psqt_accumulators[self.current_acc],
                     );
+                }
+
+                if self.can_efficiently_update::<ThreatUpdate>(colour) {
                     self.apply_lazy_updates::<ThreatUpdate>(nnue_params, board, colour);
+                } else {
+                    self.refresh_threats(nnue_params, board, colour);
+                }
+            }
+        }
+    }
+
+    pub fn refresh_threats(&mut self, nnue_params: &NNUEParams, board: &Board, colour: Colour) {
+        let acc = self.threat_accumulators[self.current_acc].select_mut(colour);
+
+        let bbs = &board.state.bbs;
+        let occ = bbs.occupied();
+        let king = board.state.bbs.king_sq(colour);
+        let bb = occ & !bbs.pieces[PieceType::King];
+
+        for from in bb {
+            let attacker = board.state.mailbox[from].unwrap();
+            let threats = occ & attacks_by_type(attacker, from, occ) & !bbs.pieces[PieceType::King];
+            for to in threats {
+                let victim = board.state.mailbox[to].unwrap();
+                if let Some(feature) = threat_index(colour, king, attacker, victim, from, to) {
+                    let start = feature.index() * L1_SIZE;
+                    let row = &nnue_params.l0_threat[start..start + L1_SIZE];
+                    for i in 0..L1_SIZE {
+                        acc[i] += i16::from(row[i]);
+                    }
                 }
             }
         }
@@ -1533,7 +1585,8 @@ impl NNUEState {
         while idx > 0 && !self.psqt_accumulators[idx].correct[C::COLOUR] {
             let curr = &self.psqt_accumulators[idx - 1];
             if curr.mv.piece.colour() == C::COLOUR
-                && Self::requires_refresh(
+                // wrote PsqtUpdate to fix lint, as-yet unsure of correctness
+                && Self::requires_refresh::<PsqtUpdate>(
                     curr.mv.piece,
                     curr.mv.from.relative_to(C::COLOUR),
                     curr.mv.to.relative_to(C::COLOUR),

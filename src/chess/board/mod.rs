@@ -544,8 +544,7 @@ impl Board {
             return false;
         }
 
-        movegen::attacks_by_type(moved_piece.piece_type(), from, self.state.bbs.occupied())
-            .contains_square(to)
+        movegen::attacks_by_type(moved_piece, from, self.state.bbs.occupied()).contains_square(to)
     }
 
     pub fn is_pseudo_legal_castling(&self, m: Move) -> bool {

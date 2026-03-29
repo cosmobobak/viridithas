@@ -41,8 +41,8 @@ pub fn init() -> Result<(), std::io::Error> {
         for square0 in Square::all() {
             for square1 in Square::all().filter(|&s1| s1 > square0) {
                 // check if a piece of this type standing on square0 could attack square1
-                let attack_overlap = attacks_by_type(piece.piece_type(), square0, SquareSet::EMPTY)
-                    & square1.as_set();
+                let attack_overlap =
+                    attacks_by_type(piece, square0, SquareSet::EMPTY) & square1.as_set();
                 if attack_overlap == SquareSet::EMPTY {
                     continue;
                 }

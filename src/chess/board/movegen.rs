@@ -339,12 +339,9 @@ pub const fn pawn_attacks_by(bb: SquareSet, colour: Colour) -> SquareSet {
     }
 }
 
-pub fn attacks_by_type(pt: PieceType, sq: Square, blockers: SquareSet) -> SquareSet {
-    match pt {
-        PieceType::Pawn => {
-            debug_assert!(false, "Invalid piece type: {pt:?}");
-            SquareSet::EMPTY
-        }
+pub fn attacks_by_type(piece: Piece, sq: Square, blockers: SquareSet) -> SquareSet {
+    match piece.piece_type() {
+        PieceType::Pawn => pawn_attacks_by(sq.as_set(), piece.colour()),
         PieceType::Knight => knight_attacks(sq),
         PieceType::Bishop => diag_attacks(sq, blockers),
         PieceType::Rook => orth_attacks(sq, blockers),

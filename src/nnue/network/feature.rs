@@ -338,7 +338,7 @@ pub fn threat_index(
     mut from: Square,
     // The square being attacked (i.e. the victim’s square).
     mut to: Square,
-) -> ThreatFeatureIndex {
+) -> Option<ThreatFeatureIndex> {
     // All threat indices are reversed for black.
     if colour == Colour::Black {
         attacker = attacker.flip_colour();
@@ -364,8 +364,10 @@ pub fn threat_index(
     // `ATTACK_INDEX` selects the block for this
     // `(attacker, victim, direction)` combination
     // (or signals exclusion if index = THREAT_FEATURES)
-    // TODO: check that!
     let attack_index = ATTACK_INDEX[attacker][victim][usize::from(forwards)];
+    if attack_index as usize == THREAT_FEATURES {
+        return None;
+    }
     // `OFFSET.offsets` selects the sub-block for the attacker’s
     // from-square within that attacker’s feature space.
     let offset = OFFSET.offsets[attacker][from];
@@ -380,5 +382,5 @@ pub fn threat_index(
         attack_index + offset + piece_index < 60144,
         "attempt to construct illegal ThreatFeatureIndex."
     );
-    ThreatFeatureIndex(attack_index + offset + piece_index)
+    Some(ThreatFeatureIndex(attack_index + offset + piece_index))
 }
