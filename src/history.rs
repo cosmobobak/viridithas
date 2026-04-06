@@ -232,6 +232,15 @@ impl ThreadData<'_> {
             index ^= PIECE_KEYS[ch2.piece][ch2.to];
             update(self.cont_corrhist.get_mut(us, index));
         }
+
+        if height > 4 {
+            let ch1 = self.ss[height - 1].ch_idx;
+            let ch2 = self.ss[height - 4].ch_idx;
+            let mut index = 0;
+            index ^= PIECE_KEYS[ch1.piece][ch1.to];
+            index ^= PIECE_KEYS[ch2.piece][ch2.to];
+            update(self.cont_corrhist.get_mut(us, index));
+        }
     }
 
     /// Adjust a raw evaluation using statistics from the correction history.
@@ -250,9 +259,20 @@ impl ThreadData<'_> {
         let minor = self.minor_corrhist.get(us, keys.minor);
         let major = self.major_corrhist.get(us, keys.major);
 
-        let cont = if height > 2 {
+        let cont12 = if height > 2 {
             let ch1 = self.ss[height - 1].ch_idx;
             let ch2 = self.ss[height - 2].ch_idx;
+            let mut index = 0;
+            index ^= PIECE_KEYS[ch1.piece][ch1.to];
+            index ^= PIECE_KEYS[ch2.piece][ch2.to];
+            self.cont_corrhist.get(us, index)
+        } else {
+            0
+        };
+
+        let cont14 = if height > 4 {
+            let ch1 = self.ss[height - 1].ch_idx;
+            let ch2 = self.ss[height - 4].ch_idx;
             let mut index = 0;
             index ^= PIECE_KEYS[ch1.piece][ch1.to];
             index ^= PIECE_KEYS[ch2.piece][ch2.to];
@@ -265,7 +285,8 @@ impl ThreadData<'_> {
             + major * i64::from(self.info.conf.major_corrhist_weight)
             + minor * i64::from(self.info.conf.minor_corrhist_weight)
             + (white + black) * i64::from(self.info.conf.nonpawn_corrhist_weight)
-            + cont * i64::from(self.info.conf.continuation_corrhist_weight);
+            + cont12 * i64::from(self.info.conf.continuation_corrhist_weight)
+            + cont14 * i64::from(self.info.conf.continuation_corrhist_weight);
 
         (adjustment * 12 / 0x40000) as i32
     }
