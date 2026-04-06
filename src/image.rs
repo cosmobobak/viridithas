@@ -84,6 +84,13 @@ pub fn inferno_colour_map(value: u8) -> u32 {
     u32::from(v[2]) | (u32::from(v[1]) << 8) | (u32::from(v[0]) << 16)
 }
 
+pub fn cool_inferno_colour_map(value: u8) -> u32 {
+    // inferno with R and B channels swapped
+    let value = (value as usize * 64) / 256;
+    let v = INFERNO_COLOUR_MAP[value];
+    u32::from(v[0]) | (u32::from(v[1]) << 8) | (u32::from(v[2]) << 16)
+}
+
 impl Image {
     pub fn zeroed(width: usize, height: usize) -> Self {
         Self {
@@ -95,6 +102,10 @@ impl Image {
 
     pub fn rows(&self) -> impl Iterator<Item = &[u32]> {
         self.data.chunks(self.width)
+    }
+
+    pub fn pixel(&self, x: usize, y: usize) -> u32 {
+        self.data[y * self.width + x]
     }
 
     pub fn set(&mut self, x: usize, y: usize, value: u32) {

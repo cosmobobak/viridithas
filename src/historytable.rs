@@ -1,13 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use crate::{
-    chess::{
-        piece::{Colour, Piece},
-        types::Square,
-    },
-    search::parameters::HistoryConfig,
-    util::BOARD_N_SQUARES,
-};
+use crate::{chess::piece::Colour, search::parameters::HistoryConfig, util::BOARD_N_SQUARES};
 
 #[inline]
 pub fn history_bonus(conf: &HistoryConfig, depth: i32) -> i32 {
@@ -53,27 +46,11 @@ fn gravity_update_with_modulator<const MAX: i32>(val: &mut i16, modulator: i32, 
 }
 
 #[repr(transparent)]
-pub struct HistoryTable {
+pub struct PieceToTable {
     table: [[i16; BOARD_N_SQUARES]; 12],
 }
 
-impl HistoryTable {
-    pub const fn new() -> Self {
-        Self {
-            table: [[0; BOARD_N_SQUARES]; 12],
-        }
-    }
-
-    pub fn clear(&mut self) {
-        if self.table.is_empty() {
-            self.table = [[0; BOARD_N_SQUARES]; 12];
-        } else {
-            self.table.iter_mut().flatten().for_each(|x| *x = 0);
-        }
-    }
-}
-
-impl Deref for HistoryTable {
+impl Deref for PieceToTable {
     type Target = [[i16; BOARD_N_SQUARES]; 12];
 
     fn deref(&self) -> &Self::Target {
@@ -81,52 +58,87 @@ impl Deref for HistoryTable {
     }
 }
 
-impl DerefMut for HistoryTable {
+impl DerefMut for PieceToTable {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.table
     }
 }
 
 #[repr(transparent)]
-pub struct ThreatsHistoryTable {
-    table: [[HistoryTable; 2]; 2],
+pub struct FromToTable {
+    table: [[i16; BOARD_N_SQUARES]; BOARD_N_SQUARES],
 }
 
-impl ThreatsHistoryTable {
-    pub const fn new() -> Self {
-        const ELEM: HistoryTable = HistoryTable::new();
-        const SLICE: [HistoryTable; 2] = [ELEM; 2];
-        const ARRAY: [[HistoryTable; 2]; 2] = [SLICE; 2];
-        Self { table: ARRAY }
-    }
-
-    pub fn clear(&mut self) {
-        self.table
-            .iter_mut()
-            .flatten()
-            .for_each(HistoryTable::clear);
-    }
-
-    pub fn get_mut(
-        &mut self,
-        piece: Piece,
-        sq: Square,
-        threat_from: bool,
-        threat_to: bool,
-    ) -> &mut i16 {
-        &mut self.table[usize::from(threat_from)][usize::from(threat_to)][piece][sq]
-    }
-}
-
-impl Deref for ThreatsHistoryTable {
-    type Target = [[HistoryTable; 2]; 2];
+impl Deref for FromToTable {
+    type Target = [[i16; BOARD_N_SQUARES]; BOARD_N_SQUARES];
 
     fn deref(&self) -> &Self::Target {
         &self.table
     }
 }
 
-impl DerefMut for ThreatsHistoryTable {
+impl DerefMut for FromToTable {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.table
+    }
+}
+
+#[repr(transparent)]
+pub struct ThreatsHistoryTable<T> {
+    table: [[T; 2]; 2],
+}
+
+impl<T> ThreatsHistoryTable<T> {
+    pub fn boxed() -> Box<Self> {
+        #![allow(clippy::cast_ptr_alignment)]
+        // SAFETY: we're allocating a zeroed block of memory, and then casting it to a Box<Self>
+        // this is fine! because [[HistoryTable; BOARD_N_SQUARES]; 12] is just a bunch of i16s
+        // at base, which are fine to zero-out.
+        unsafe {
+            let layout = std::alloc::Layout::new::<Self>();
+            let ptr = std::alloc::alloc_zeroed(layout);
+            if ptr.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
+            Box::from_raw(ptr.cast())
+        }
+    }
+    pub fn get_mut(&mut self, threat_from: bool, threat_to: bool) -> &mut T {
+        &mut self.table[usize::from(threat_from)][usize::from(threat_to)]
+    }
+}
+
+impl ThreatsHistoryTable<PieceToTable> {
+    pub fn clear(&mut self) {
+        self.table
+            .iter_mut()
+            .flatten()
+            .flat_map(|h| &mut h.table)
+            .flatten()
+            .for_each(|x| *x = 0);
+    }
+}
+
+impl ThreatsHistoryTable<FromToTable> {
+    pub fn clear(&mut self) {
+        self.table
+            .iter_mut()
+            .flatten()
+            .flat_map(|h| &mut h.table)
+            .flatten()
+            .for_each(|x| *x = 0);
+    }
+}
+
+impl<T> Deref for ThreatsHistoryTable<T> {
+    type Target = [[T; 2]; 2];
+
+    fn deref(&self) -> &Self::Target {
+        &self.table
+    }
+}
+
+impl<T> DerefMut for ThreatsHistoryTable<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.table
     }
@@ -134,7 +146,7 @@ impl DerefMut for ThreatsHistoryTable {
 
 #[repr(transparent)]
 pub struct CaptureHistoryTable {
-    table: [[HistoryTable; 6]; 2],
+    table: [[PieceToTable; 6]; 2],
 }
 
 impl CaptureHistoryTable {
@@ -157,12 +169,14 @@ impl CaptureHistoryTable {
         self.table
             .iter_mut()
             .flatten()
-            .for_each(HistoryTable::clear);
+            .flat_map(|h| &mut h.table)
+            .flatten()
+            .for_each(|x| *x = 0);
     }
 }
 
 impl Deref for CaptureHistoryTable {
-    type Target = [[HistoryTable; 6]; 2];
+    type Target = [[PieceToTable; 6]; 2];
 
     fn deref(&self) -> &Self::Target {
         &self.table
@@ -177,7 +191,7 @@ impl DerefMut for CaptureHistoryTable {
 
 #[repr(transparent)]
 pub struct DoubleHistoryTable {
-    table: [[HistoryTable; BOARD_N_SQUARES]; 12],
+    table: [[PieceToTable; BOARD_N_SQUARES]; 12],
 }
 
 impl DoubleHistoryTable {
@@ -200,12 +214,14 @@ impl DoubleHistoryTable {
         self.table
             .iter_mut()
             .flatten()
-            .for_each(HistoryTable::clear);
+            .flat_map(|h| &mut h.table)
+            .flatten()
+            .for_each(|x| *x = 0);
     }
 }
 
 impl Deref for DoubleHistoryTable {
-    type Target = [[HistoryTable; BOARD_N_SQUARES]; 12];
+    type Target = [[PieceToTable; BOARD_N_SQUARES]; 12];
 
     fn deref(&self) -> &Self::Target {
         &self.table
@@ -220,7 +236,7 @@ impl DerefMut for DoubleHistoryTable {
 
 #[repr(transparent)]
 pub struct HashHistoryTable {
-    table: [HistoryTable; HASH_HISTORY_SIZE],
+    table: [PieceToTable; HASH_HISTORY_SIZE],
 }
 
 impl HashHistoryTable {
@@ -240,12 +256,16 @@ impl HashHistoryTable {
     }
 
     pub fn clear(&mut self) {
-        self.table.iter_mut().for_each(HistoryTable::clear);
+        self.table
+            .iter_mut()
+            .flat_map(|h| &mut h.table)
+            .flatten()
+            .for_each(|x| *x = 0);
     }
 }
 
 impl Deref for HashHistoryTable {
-    type Target = [HistoryTable; HASH_HISTORY_SIZE];
+    type Target = [PieceToTable; HASH_HISTORY_SIZE];
 
     fn deref(&self) -> &Self::Target {
         &self.table
