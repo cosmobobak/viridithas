@@ -54,34 +54,34 @@ impl Vector {
 }
 
 pub struct Permutation {
-    indexes: Vector,
+    indices: Vector,
     valid: Vector,
 }
 
 pub fn permutation_for(focus: Square) -> Permutation {
     unsafe {
-        let indexes = Vector::load(PERMUTATION[focus.index()].as_ptr());
+        let indices = Vector::load(PERMUTATION[focus.index()].as_ptr());
         let valid = Vector {
             raw: [
                 vmvnq_u8(vreinterpretq_u8_s8(vshrq_n_s8(
-                    vreinterpretq_s8_u8(indexes.raw[0]),
+                    vreinterpretq_s8_u8(indices.raw[0]),
                     7,
                 ))),
                 vmvnq_u8(vreinterpretq_u8_s8(vshrq_n_s8(
-                    vreinterpretq_s8_u8(indexes.raw[1]),
+                    vreinterpretq_s8_u8(indices.raw[1]),
                     7,
                 ))),
                 vmvnq_u8(vreinterpretq_u8_s8(vshrq_n_s8(
-                    vreinterpretq_s8_u8(indexes.raw[2]),
+                    vreinterpretq_s8_u8(indices.raw[2]),
                     7,
                 ))),
                 vmvnq_u8(vreinterpretq_u8_s8(vshrq_n_s8(
-                    vreinterpretq_s8_u8(indexes.raw[3]),
+                    vreinterpretq_s8_u8(indices.raw[3]),
                     7,
                 ))),
             ],
         };
-        Permutation { indexes, valid }
+        Permutation { indices, valid }
     }
 }
 
@@ -97,10 +97,10 @@ fn permute_mailbox_inner(permutation: &Permutation, mailbox: &Vector) -> (Vector
         );
         let permuted = Vector {
             raw: [
-                vqtbl4q_u8(mb, permutation.indexes.raw[0]),
-                vqtbl4q_u8(mb, permutation.indexes.raw[1]),
-                vqtbl4q_u8(mb, permutation.indexes.raw[2]),
-                vqtbl4q_u8(mb, permutation.indexes.raw[3]),
+                vqtbl4q_u8(mb, permutation.indices.raw[0]),
+                vqtbl4q_u8(mb, permutation.indices.raw[1]),
+                vqtbl4q_u8(mb, permutation.indices.raw[2]),
+                vqtbl4q_u8(mb, permutation.indices.raw[3]),
             ],
         };
         let bits = Vector {
@@ -164,7 +164,7 @@ pub fn closest_occupied(bits: Vector) -> BitRays {
         };
         let occupied = occupied_vec.to_mask();
         let o = occupied | 0x8181_8181_8181_8181;
-        BitRays((o ^ o.wrapping_sub(0x0303_0303_0303_0303)) & occupied)
+        (o ^ o.wrapping_sub(0x0303_0303_0303_0303)) & occupied
     }
 }
 
@@ -179,7 +179,7 @@ pub fn incoming_attackers(bits: Vector, closest: BitRays) -> BitRays {
                 vtstq_u8(bits.raw[3], mask.raw[3]),
             ],
         };
-        BitRays(v.to_mask() & closest.0)
+        v.to_mask() & closest
     }
 }
 
@@ -194,6 +194,6 @@ pub fn incoming_sliders(bits: Vector, closest: BitRays) -> BitRays {
                 vtstq_u8(bits.raw[3], mask.raw[3]),
             ],
         };
-        BitRays(v.to_mask() & closest.0 & 0xFEFE_FEFE_FEFE_FEFE)
+        v.to_mask() & closest & 0xFEFE_FEFE_FEFE_FEFE
     }
 }

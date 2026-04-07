@@ -9,9 +9,10 @@ use crate::{
 
 use super::{BitRays, INCOMING_SLIDERS_MASK, INCOMING_THREATS_MASK, PERMUTATION, PIECE_TO_BIT};
 
+#[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct Vector {
-    raw: [__m256i; 2],
+    pub raw: [__m256i; 2],
 }
 
 impl Vector {
@@ -23,9 +24,9 @@ impl Vector {
 
     fn mask(self) -> BitRays {
         unsafe {
-            let a = _mm256_movemask_epi8(self.raw[0]) as u32 as u64;
-            let b = _mm256_movemask_epi8(self.raw[1]) as u32 as u64;
-            BitRays(a | (b << 32))
+            let a = u64::from(_mm256_movemask_epi8(self.raw[0]) as u32);
+            let b = u64::from(_mm256_movemask_epi8(self.raw[1]) as u32);
+            a | (b << 32)
         }
     }
 
@@ -47,20 +48,20 @@ impl Vector {
 }
 
 pub struct Permutation {
-    indexes: Vector,
-    invalid: Vector,
+    pub indices: Vector,
+    pub invalid: Vector,
 }
 
 pub fn permutation_for(focus: Square) -> Permutation {
     unsafe {
-        let indexes = Vector::cast(&PERMUTATION[focus.index()]);
+        let indices = Vector::cast(&PERMUTATION[focus.index()]);
         let invalid = Vector {
             raw: [
-                _mm256_cmpeq_epi8(indexes.raw[0], _mm256_set1_epi8(0x80u8 as i8)),
-                _mm256_cmpeq_epi8(indexes.raw[1], _mm256_set1_epi8(0x80u8 as i8)),
+                _mm256_cmpeq_epi8(indices.raw[0], _mm256_set1_epi8(0x80u8 as i8)),
+                _mm256_cmpeq_epi8(indices.raw[1], _mm256_set1_epi8(0x80u8 as i8)),
             ],
         };
-        Permutation { indexes, invalid }
+        Permutation { indices, invalid }
     }
 }
 
@@ -89,12 +90,12 @@ fn permute_mailbox_inner(permutation: &Permutation, masked_mailbox: Vector) -> (
                 half_swizzle(
                     masked_mailbox.raw[0],
                     masked_mailbox.raw[1],
-                    permutation.indexes.raw[0],
+                    permutation.indices.raw[0],
                 ),
                 half_swizzle(
                     masked_mailbox.raw[0],
                     masked_mailbox.raw[1],
-                    permutation.indexes.raw[1],
+                    permutation.indices.raw[1],
                 ),
             ],
         };
@@ -165,9 +166,9 @@ pub fn closest_occupied(bits: Vector) -> BitRays {
                 _mm256_cmpeq_epi8(bits.raw[1], _mm256_setzero_si256()),
             ],
         };
-        let occupied = !unoccupied.mask().0;
+        let occupied = !unoccupied.mask();
         let o = occupied | 0x8181_8181_8181_8181;
-        BitRays((o ^ o.wrapping_sub(0x0303_0303_0303_0303)) & occupied)
+        (o ^ o.wrapping_sub(0x0303_0303_0303_0303)) & occupied
     }
 }
 
@@ -186,7 +187,7 @@ pub fn incoming_attackers(bits: Vector, closest: BitRays) -> BitRays {
                 ),
             ],
         };
-        BitRays(!v.mask().0 & closest.0)
+        !v.mask() & closest
     }
 }
 
@@ -205,6 +206,6 @@ pub fn incoming_sliders(bits: Vector, closest: BitRays) -> BitRays {
                 ),
             ],
         };
-        BitRays(!v.mask().0 & closest.0 & 0xFEFE_FEFE_FEFE_FEFE)
+        !v.mask() & closest & 0xFEFE_FEFE_FEFE_FEFE
     }
 }

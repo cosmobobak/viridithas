@@ -3,9 +3,9 @@ mod vbmi;
 #[cfg(target_feature = "avx512vbmi")]
 pub use vbmi::*;
 
-#[cfg(all(target_feature = "avx2", not(target_feature = "avx512vbmi")))]
+// #[cfg(all(target_feature = "avx2", not(target_feature = "avx512vbmi")))]
 mod avx2;
-#[cfg(all(target_feature = "avx2", not(target_feature = "avx512vbmi")))]
+// #[cfg(all(target_feature = "avx2", not(target_feature = "avx512vbmi")))]
 pub use avx2::*;
 
 #[cfg(target_feature = "neon")]
@@ -30,9 +30,7 @@ impl Bit {
     const KING       : Self = Self(0x40);
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-#[repr(transparent)]
-pub struct BitRays(pub u64);
+pub type BitRays = u64;
 
 pub const PERMUTATION: [[u8; 64]; 64] = {
     let offsets = [
@@ -81,19 +79,19 @@ pub const PIECE_TO_BIT: [Bit; 16] = {
 };
 
 const OUTGOING_THREATS: [BitRays; 12] = {
-    let mut lut = [BitRays(0); 12];
-    lut[Piece::WP as usize].0 = 0x02_00_00_00_00_00_02_00;
-    lut[Piece::BP as usize].0 = 0x00_00_02_00_02_00_00_00;
-    lut[Piece::WN as usize].0 = 0x01_01_01_01_01_01_01_01;
-    lut[Piece::BN as usize].0 = 0x01_01_01_01_01_01_01_01;
-    lut[Piece::WB as usize].0 = 0xFE_00_FE_00_FE_00_FE_00;
-    lut[Piece::BB as usize].0 = 0xFE_00_FE_00_FE_00_FE_00;
-    lut[Piece::WR as usize].0 = 0x00_FE_00_FE_00_FE_00_FE;
-    lut[Piece::BR as usize].0 = 0x00_FE_00_FE_00_FE_00_FE;
-    lut[Piece::WQ as usize].0 = 0xFE_FE_FE_FE_FE_FE_FE_FE;
-    lut[Piece::BQ as usize].0 = 0xFE_FE_FE_FE_FE_FE_FE_FE;
-    lut[Piece::WK as usize].0 = 0; // ignore king threats
-    lut[Piece::BK as usize].0 = 0; // ignore king threats
+    let mut lut = [0; 12];
+    lut[Piece::WP as usize] = 0x02_00_00_00_00_00_02_00;
+    lut[Piece::BP as usize] = 0x00_00_02_00_02_00_00_00;
+    lut[Piece::WN as usize] = 0x01_01_01_01_01_01_01_01;
+    lut[Piece::BN as usize] = 0x01_01_01_01_01_01_01_01;
+    lut[Piece::WB as usize] = 0xFE_00_FE_00_FE_00_FE_00;
+    lut[Piece::BB as usize] = 0xFE_00_FE_00_FE_00_FE_00;
+    lut[Piece::WR as usize] = 0x00_FE_00_FE_00_FE_00_FE;
+    lut[Piece::BR as usize] = 0x00_FE_00_FE_00_FE_00_FE;
+    lut[Piece::WQ as usize] = 0xFE_FE_FE_FE_FE_FE_FE_FE;
+    lut[Piece::BQ as usize] = 0xFE_FE_FE_FE_FE_FE_FE_FE;
+    lut[Piece::WK as usize] = 0; // ignore king threats
+    lut[Piece::BK as usize] = 0; // ignore king threats
     lut
 };
 
@@ -136,11 +134,11 @@ pub const INCOMING_SLIDERS_MASK: [Bit; 64] = {
 
 #[inline]
 pub fn ray_fill(mut br: BitRays) -> BitRays {
-    br.0 = (br.0.wrapping_add(0x7E_7E_7E_7E_7E_7E_7E_7E)) & 0x80_80_80_80_80_80_80_80;
-    BitRays(br.0.wrapping_sub(br.0 >> 7))
+    br = (br.wrapping_add(0x7E_7E_7E_7E_7E_7E_7E_7E)) & 0x80_80_80_80_80_80_80_80;
+    br.wrapping_sub(br >> 7)
 }
 
 #[inline]
 pub fn outgoing_threats(piece: Piece, closest: BitRays) -> BitRays {
-    BitRays(OUTGOING_THREATS[piece as usize].0 & closest.0)
+    OUTGOING_THREATS[piece as usize] & closest
 }

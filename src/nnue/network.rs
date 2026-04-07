@@ -19,7 +19,6 @@ use crate::{
         board::{Board, movegen::attacks_by_type},
         piece::{Black, Col, Colour, Piece, PieceType, White},
         piecelayout::PieceLayout,
-        squareset::SquareSet,
         types::Square,
     },
     image::{self, Image},
@@ -31,6 +30,7 @@ use super::accumulator::{self, Accumulator};
 
 pub mod feature;
 pub mod layers;
+pub mod threat_updates;
 
 /// The embedded neural network parameters.
 pub static EMBEDDED_NNUE: &[u8] = include_bytes_aligned!("../../viridithas.nnue.zst");
@@ -1199,10 +1199,11 @@ pub struct PsqtFeatureUpdate {
 
 /// Struct representing some unmaterialised threat update made as part of a move.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(C)]
 pub struct ThreatFeatureUpdate {
     pub attacker: Piece,
-    pub victim: Piece,
     pub from: Square,
+    pub victim: Piece,
     pub to: Square,
 }
 

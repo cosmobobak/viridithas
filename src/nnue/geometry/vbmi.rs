@@ -22,16 +22,16 @@ impl Vector {
 }
 
 pub struct Permutation {
-    indexes: Vector,
+    indices: Vector,
     valid: u64,
 }
 
 pub fn permutation_for(focus: Square) -> Permutation {
     unsafe {
-        let indexes = _mm512_loadu_si512(PERMUTATION[focus.index()].as_ptr().cast());
-        let valid = _mm512_testn_epi8_mask(indexes, _mm512_set1_epi8(0x80u8 as i8));
+        let indices = _mm512_loadu_si512(PERMUTATION[focus.index()].as_ptr().cast());
+        let valid = _mm512_testn_epi8_mask(indices, _mm512_set1_epi8(0x80u8 as i8));
         Permutation {
-            indexes: Vector { raw: indexes },
+            indices: Vector { raw: indices },
             valid,
         }
     }
@@ -45,7 +45,7 @@ pub fn permute_mailbox(
         let lut = _mm512_broadcast_i32x4(_mm_loadu_si128(PIECE_TO_BIT.as_ptr().cast::<__m128i>()));
 
         let masked_mailbox = _mm512_loadu_si512(mailbox.as_ptr().cast());
-        let permuted = _mm512_permutexvar_epi8(permutation.indexes.raw, masked_mailbox);
+        let permuted = _mm512_permutexvar_epi8(permutation.indices.raw, masked_mailbox);
         let bits = _mm512_maskz_shuffle_epi8(permutation.valid, lut, permuted);
         (Vector { raw: permuted }, Vector { raw: bits })
     }
@@ -66,7 +66,7 @@ pub fn permute_mailbox_ignoring(
             // None<Piece> is represented as 12 due to niche optimisation.
             _mm512_set1_epi8(12),
         );
-        let permuted = _mm512_permutexvar_epi8(permutation.indexes.raw, masked_mailbox);
+        let permuted = _mm512_permutexvar_epi8(permutation.indices.raw, masked_mailbox);
         let bits = _mm512_maskz_shuffle_epi8(permutation.valid, lut, permuted);
         (Vector { raw: permuted }, Vector { raw: bits })
     }
@@ -76,20 +76,20 @@ pub fn closest_occupied(bits: Vector) -> BitRays {
     unsafe {
         let occupied = _mm512_test_epi8_mask(bits.raw, bits.raw);
         let o = occupied | 0x8181818181818181;
-        BitRays((o ^ o.wrapping_sub(0x0303030303030303)) & occupied)
+        (o ^ o.wrapping_sub(0x0303030303030303)) & occupied
     }
 }
 
 pub fn incoming_attackers(bits: Vector, closest: BitRays) -> BitRays {
     unsafe {
         let mask = _mm512_loadu_si512(INCOMING_THREATS_MASK.as_ptr().cast());
-        BitRays(_mm512_test_epi8_mask(bits.raw, mask) & closest.0)
+        _mm512_test_epi8_mask(bits.raw, mask) & closest
     }
 }
 
 pub fn incoming_sliders(bits: Vector, closest: BitRays) -> BitRays {
     unsafe {
         let mask = _mm512_loadu_si512(INCOMING_SLIDERS_MASK.as_ptr().cast());
-        BitRays(_mm512_test_epi8_mask(bits.raw, mask) & closest.0 & 0xFEFEFEFEFEFEFEFE)
+        _mm512_test_epi8_mask(bits.raw, mask) & closest & 0xFEFEFEFEFEFEFEFE
     }
 }
