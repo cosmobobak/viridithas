@@ -1426,6 +1426,10 @@ impl NNUEState {
         let king = board.state.bbs.king_sq(colour);
         let bb = occ & !bbs.pieces[PieceType::King];
 
+        // todo: think about whether this would be better as
+        // a per-type loop — we might do better if we knew
+        // what sort of piece we were moving, or we could merge
+        // queen directions with ortho/diagonal moves, &c &c
         for from in bb {
             let attacker = board.state.mailbox[from].unwrap();
             let threats = occ & attacks_by_type(attacker, from, occ) & !bbs.pieces[PieceType::King];
