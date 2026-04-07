@@ -1,14 +1,14 @@
-// #[cfg(target_feature = "avx512vbmi")]
+#[cfg(target_feature = "avx512vbmi")]
 mod vbmi;
 #[cfg(target_feature = "avx512vbmi")]
 pub use vbmi::*;
 
-// #[cfg(all(target_feature = "avx2", not(target_feature = "avx512vbmi")))]
+#[cfg(all(target_feature = "avx2", not(target_feature = "avx512vbmi")))]
 mod avx2;
 #[cfg(all(target_feature = "avx2", not(target_feature = "avx512vbmi")))]
 pub use avx2::*;
 
-// #[cfg(target_feature = "neon")]
+#[cfg(target_feature = "neon")]
 mod neon;
 #[cfg(target_feature = "neon")]
 pub use neon::*;
