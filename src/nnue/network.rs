@@ -1296,7 +1296,7 @@ impl BucketAccumulatorCache {
 
         accumulator::vector_update_inplace(cache_acc, weights, &adds, &subs);
 
-        acc.accs[colour] = cache_acc.clone();
+        acc.halves[colour] = cache_acc.clone();
 
         self.board_states[colour][bucket] = board_state;
     }
@@ -1514,7 +1514,7 @@ impl NNUEState {
     }
 
     pub fn refresh_threats(&mut self, nnue_params: &NNUEParams, board: &Board, colour: Colour) {
-        let acc = &mut self.threat_accumulators[self.current_acc].accs[colour];
+        let acc = &mut self.threat_accumulators[self.current_acc].halves[colour];
 
         let bbs = &board.state.bbs;
         let occ = bbs.occupied();
@@ -1578,10 +1578,10 @@ impl NNUEState {
                 }
             }
 
-            self.psqt_accumulators[self.current_acc].accs[C::COLOUR] =
-                self.psqt_accumulators[source].accs[C::COLOUR].clone();
+            self.psqt_accumulators[self.current_acc].halves[C::COLOUR] =
+                self.psqt_accumulators[source].halves[C::COLOUR].clone();
             accumulator::vector_update_inplace(
-                &mut self.psqt_accumulators[self.current_acc].accs[C::COLOUR],
+                &mut self.psqt_accumulators[self.current_acc].halves[C::COLOUR],
                 weights,
                 &adds,
                 &subs,
@@ -1650,8 +1650,8 @@ impl NNUEState {
 
         let bucket = nnue_params.select_feature_weights(bucket);
 
-        let src = &src_acc.accs[colour];
-        let tgt = &mut tgt_acc.accs[colour];
+        let src = &src_acc.halves[colour];
+        let tgt = &mut tgt_acc.halves[colour];
 
         match (updates.adds(), updates.subs()) {
             // quiet or promotion
@@ -1694,9 +1694,9 @@ impl NNUEState {
         let acc = &self.psqt_accumulators[self.current_acc];
 
         let [us, them] = if stm == Colour::White {
-            acc.accs.each_ref()
+            acc.halves.each_ref()
         } else {
-            [&acc.accs[Colour::Black], &acc.accs[Colour::White]]
+            [&acc.halves[Colour::Black], &acc.halves[Colour::White]]
         };
 
         let mut l1_outputs = Align64([0.0; L2_SIZE]);

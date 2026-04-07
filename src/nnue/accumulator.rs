@@ -5,7 +5,7 @@ use crate::{
 
 /// Activations of the hidden layer.
 pub struct Accumulator {
-    pub accs: [Align64<[i16; L1_SIZE]>; 2],
+    pub halves: [Align64<[i16; L1_SIZE]>; 2],
 }
 
 #[allow(clippy::inline_always)]
