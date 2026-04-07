@@ -1675,7 +1675,7 @@ impl NNUEState {
                 let sub2 = feature::psqt_index(colour, king, sub2);
                 accumulator::vector_add2_sub2(src, tgt, bucket, add1, add2, sub1, sub2);
             }
-            (_, _) => panic!("invalid update buffer: {:?}", updates),
+            (_, _) => panic!("invalid update buffer: {updates:?}"),
         }
     }
 
