@@ -1297,7 +1297,6 @@ impl BucketAccumulatorCache {
         accumulator::vector_update_inplace(cache_acc, weights, &adds, &subs);
 
         acc.accs[colour] = cache_acc.clone();
-        acc.correct[colour] = true;
 
         self.board_states[colour][bucket] = board_state;
     }
@@ -1329,8 +1328,16 @@ impl AccUpdateType for ThreatUpdate {
 pub struct NNUEState {
     /// Board-state accumulators for the first layer.
     pub psqt_accumulators: [Accumulator; ACC_STACK_SIZE],
+    /// Diffs for the PSQT updates.
+    pub psqt_updates: [PsqtUpdateBuffer; ACC_STACK_SIZE],
+    /// “dirty” flags for the PSQT accumulators.
+    pub psqt_correct: [[bool; 2]; ACC_STACK_SIZE],
     /// Threat-state accumulators for the first layer.
     pub threat_accumulators: [Accumulator; ACC_STACK_SIZE],
+    /// Diffs for the threat updates.
+    pub threat_updates: [ThreatUpdateBuffer; ACC_STACK_SIZE],
+    /// “dirty” flags for the threat accumulators.
+    pub threat_correct: [[bool; 2]; ACC_STACK_SIZE],
     /// Moves made for update computation.
     pub moves: [MovedPiece; ACC_STACK_SIZE],
     /// Index of the current accumulator.
@@ -1393,6 +1400,7 @@ impl NNUEState {
                 colour,
                 &mut self.psqt_accumulators[0],
             );
+            self.psqt_correct[0][colour] = true;
         }
     }
 
@@ -1415,7 +1423,6 @@ impl NNUEState {
         let mut curr_idx = self.current_acc;
         loop {
             curr_idx -= 1;
-            let curr = &self.psqt_accumulators[curr_idx];
 
             let mv = self.moves[curr_idx];
             let from = mv.from.relative_to(colour);
@@ -1425,7 +1432,7 @@ impl NNUEState {
             if piece.colour() == colour && Self::requires_refresh::<A>(piece, from, to) {
                 return false;
             }
-            if curr.correct[colour] {
+            if self.psqt_correct[curr_idx][colour] {
                 return true;
             }
         }
@@ -1443,11 +1450,17 @@ impl NNUEState {
             &mut self.threat_accumulators
         };
 
+        let correct = if A::PSQT {
+            &mut self.psqt_correct
+        } else {
+            &mut self.threat_correct
+        };
+
         let mut curr_index = self.current_acc;
         loop {
             curr_index -= 1;
 
-            if stack[curr_index].correct[colour] {
+            if correct[curr_index][colour] {
                 break;
             }
         }
@@ -1455,9 +1468,14 @@ impl NNUEState {
         let king = board.state.bbs.king_sq(colour);
 
         loop {
-            Self::materialise_new_acc_from(stack, king, colour, curr_index + 1, nnue_params);
+            let (front, back) = stack.split_at_mut(curr_index + 1);
+            let src_acc = front.last().unwrap();
+            let tgt_acc = back.first_mut().unwrap();
+            let updates = &self.psqt_updates[curr_index];
 
-            stack[curr_index + 1].correct[colour] = true;
+            Self::materialise_new_acc_from(src_acc, tgt_acc, updates, king, colour, nnue_params);
+
+            correct[curr_index + 1][colour] = true;
 
             curr_index += 1;
             if curr_index == self.current_acc {
@@ -1473,7 +1491,7 @@ impl NNUEState {
     /// bucketed (though they do mirror when the king crosses the center-line).
     pub fn force(&mut self, board: &Board, nnue_params: &NNUEParams) {
         for colour in Colour::all() {
-            if !self.psqt_accumulators[self.current_acc].correct[colour] {
+            if !self.psqt_correct[self.current_acc][colour] {
                 if self.can_efficiently_update::<PsqtUpdate>(colour) {
                     self.apply_lazy_updates::<PsqtUpdate>(nnue_params, board, colour);
                 } else {
@@ -1483,6 +1501,7 @@ impl NNUEState {
                         colour,
                         &mut self.psqt_accumulators[self.current_acc],
                     );
+                    self.psqt_correct[self.current_acc][colour] = true;
                 }
 
                 if self.can_efficiently_update::<ThreatUpdate>(colour) {
@@ -1528,14 +1547,14 @@ impl NNUEState {
         pos: &Board,
         nnue_params: &NNUEParams,
     ) {
-        if self.psqt_accumulators[self.current_acc].correct[C::COLOUR] {
+        if self.psqt_correct[self.current_acc][C::COLOUR] {
             return;
         }
 
         let oldest = self.try_find_computed_accumulator::<C>(pos);
 
         if let Some(source) = oldest {
-            assert!(self.psqt_accumulators[source].correct[C::COLOUR]);
+            assert!(self.psqt_correct[source][C::COLOUR]);
             // directly construct the top accumulator from the last-known-good one
             let mut curr_index = source;
             let king = pos.state.bbs.king_sq(C::COLOUR);
@@ -1545,10 +1564,10 @@ impl NNUEState {
             let mut subs = ArrayVec::<_, 32>::new();
 
             loop {
-                for &add in self.psqt_accumulators[curr_index].update_buffer.adds() {
+                for &add in self.psqt_updates[curr_index].adds() {
                     adds.push(feature::psqt_index(C::COLOUR, king, add));
                 }
-                for &sub in self.psqt_accumulators[curr_index].update_buffer.subs() {
+                for &sub in self.psqt_updates[curr_index].subs() {
                     subs.push(feature::psqt_index(C::COLOUR, king, sub));
                 }
 
@@ -1567,7 +1586,7 @@ impl NNUEState {
                 &adds,
                 &subs,
             );
-            self.psqt_accumulators[self.current_acc].correct[C::COLOUR] = true;
+            self.psqt_correct[self.current_acc][C::COLOUR] = true;
         } else {
             self.bucket_cache.load_accumulator_for_position(
                 nnue_params,
@@ -1575,6 +1594,7 @@ impl NNUEState {
                 C::COLOUR,
                 &mut self.psqt_accumulators[self.current_acc],
             );
+            self.psqt_correct[self.current_acc][C::COLOUR] = true;
         }
     }
 
@@ -1588,9 +1608,9 @@ impl NNUEState {
     fn try_find_computed_accumulator<C: Col>(&self, pos: &Board) -> Option<usize> {
         let mut idx = self.current_acc;
         let mut budget = pos.state.bbs.occupied().count() as i32;
-        while idx > 0 && !self.psqt_accumulators[idx].correct[C::COLOUR] {
-            let curr = &self.psqt_accumulators[idx - 1];
+        while idx > 0 && !self.psqt_correct[idx][C::COLOUR] {
             let mv = self.moves[idx - 1];
+            let psqt_updates = &self.psqt_updates[idx - 1];
             if mv.piece.colour() == C::COLOUR
                 // wrote PsqtUpdate to fix lint, as-yet unsure of correctness
                 && Self::requires_refresh::<PsqtUpdate>(
@@ -1601,15 +1621,15 @@ impl NNUEState {
             {
                 break;
             }
-            let adds = curr.update_buffer.adds().len() as i32;
-            let subs = curr.update_buffer.subs().len() as i32;
+            let adds = psqt_updates.adds().len() as i32;
+            let subs = psqt_updates.subs().len() as i32;
             budget -= adds + subs + 1;
             if budget < 0 {
                 break;
             }
             idx -= 1;
         }
-        if self.psqt_accumulators[idx].correct[C::COLOUR] {
+        if self.psqt_correct[idx][C::COLOUR] {
             Some(idx)
         } else {
             None
@@ -1617,16 +1637,15 @@ impl NNUEState {
     }
 
     pub fn materialise_new_acc_from(
-        stack: &mut [Accumulator; ACC_STACK_SIZE],
+        // stack: &mut [Accumulator; ACC_STACK_SIZE],
+        src_acc: &Accumulator,
+        tgt_acc: &mut Accumulator,
+        updates: &PsqtUpdateBuffer,
         king: Square,
         colour: Colour,
-        create_at_idx: usize,
+        // create_at_idx: usize,
         nnue_params: &NNUEParams,
     ) {
-        let (front, back) = stack.split_at_mut(create_at_idx);
-        let src_acc = front.last().unwrap();
-        let tgt_acc = back.first_mut().unwrap();
-
         let bucket = BUCKET_MAP[king.relative_to(colour)];
 
         let bucket = nnue_params.select_feature_weights(bucket);
@@ -1634,7 +1653,7 @@ impl NNUEState {
         let src = &src_acc.accs[colour];
         let tgt = &mut tgt_acc.accs[colour];
 
-        match (src_acc.update_buffer.adds(), src_acc.update_buffer.subs()) {
+        match (updates.adds(), updates.subs()) {
             // quiet or promotion
             (&[add], &[sub]) => {
                 let add = feature::psqt_index(colour, king, add);
@@ -1656,7 +1675,7 @@ impl NNUEState {
                 let sub2 = feature::psqt_index(colour, king, sub2);
                 accumulator::vector_add2_sub2(src, tgt, bucket, add1, add2, sub1, sub2);
             }
-            (_, _) => panic!("invalid update buffer: {:?}", src_acc.update_buffer),
+            (_, _) => panic!("invalid update buffer: {:?}", updates),
         }
     }
 
@@ -1665,12 +1684,14 @@ impl NNUEState {
     pub fn evaluate(&self, nn: &NNUEParams, board: &Board) -> i32 {
         const K: f32 = SCALE as f32;
 
+        debug_assert!(
+            self.psqt_correct[self.current_acc][0] && self.psqt_correct[self.current_acc][1]
+        );
+
         let stm = board.turn();
         let out = output_bucket(board);
 
         let acc = &self.psqt_accumulators[self.current_acc];
-
-        debug_assert!(acc.correct[0] && acc.correct[1]);
 
         let [us, them] = if stm == Colour::White {
             acc.accs.each_ref()

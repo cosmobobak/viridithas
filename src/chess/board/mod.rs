@@ -1007,9 +1007,11 @@ impl Board {
             to: m.to(),
             piece,
         };
-        nnue.psqt_accumulators[nnue.current_acc].update_buffer = update_buffer;
+        // todo: don’t needlessly copy, just operate in place
+        nnue.psqt_updates[nnue.current_acc] = update_buffer;
+        // todo: be less weird about mutation
         nnue.current_acc += 1;
-        nnue.psqt_accumulators[nnue.current_acc].correct = [false; 2];
+        nnue.psqt_correct[nnue.current_acc] = [false; 2];
     }
 
     pub fn unmake_move_nnue(&mut self, nnue: &mut NNUEState) {

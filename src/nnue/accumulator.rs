@@ -1,16 +1,11 @@
 use crate::{
-    nnue::network::{
-        L1_SIZE, MovedPiece, PSQT_FEATURES, PsqtUpdateBuffer, feature::PsqtFeatureIndex,
-    },
+    nnue::network::{L1_SIZE, PSQT_FEATURES, feature::PsqtFeatureIndex},
     util::Align64,
 };
 
 /// Activations of the hidden layer.
 pub struct Accumulator {
     pub accs: [Align64<[i16; L1_SIZE]>; 2],
-
-    pub update_buffer: PsqtUpdateBuffer,
-    pub correct: [bool; 2],
 }
 
 #[allow(clippy::inline_always)]
