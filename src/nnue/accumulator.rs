@@ -3,7 +3,7 @@ use crate::{
     util::Align64,
 };
 
-/// Activations of the hidden layer.
+/// Pre-activations of l0’s output.
 pub struct Accumulator {
     pub halves: [Align64<[i16; L1_SIZE]>; 2],
 }
