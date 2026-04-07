@@ -1331,6 +1331,8 @@ pub struct NNUEState {
     pub psqt_accumulators: [Accumulator; ACC_STACK_SIZE],
     /// Threat-state accumulators for the first layer.
     pub threat_accumulators: [Accumulator; ACC_STACK_SIZE],
+    /// Moves made for update computation.
+    pub moves: [MovedPiece; ACC_STACK_SIZE],
     /// Index of the current accumulator.
     pub current_acc: usize,
     /// Cache of last-seen accumulators for each bucket.
@@ -1415,7 +1417,7 @@ impl NNUEState {
             curr_idx -= 1;
             let curr = &self.psqt_accumulators[curr_idx];
 
-            let mv = curr.mv;
+            let mv = self.moves[curr_idx];
             let from = mv.from.relative_to(colour);
             let to = mv.to.relative_to(colour);
             let piece = mv.piece;
@@ -1588,12 +1590,13 @@ impl NNUEState {
         let mut budget = pos.state.bbs.occupied().count() as i32;
         while idx > 0 && !self.psqt_accumulators[idx].correct[C::COLOUR] {
             let curr = &self.psqt_accumulators[idx - 1];
-            if curr.mv.piece.colour() == C::COLOUR
+            let mv = self.moves[idx - 1];
+            if mv.piece.colour() == C::COLOUR
                 // wrote PsqtUpdate to fix lint, as-yet unsure of correctness
                 && Self::requires_refresh::<PsqtUpdate>(
-                    curr.mv.piece,
-                    curr.mv.from.relative_to(C::COLOUR),
-                    curr.mv.to.relative_to(C::COLOUR),
+                    mv.piece,
+                    mv.from.relative_to(C::COLOUR),
+                    mv.to.relative_to(C::COLOUR),
                 )
             {
                 break;

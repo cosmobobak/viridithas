@@ -9,7 +9,6 @@ use crate::{
 pub struct Accumulator {
     pub accs: [Align64<[i16; L1_SIZE]>; 2],
 
-    pub mv: MovedPiece,
     pub update_buffer: PsqtUpdateBuffer,
     pub correct: [bool; 2],
 }

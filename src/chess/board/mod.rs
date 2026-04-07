@@ -1002,7 +1002,7 @@ impl Board {
 
         self.make_move_base(m, &mut update_buffer);
 
-        nnue.psqt_accumulators[nnue.current_acc].mv = MovedPiece {
+        nnue.moves[nnue.current_acc] = MovedPiece {
             from: m.from(),
             to: m.to(),
             piece,
