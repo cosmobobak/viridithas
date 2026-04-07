@@ -1262,7 +1262,7 @@ impl ThreatUpdateBuffer {
 pub struct BucketAccumulatorCache {
     // both of these are BUCKETS * 2, rather than just BUCKETS,
     // because we use a horizontally-mirrored architecture.
-    accs: [Accumulator; BUCKETS * 2],
+    accs: [[Align64<[i16; L1_SIZE]>; 2]; BUCKETS * 2],
     board_states: [[PieceLayout; BUCKETS * 2]; 2],
 }
 
@@ -1279,7 +1279,7 @@ impl BucketAccumulatorCache {
             .first()
             .unwrap();
         let bucket = BUCKET_MAP[king.relative_to(colour)];
-        let cache_acc = self.accs[bucket].select_mut(colour);
+        let cache_acc = &mut self.accs[bucket][colour];
 
         let mut adds = ArrayVec::<_, 32>::new();
         let mut subs = ArrayVec::<_, 32>::new();
@@ -1296,7 +1296,7 @@ impl BucketAccumulatorCache {
 
         accumulator::vector_update_inplace(cache_acc, weights, &adds, &subs);
 
-        *acc.select_mut(colour) = cache_acc.clone();
+        acc.accs[colour] = cache_acc.clone();
         acc.correct[colour] = true;
 
         self.board_states[colour][bucket] = board_state;
@@ -1375,8 +1375,8 @@ impl NNUEState {
 
         // initalise all the accumulators in the bucket cache to the bias
         for acc in &mut self.bucket_cache.accs {
-            acc.white = nnue_params.l0_biases.clone();
-            acc.black = nnue_params.l0_biases.clone();
+            acc[Colour::White] = nnue_params.l0_biases.clone();
+            acc[Colour::Black] = nnue_params.l0_biases.clone();
         }
         // initialise all the board states in the bucket cache to the empty board
         for board_state in self.bucket_cache.board_states.iter_mut().flatten() {
@@ -1493,7 +1493,7 @@ impl NNUEState {
     }
 
     pub fn refresh_threats(&mut self, nnue_params: &NNUEParams, board: &Board, colour: Colour) {
-        let acc = self.threat_accumulators[self.current_acc].select_mut(colour);
+        let acc = &mut self.threat_accumulators[self.current_acc].accs[colour];
 
         let bbs = &board.state.bbs;
         let occ = bbs.occupied();
@@ -1557,10 +1557,10 @@ impl NNUEState {
                 }
             }
 
-            *self.psqt_accumulators[self.current_acc].select_mut(C::COLOUR) =
-                self.psqt_accumulators[source].select_mut(C::COLOUR).clone();
+            self.psqt_accumulators[self.current_acc].accs[C::COLOUR] =
+                self.psqt_accumulators[source].accs[C::COLOUR].clone();
             accumulator::vector_update_inplace(
-                self.psqt_accumulators[self.current_acc].select_mut(C::COLOUR),
+                &mut self.psqt_accumulators[self.current_acc].accs[C::COLOUR],
                 weights,
                 &adds,
                 &subs,
@@ -1628,8 +1628,8 @@ impl NNUEState {
 
         let bucket = nnue_params.select_feature_weights(bucket);
 
-        let src = src_acc.select(colour);
-        let tgt = tgt_acc.select_mut(colour);
+        let src = &src_acc.accs[colour];
+        let tgt = &mut tgt_acc.accs[colour];
 
         match (src_acc.update_buffer.adds(), src_acc.update_buffer.subs()) {
             // quiet or promotion
@@ -1669,10 +1669,10 @@ impl NNUEState {
 
         debug_assert!(acc.correct[0] && acc.correct[1]);
 
-        let (us, them) = if stm == Colour::White {
-            (&acc.white, &acc.black)
+        let [us, them] = if stm == Colour::White {
+            acc.accs.each_ref()
         } else {
-            (&acc.black, &acc.white)
+            [&acc.accs[Colour::Black], &acc.accs[Colour::White]]
         };
 
         let mut l1_outputs = Align64([0.0; L2_SIZE]);

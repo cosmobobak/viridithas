@@ -1,5 +1,4 @@
 use crate::{
-    chess::piece::Colour,
     nnue::network::{
         L1_SIZE, MovedPiece, PSQT_FEATURES, PsqtUpdateBuffer, feature::PsqtFeatureIndex,
     },
@@ -8,30 +7,11 @@ use crate::{
 
 /// Activations of the hidden layer.
 pub struct Accumulator {
-    pub white: Align64<[i16; L1_SIZE]>,
-    pub black: Align64<[i16; L1_SIZE]>,
+    pub accs: [Align64<[i16; L1_SIZE]>; 2],
 
     pub mv: MovedPiece,
     pub update_buffer: PsqtUpdateBuffer,
     pub correct: [bool; 2],
-}
-
-impl Accumulator {
-    /// Select the buffer by colour.
-    pub const fn select(&self, colour: Colour) -> &Align64<[i16; L1_SIZE]> {
-        match colour {
-            Colour::White => &self.white,
-            Colour::Black => &self.black,
-        }
-    }
-
-    /// Select the buffer by colour.
-    pub fn select_mut(&mut self, colour: Colour) -> &mut Align64<[i16; L1_SIZE]> {
-        match colour {
-            Colour::White => &mut self.white,
-            Colour::Black => &mut self.black,
-        }
-    }
 }
 
 #[allow(clippy::inline_always)]
