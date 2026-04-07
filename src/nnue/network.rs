@@ -1465,6 +1465,10 @@ impl NNUEState {
     }
 
     /// Apply all in-flight updates, generating all the accumulators up to the current one.
+    ///
+    /// When we do this, we update the piece-square and threat features separately,
+    /// as threat features are almost-always updatable efficiently, as they are not
+    /// bucketed (though they do mirror when the king crosses the center-line).
     pub fn force(&mut self, board: &Board, nnue_params: &NNUEParams) {
         for colour in Colour::all() {
             if !self.psqt_accumulators[self.current_acc].correct[colour] {
