@@ -166,7 +166,7 @@ impl<'a> ThreadData<'a> {
         self.root_depth = 0;
         self.completed = 0;
         self.pvs.fill_with(PVariation::new);
-        self.nnue.reinit_from(&self.board, self.nnue_params);
+        self.nnue.reïnit_from(&self.board, self.nnue_params);
         self.stm_at_root = self.board.turn();
     }
 

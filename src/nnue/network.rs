@@ -1376,13 +1376,13 @@ impl NNUEState {
             Box::from_raw(ptr.cast())
         };
 
-        net.reinit_from(board, nnue_params);
+        net.reïnit_from(board, nnue_params);
 
         net
     }
 
-    /// Reinitialise the state from a board.
-    pub fn reinit_from(&mut self, board: &Board, nnue_params: &NNUEParams) {
+    /// reïnitialise the state from a board.
+    pub fn reïnit_from(&mut self, board: &Board, nnue_params: &NNUEParams) {
         // set the current accumulator to the first one
         self.current_acc = 0;
 
@@ -1398,6 +1398,7 @@ impl NNUEState {
 
         // refresh the first accumulator
         for colour in Colour::all() {
+            // PSQT half:
             self.bucket_cache.load_accumulator_for_position(
                 nnue_params,
                 board.state.bbs,
@@ -1405,6 +1406,40 @@ impl NNUEState {
                 &mut self.psqt_accumulators[0],
             );
             self.psqt_correct[0][colour] = true;
+
+            // threat half:
+            Self::refresh_threats(nnue_params, board, colour, &mut self.threat_accumulators[0]);
+            self.threat_correct[0][colour] = true;
+        }
+    }
+
+    pub fn refresh_threats(
+        nnue_params: &NNUEParams,
+        board: &Board,
+        colour: Colour,
+        acc: &mut Accumulator,
+    ) {
+        let acc = &mut acc.halves[colour];
+
+        let bbs = &board.state.bbs;
+        let occ = bbs.occupied();
+        let king = board.state.bbs.king_sq(colour);
+        let bb = occ & !bbs.pieces[PieceType::King];
+
+        for from in bb {
+            let attacker = board.state.mailbox[from].unwrap();
+            let threats = occ & attacks_by_type(attacker, from, occ) & !bbs.pieces[PieceType::King];
+            for to in threats {
+                let victim = board.state.mailbox[to].unwrap();
+                let Some(feature) = threat_index(colour, king, attacker, victim, from, to) else {
+                    continue;
+                };
+                let start = feature.index() * L1_SIZE;
+                let row = &nnue_params.l0_threat[start..start + L1_SIZE];
+                for i in 0..L1_SIZE {
+                    acc[i] += i16::from(row[i]);
+                }
+            }
         }
     }
 
@@ -1511,31 +1546,13 @@ impl NNUEState {
                 if self.can_efficiently_update::<ThreatUpdate>(colour) {
                     self.apply_lazy_updates::<ThreatUpdate>(nnue_params, board, colour);
                 } else {
-                    self.refresh_threats(nnue_params, board, colour);
-                }
-            }
-        }
-    }
-
-    pub fn refresh_threats(&mut self, nnue_params: &NNUEParams, board: &Board, colour: Colour) {
-        let acc = &mut self.threat_accumulators[self.current_acc].halves[colour];
-
-        let bbs = &board.state.bbs;
-        let occ = bbs.occupied();
-        let king = board.state.bbs.king_sq(colour);
-        let bb = occ & !bbs.pieces[PieceType::King];
-
-        for from in bb {
-            let attacker = board.state.mailbox[from].unwrap();
-            let threats = occ & attacks_by_type(attacker, from, occ) & !bbs.pieces[PieceType::King];
-            for to in threats {
-                let victim = board.state.mailbox[to].unwrap();
-                if let Some(feature) = threat_index(colour, king, attacker, victim, from, to) {
-                    let start = feature.index() * L1_SIZE;
-                    let row = &nnue_params.l0_threat[start..start + L1_SIZE];
-                    for i in 0..L1_SIZE {
-                        acc[i] += i16::from(row[i]);
-                    }
+                    Self::refresh_threats(
+                        nnue_params,
+                        board,
+                        colour,
+                        &mut self.threat_accumulators[self.current_acc],
+                    );
+                    self.threat_correct[self.current_acc][colour] = true;
                 }
             }
         }

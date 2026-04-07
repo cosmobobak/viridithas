@@ -246,7 +246,7 @@ pub fn main_loop() -> Result<(), UciError> {
                 .iter_mut()
                 .try_for_each(|t| {
                     parse_position(input, &mut t.board)?;
-                    t.nnue.reinit_from(&t.board, t.nnue_params);
+                    t.nnue.reïnit_from(&t.board, t.nnue_params);
                     Ok::<_, PositionParseError>(())
                 })
                 .map_err(Into::into),
@@ -297,7 +297,7 @@ pub fn main_loop() -> Result<(), UciError> {
                             }
                         }
                         t.board.zero_height();
-                        t.nnue.reinit_from(&t.board, t.nnue_params);
+                        t.nnue.reïnit_from(&t.board, t.nnue_params);
                     }
                     Ok(())
                 // then try to quick-ly parse
@@ -315,7 +315,7 @@ pub fn main_loop() -> Result<(), UciError> {
                             }
                         }
                         t.board.zero_height();
-                        t.nnue.reinit_from(&t.board, t.nnue_params);
+                        t.nnue.reïnit_from(&t.board, t.nnue_params);
                     }
                     Ok(())
                 // lastly, attempt to find some legal moves
@@ -338,7 +338,7 @@ pub fn main_loop() -> Result<(), UciError> {
                             }
                         }
                         t.board.zero_height();
-                        t.nnue.reinit_from(&t.board, t.nnue_params);
+                        t.nnue.reïnit_from(&t.board, t.nnue_params);
                     }
                     Ok(())
                 } else {
@@ -860,7 +860,7 @@ pub fn bench(
                 thread_data[0].info.print_to_stdout = true;
                 return Err(e.into());
             }
-            t.nnue.reinit_from(&t.board, nnue_params);
+            t.nnue.reïnit_from(&t.board, nnue_params);
         }
         thread_data[0].info.clock.start();
         let res = parse_go(&bench_string, thread_data[0].board.turn());
