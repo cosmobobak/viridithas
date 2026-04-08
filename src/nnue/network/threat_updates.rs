@@ -120,6 +120,7 @@ mod vbmi {
         victims: geometry::BitRays,
     ) {
         // Safety: TODO
+        #[expect(clippy::cast_ptr_alignment)]
         unsafe {
             let count = victims.count_ones();
 
@@ -140,7 +141,7 @@ mod vbmi {
 
             // this is flipped because adding a piece undiscovers threats,
             // whereas removing a piece adds discovered threats.
-            let mut buffer = if Op::ADD {
+            let buffer = if Op::ADD {
                 &mut updates.sub
             } else {
                 &mut updates.add
