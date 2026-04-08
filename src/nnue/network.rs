@@ -1414,6 +1414,8 @@ impl NNUEState {
     ) {
         let acc = &mut acc.halves[colour];
 
+        acc.fill(0); // clear the accumulator, we'll rebuild it from scratch
+
         let bbs = &board.state.bbs;
         let occ = bbs.occupied();
         let king = board.state.bbs.king_sq(colour);
