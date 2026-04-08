@@ -387,9 +387,14 @@ pub fn on_move(
 mod tests {
     use std::fmt::Display;
 
-    use crate::chess::{
-        board::{Board, movegen::attacks_by_type},
-        piece::PieceType,
+    use arrayvec::ArrayVec;
+
+    use crate::{
+        chess::{
+            board::{Board, movegen::attacks_by_type},
+            piece::PieceType,
+        },
+        nnue::network::feature::ThreatFeatureIndex,
     };
 
     use super::*;
@@ -632,5 +637,73 @@ mod tests {
     #[test]
     fn kiwipete_all_moves() {
         check_all_moves(KIWIPETE);
+    }
+
+    // ---- active index tests ----
+
+    use crate::{chess::piece::Colour, nnue::network::feature::threat_index};
+
+    /// Compute sorted threat feature indices for a given perspective.
+    fn threat_indices(board: &Board, colour: Colour) -> ArrayVec<usize, 128> {
+        let king = board.state.bbs.king_sq(colour);
+        let threats = collect_threats_simple(board);
+        let mut indices = threats
+            .iter()
+            .filter_map(|t| {
+                threat_index(colour, king, t.attacker, t.victim, t.from, t.to)
+                    .map(ThreatFeatureIndex::index)
+            })
+            .collect::<ArrayVec<_, _>>();
+        indices.sort_unstable();
+        indices
+    }
+
+    #[test]
+    fn startpos_threat_indices() {
+        let board = Board::from_fen(STARTPOS).unwrap();
+        let expected = [
+            506, 525, 3878, 3879, 3899, 3900, 8351, 8449, 9240, 9344, 15603, 15604, 15605, 18512,
+            32570, 32589, 36699, 36700, 36720, 36721, 42790, 42888, 43687, 43791, 54247, 54248,
+            54249, 57166,
+        ];
+        // symmetric
+        assert_eq!(
+            &threat_indices(&board, Colour::White),
+            &expected[..],
+            "white threats"
+        );
+        assert_eq!(
+            &threat_indices(&board, Colour::Black),
+            &expected[..],
+            "black threats"
+        );
+    }
+
+    #[test]
+    fn kiwipete_threat_indices() {
+        let board = Board::from_fen(KIWIPETE).unwrap();
+
+        let white_expected = [
+            34, 95, 605, 606, 608, 1276, 2034, 2374, 2376, 2377, 4517, 8351, 8449, 15907, 15908,
+            15919, 17370, 18821, 23190, 24659, 30086, 30134, 30195, 30397, 30398, 30401, 30488,
+            30491, 30807, 30809, 30840, 32491, 32521, 33531, 35486, 37185, 38306, 42786, 42888,
+            54045, 54050, 54054, 54055, 55505,
+        ];
+        let black_expected = [
+            3, 4, 7, 94, 97, 389, 581, 612, 1619, 2263, 2265, 2293, 4490, 5607, 8355, 8449, 15752,
+            15753, 15758, 15765, 17213, 30107, 30143, 30372, 30489, 30710, 30711, 30712, 32510,
+            32512, 32515, 33186, 33740, 35517, 37212, 42790, 42888, 46560, 48008, 53839, 53847,
+            53848, 55300, 56761,
+        ];
+        assert_eq!(
+            &threat_indices(&board, Colour::White),
+            &white_expected[..],
+            "white threats"
+        );
+        assert_eq!(
+            &threat_indices(&board, Colour::Black),
+            &black_expected[..],
+            "black threats"
+        );
     }
 }

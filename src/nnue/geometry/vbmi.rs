@@ -1,6 +1,14 @@
-#![expect(clippy::cast_sign_loss, clippy::undocumented_unsafe_blocks)]
+#![expect(
+    clippy::undocumented_unsafe_blocks,
+    clippy::cast_ptr_alignment,
+    clippy::cast_possible_wrap
+)]
 
-use std::arch::x86_64::*;
+use std::arch::x86_64::{
+    __m128i, __m512i, _mm_loadu_si128, _mm512_broadcast_i32x4, _mm512_loadu_si512,
+    _mm512_mask_blend_epi8, _mm512_maskz_shuffle_epi8, _mm512_permutexvar_epi8, _mm512_set1_epi8,
+    _mm512_shuffle_i64x2, _mm512_test_epi8_mask, _mm512_testn_epi8_mask,
+};
 
 use crate::chess::{piece::Piece, types::Square};
 
@@ -76,8 +84,8 @@ pub fn permute_mailbox_ignoring(
 pub fn closest_occupied(bits: Vector) -> BitRays {
     unsafe {
         let occupied = _mm512_test_epi8_mask(bits.raw, bits.raw);
-        let o = occupied | 0x8181818181818181;
-        (o ^ o.wrapping_sub(0x0303030303030303)) & occupied
+        let o = occupied | 0x8181_8181_8181_8181;
+        (o ^ o.wrapping_sub(0x0303_0303_0303_0303)) & occupied
     }
 }
 
@@ -91,6 +99,6 @@ pub fn incoming_attackers(bits: Vector, closest: BitRays) -> BitRays {
 pub fn incoming_sliders(bits: Vector, closest: BitRays) -> BitRays {
     unsafe {
         let mask = _mm512_loadu_si512(INCOMING_SLIDERS_MASK.as_ptr().cast());
-        _mm512_test_epi8_mask(bits.raw, mask) & closest & 0xFEFEFEFEFEFEFEFE
+        _mm512_test_epi8_mask(bits.raw, mask) & closest & 0xFEFE_FEFE_FEFE_FEFE
     }
 }

@@ -32,6 +32,7 @@ impl Bit {
 
 pub type BitRays = u64;
 
+#[expect(clippy::cast_possible_truncation)]
 pub const PERMUTATION: [[u8; 64]; 64] = {
     let offsets = [
         0x1F, 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, // N

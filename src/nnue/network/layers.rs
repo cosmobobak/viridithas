@@ -421,6 +421,7 @@ mod simd {
         }
     }
 
+    #[allow(clippy::modulo_one)]
     pub fn propagate_l3(
         inputs: &Align64<[f32; L3_SIZE]>,
         weights: &Align64<[f32; L3_SIZE]>,

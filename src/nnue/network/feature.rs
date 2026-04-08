@@ -1,7 +1,7 @@
 use crate::{
     cfor,
     chess::{
-        board::movegen::{attacks_by_type, attacks_by_type_slow},
+        board::movegen::attacks_by_type_slow,
         piece::{Colour, Piece, PieceType},
         squareset::SquareSet,
         types::{File, Rank, Square},
