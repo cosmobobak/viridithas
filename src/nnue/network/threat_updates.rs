@@ -46,7 +46,11 @@ impl Direction for Incoming {
 
 #[cfg(target_feature = "avx512vbmi")]
 mod vbmi {
-    use std::arch::x86_64::*;
+    use std::arch::x86_64::{
+        __m128i, _mm_storeu_si128, _mm_unpackhi_epi16, _mm_unpacklo_epi8, _mm_unpacklo_epi16,
+        _mm512_castsi512_si128, _mm512_mask_mov_epi8, _mm512_maskz_compress_epi8,
+        _mm512_permutex2var_epi8, _mm512_set_epi8, _mm512_set1_epi16, _mm512_storeu_si512,
+    };
 
     use crate::{
         chess::{piece::Piece, types::Square},
@@ -270,7 +274,7 @@ pub use vbmi::*;
 #[cfg(not(target_feature = "avx512vbmi"))]
 pub use generic::*;
 
-pub fn update_piece_threats_on_change<Op: AddSub>(
+pub fn on_change<Op: AddSub>(
     updates: &mut ThreatUpdateBuffer,
     board: &Board,
     piece: Piece,
@@ -305,7 +309,7 @@ pub fn update_piece_threats_on_change<Op: AddSub>(
     );
 }
 
-pub fn update_piece_threats_on_mutate(
+pub fn on_mutate(
     updates: &mut ThreatUpdateBuffer,
     board: &Board,
     old_piece: Piece,
@@ -328,7 +332,7 @@ pub fn update_piece_threats_on_mutate(
     push_focus::<Add, Incoming>(updates, perm.indices, rays, incoming, new_piece, sq);
 }
 
-pub fn update_piece_threats_on_move(
+pub fn on_move(
     updates: &mut ThreatUpdateBuffer,
     board: &Board,
     old_piece: Piece,
@@ -433,7 +437,7 @@ mod tests {
         let mut buf = ThreatUpdateBuffer::default();
         for sq in non_kings {
             let piece = board.state.mailbox[sq].unwrap();
-            update_piece_threats_on_change::<Add>(&mut buf, board, piece, sq);
+            on_change::<Add>(&mut buf, board, piece, sq);
         }
 
         // Filter out king threats, then sort to group duplicates.
@@ -546,13 +550,13 @@ mod tests {
         let piece = board_before.state.mailbox[m.from()].unwrap();
 
         // Remove threats before the move
-        update_piece_threats_on_change::<Sub>(&mut buf, &board_before, piece, m.from());
+        on_change::<Sub>(&mut buf, &board_before, piece, m.from());
 
         let mut board_after = board_before.clone();
         board_after.make_move_simple(m);
 
         // Add threats after the move
-        update_piece_threats_on_change::<Add>(&mut buf, &board_after, piece, m.to());
+        on_change::<Add>(&mut buf, &board_after, piece, m.to());
 
         // Apply diff: remove subs, add adds, filtering king threats
         let mut result = threats_before;

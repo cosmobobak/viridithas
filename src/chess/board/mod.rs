@@ -24,7 +24,10 @@ use crate::{
     cuckoo,
     errors::MoveParseError,
     lookups::{CASTLE_KEYS, EP_KEYS, HM_CLOCK_KEYS, PIECE_KEYS, SIDE_KEY},
-    nnue::network::{MovedPiece, NNUEState, PsqtFeatureUpdate, PsqtUpdateBuffer},
+    nnue::network::{
+        MovedPiece, NNUEState, PsqtFeatureUpdate, UpdateBuffer,
+        threat_updates::{self, Add, Sub},
+    },
     search::pv::PVariation,
 };
 
@@ -734,11 +737,11 @@ impl Board {
     }
 
     pub fn make_move_simple(&mut self, m: Move) {
-        self.make_move_base(m, &mut PsqtUpdateBuffer::default());
+        self.make_move_base(m, &mut UpdateBuffer::default());
     }
 
     #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
-    pub fn make_move_base(&mut self, m: Move, update_buffer: &mut PsqtUpdateBuffer) {
+    pub fn make_move_base(&mut self, m: Move, update_buffer: &mut UpdateBuffer) {
         debug_assert!(self.is_pseudo_legal(m));
         debug_assert!(self.is_legal(m));
 
@@ -761,9 +764,9 @@ impl Board {
         if !castle {
             if m.is_promo() {
                 // just remove the source piece, as a different piece will be arriving here
-                update_buffer.clear_piece(from, piece);
+                update_buffer.psqt.clear_piece(from, piece);
             } else {
-                update_buffer.move_piece(from, to, piece);
+                update_buffer.psqt.move_piece(from, to, piece);
             }
         }
 
@@ -774,8 +777,10 @@ impl Board {
             }
             .unwrap();
             let to_clear = Piece::new(side.flip(), PieceType::Pawn);
+            threat_updates::on_change::<Sub>(&mut update_buffer.threat, self, to_clear, clear_at);
+            self.state.mailbox[clear_at] = None;
             self.state.bbs.clear_piece_at(clear_at, to_clear);
-            update_buffer.clear_piece(clear_at, to_clear);
+            update_buffer.psqt.clear_piece(clear_at, to_clear);
         } else if castle {
             self.state.bbs.clear_piece_at(from, piece);
             let to_file = Some(to.file());
@@ -790,12 +795,12 @@ impl Board {
                 unreachable!()
             };
             if from != to {
-                update_buffer.move_piece(from, to, piece);
+                update_buffer.psqt.move_piece(from, to, piece);
             }
             if rook_from != rook_to {
                 let rook = Piece::new(side, PieceType::Rook);
                 self.state.bbs.move_piece(rook_from, rook_to, rook);
-                update_buffer.move_piece(rook_from, rook_to, rook);
+                update_buffer.psqt.move_piece(rook_from, rook_to, rook);
             }
         }
 
@@ -803,8 +808,10 @@ impl Board {
 
         if let Some(captured) = captured {
             self.state.fifty_move_counter = 0;
+            threat_updates::on_mutate(&mut update_buffer.threat, self, captured, piece, to);
+            self.state.mailbox[to] = Some(piece);
             self.state.bbs.clear_piece_at(to, captured);
-            update_buffer.clear_piece(to, captured);
+            update_buffer.psqt.clear_piece(to, captured);
         }
 
         if let Some(ep_sq) = self.state.ep_square {
@@ -833,15 +840,58 @@ impl Board {
         }
 
         if let Some(promo) = m.promotion_type() {
-            let promo = Piece::new(side, promo);
-            debug_assert!(promo.piece_type().legal_promo());
+            let promo_piece = Piece::new(side, promo);
+            debug_assert!(promo_piece.piece_type().legal_promo());
             self.state.bbs.clear_piece_at(from, piece);
-            self.state.bbs.set_piece_at(to, promo);
-            update_buffer.add_piece(to, promo);
+            self.state.bbs.set_piece_at(to, promo_piece);
+            // update mailbox: remove pawn, place promoted piece
+            self.state.mailbox[from] = None;
+            self.state.mailbox[to] = Some(promo_piece);
+            // geometry: pawn removed from `from`, promoted piece added at `to`
+            // todo: is on_move correct instead?
+            threat_updates::on_change::<Sub>(&mut update_buffer.threat, self, piece, from);
+            threat_updates::on_change::<Add>(&mut update_buffer.threat, self, promo_piece, to);
+            update_buffer.psqt.add_piece(to, promo_piece);
         } else if castle {
             self.state.bbs.set_piece_at(to, piece); // stupid hack for piece-swapping
+            // update mailbox for castling: king and rook both moved.
+            // clear old positions, set new positions.
+            self.state.mailbox[from] = None;
+            self.state.mailbox[to] = Some(piece);
+            // rook movement: rook_from is the original `to` of the castle-encoded move.
+            let rook_from = m.to();
+            let rook_to = if to.file() == File::G {
+                Square::F1.relative_to(side)
+            } else {
+                Square::D1.relative_to(side)
+            };
+            if rook_from != rook_to {
+                let rook = Piece::new(side, PieceType::Rook);
+                self.state.mailbox[rook_from] = None;
+                self.state.mailbox[rook_to] = Some(rook);
+                // geometry: king moved, rook moved
+                threat_updates::on_move(
+                    &mut update_buffer.threat,
+                    self,
+                    rook,
+                    rook_from,
+                    rook,
+                    rook_to,
+                );
+            }
+            // king move
+            threat_updates::on_move(&mut update_buffer.threat, self, piece, from, piece, to);
+        } else if captured.is_some() {
+            self.state.bbs.move_piece(from, to, piece);
+            // update mailbox and compute threats for the moving piece
+            self.state.mailbox[from] = None;
+            threat_updates::on_change::<Sub>(&mut update_buffer.threat, self, piece, from);
         } else {
             self.state.bbs.move_piece(from, to, piece);
+            // update mailbox and compute threats for the moving piece
+            self.state.mailbox[from] = None;
+            self.state.mailbox[to] = Some(piece);
+            threat_updates::on_move(&mut update_buffer.threat, self, piece, from, piece, to);
         }
 
         self.side = self.side.flip();
@@ -876,8 +926,7 @@ impl Board {
 
         // apply all the updates to the zobrist hash
         self.state.keys.zobrist ^= SIDE_KEY;
-        for &PsqtFeatureUpdate { sq, piece } in update_buffer.subs() {
-            self.state.mailbox[sq] = None;
+        for &PsqtFeatureUpdate { sq, piece } in update_buffer.psqt.subs() {
             let piece_key = PIECE_KEYS[piece][sq];
             self.state.keys.zobrist ^= piece_key;
             if piece.piece_type() == PieceType::Pawn {
@@ -894,8 +943,7 @@ impl Board {
                 }
             }
         }
-        for &PsqtFeatureUpdate { sq, piece } in update_buffer.adds() {
-            self.state.mailbox[sq] = Some(piece);
+        for &PsqtFeatureUpdate { sq, piece } in update_buffer.psqt.adds() {
             let piece_key = PIECE_KEYS[piece][sq];
             self.state.keys.zobrist ^= piece_key;
             if piece.piece_type() == PieceType::Pawn {
@@ -997,21 +1045,20 @@ impl Board {
     }
 
     pub fn make_move_nnue(&mut self, m: Move, nnue: &mut NNUEState) {
-        let mut update_buffer = PsqtUpdateBuffer::default();
+        let update_buffer = &mut nnue.updates[nnue.current_acc];
+        update_buffer.clear();
         let piece = self.state.mailbox[m.from()].unwrap();
 
-        self.make_move_base(m, &mut update_buffer);
+        self.make_move_base(m, update_buffer);
 
         nnue.moves[nnue.current_acc] = MovedPiece {
             from: m.from(),
             to: m.to(),
             piece,
         };
-        // todo: don’t needlessly copy, just operate in place
-        nnue.psqt_updates[nnue.current_acc] = update_buffer;
-        // todo: be less weird about mutation
+        nnue.psqt_correct[nnue.current_acc + 1] = [false; 2];
+        nnue.threat_correct[nnue.current_acc + 1] = [false; 2];
         nnue.current_acc += 1;
-        nnue.psqt_correct[nnue.current_acc] = [false; 2];
     }
 
     pub fn unmake_move_nnue(&mut self, nnue: &mut NNUEState) {

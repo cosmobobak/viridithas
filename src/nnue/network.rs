@@ -1240,12 +1240,17 @@ impl PsqtUpdateBuffer {
     pub fn subs(&self) -> &[PsqtFeatureUpdate] {
         &self.sub[..]
     }
+
+    pub fn clear(&mut self) {
+        self.add.clear();
+        self.sub.clear();
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, Default)]
 pub struct ThreatUpdateBuffer {
-    add: ArrayVec<ThreatFeatureUpdate, 128>,
-    sub: ArrayVec<ThreatFeatureUpdate, 128>,
+    pub add: ArrayVec<ThreatFeatureUpdate, 128>,
+    pub sub: ArrayVec<ThreatFeatureUpdate, 128>,
 }
 
 impl ThreatUpdateBuffer {
@@ -1255,6 +1260,25 @@ impl ThreatUpdateBuffer {
 
     pub fn subs(&self) -> &[ThreatFeatureUpdate] {
         &self.sub[..]
+    }
+
+    pub fn clear(&mut self) {
+        self.add.clear();
+        self.sub.clear();
+    }
+}
+
+/// Combined PSQT + threat update buffer, filled during move-making.
+#[derive(PartialEq, Eq, Clone, Debug, Default)]
+pub struct UpdateBuffer {
+    pub psqt: PsqtUpdateBuffer,
+    pub threat: ThreatUpdateBuffer,
+}
+
+impl UpdateBuffer {
+    pub fn clear(&mut self) {
+        self.psqt.clear();
+        self.threat.clear();
     }
 }
 
@@ -1330,17 +1354,16 @@ impl AccUpdateType for ThreatUpdate {
 pub struct NNUEState {
     /// Board-state accumulators for the first layer.
     pub psqt_accumulators: [Accumulator; ACC_STACK_SIZE],
-    /// Diffs for the PSQT updates.
-    pub psqt_updates: [PsqtUpdateBuffer; ACC_STACK_SIZE],
     /// “dirty” flags for the PSQT accumulators.
     pub psqt_correct: [[bool; 2]; ACC_STACK_SIZE],
 
     /// Threat-state accumulators for the first layer.
     pub threat_accumulators: [Accumulator; ACC_STACK_SIZE],
-    /// Diffs for the threat updates.
-    pub threat_updates: [ThreatUpdateBuffer; ACC_STACK_SIZE],
     /// “dirty” flags for the threat accumulators.
     pub threat_correct: [[bool; 2]; ACC_STACK_SIZE],
+
+    /// Diffs for the updates.
+    pub updates: [UpdateBuffer; ACC_STACK_SIZE],
 
     /// Moves made for update computation.
     pub moves: [MovedPiece; ACC_STACK_SIZE],
@@ -1509,7 +1532,7 @@ impl NNUEState {
             let (front, back) = stack.split_at_mut(curr_index + 1);
             let src_acc = front.last().unwrap();
             let tgt_acc = back.first_mut().unwrap();
-            let updates = &self.psqt_updates[curr_index];
+            let updates = &self.updates[curr_index].psqt;
 
             Self::materialise_new_acc_from(src_acc, tgt_acc, updates, king, colour, nnue_params);
 
@@ -1584,10 +1607,10 @@ impl NNUEState {
             let mut subs = ArrayVec::<_, 32>::new();
 
             loop {
-                for &add in self.psqt_updates[curr_index].adds() {
+                for &add in self.updates[curr_index].psqt.adds() {
                     adds.push(feature::psqt_index(C::COLOUR, king, add));
                 }
-                for &sub in self.psqt_updates[curr_index].subs() {
+                for &sub in self.updates[curr_index].psqt.subs() {
                     subs.push(feature::psqt_index(C::COLOUR, king, sub));
                 }
 
@@ -1630,7 +1653,7 @@ impl NNUEState {
         let mut budget = pos.state.bbs.occupied().count() as i32;
         while idx > 0 && !self.psqt_correct[idx][C::COLOUR] {
             let mv = self.moves[idx - 1];
-            let psqt_updates = &self.psqt_updates[idx - 1];
+            let psqt_updates = &self.updates[idx - 1].psqt;
             if mv.piece.colour() == C::COLOUR
                 // wrote PsqtUpdate to fix lint, as-yet unsure of correctness
                 && Self::requires_refresh::<PsqtUpdate>(
