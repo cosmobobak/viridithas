@@ -1198,7 +1198,7 @@ pub struct PsqtFeatureUpdate {
 }
 
 /// Struct representing some unmaterialised threat update made as part of a move.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(C)]
 pub struct ThreatFeatureUpdate {
     pub attacker: Piece,

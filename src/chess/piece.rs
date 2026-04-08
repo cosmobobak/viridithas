@@ -86,7 +86,7 @@ impl Display for PieceType {
 }
 
 #[rustfmt::skip]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
 #[repr(u8)]
 pub enum Piece {
     #[default]

@@ -284,7 +284,7 @@ pub fn update_piece_threats_on_change<Op: AddSub>(
     let closest = geometry::closest_occupied(bits);
     let outgoing_threats = geometry::outgoing_threats(piece, closest);
     let incoming_attackers = geometry::incoming_attackers(bits, closest);
-    let incoming_sliders = geometry::incoming_attackers(bits, closest);
+    let incoming_sliders = geometry::incoming_sliders(bits, closest);
 
     // push focus-square relative threats
     push_focus::<Op, Outgoing>(updates, perm.indices, rays, outgoing_threats, piece, sq);
@@ -377,4 +377,256 @@ pub fn update_piece_threats_on_move(
         dst_sliders & dst_valid,
         dst_victim_mask & dst_valid,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fmt::Display;
+
+    use crate::chess::{
+        board::{Board, movegen::attacks_by_type},
+        piece::PieceType,
+    };
+
+    use super::*;
+
+    const STARTPOS: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    const KIWIPETE: &str = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+
+    fn is_king_threat(t: ThreatFeatureUpdate) -> bool {
+        t.attacker.piece_type() == PieceType::King || t.victim.piece_type() == PieceType::King
+    }
+
+    /// Collect threats using the simple attack-table method.
+    /// Each threat appears exactly once.
+    fn collect_threats_simple(board: &Board) -> Vec<ThreatFeatureUpdate> {
+        let mut threats = Vec::new();
+        let bbs = &board.state.bbs;
+        let occ = bbs.occupied();
+        let non_kings = occ & !bbs.pieces[PieceType::King];
+
+        for from in non_kings {
+            let attacker = board.state.mailbox[from].unwrap();
+            let targets = occ & attacks_by_type(attacker, from, occ) & !bbs.pieces[PieceType::King];
+            for to in targets {
+                let victim = board.state.mailbox[to].unwrap();
+                threats.push(ThreatFeatureUpdate {
+                    attacker,
+                    from,
+                    victim,
+                    to,
+                });
+            }
+        }
+        threats.sort();
+        threats
+    }
+
+    /// Collect threats using the geometry module.
+    /// Each threat should appear exactly twice (once outgoing, once incoming).
+    /// We verify the duplication, then deduplicate.
+    fn collect_threats_geometry(board: &Board) -> Vec<ThreatFeatureUpdate> {
+        let bbs = &board.state.bbs;
+        let occ = bbs.occupied();
+        let non_kings = occ & !bbs.pieces[PieceType::King];
+
+        let mut buf = ThreatUpdateBuffer::default();
+        for sq in non_kings {
+            let piece = board.state.mailbox[sq].unwrap();
+            update_piece_threats_on_change::<Add>(&mut buf, board, piece, sq);
+        }
+
+        // Filter out king threats, then sort to group duplicates.
+        let mut threats: Vec<_> = buf
+            .adds()
+            .iter()
+            .copied()
+            .filter(|&t| !is_king_threat(t))
+            .collect();
+        threats.sort();
+
+        // Every non-king threat must appear exactly twice
+        // (once as outgoing from attacker's focus, once as incoming to victim's focus).
+        assert!(
+            threats.len().is_multiple_of(2),
+            "odd number of threats {len}, cannot be all duplicates",
+            len = threats.len(),
+        );
+        threats
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|&[a, b]| {
+                assert!(
+                    a == b,
+                    "threat {t:?} does not appear exactly twice (position {i} of {len})",
+                    t = a,
+                    i = threats.as_ptr_range().start as usize / size_of::<ThreatFeatureUpdate>(),
+                    len = threats.len(),
+                );
+                a
+            })
+            .collect()
+    }
+
+    fn assert_threats_eq(
+        expected: &[ThreatFeatureUpdate],
+        actual: &[ThreatFeatureUpdate],
+        context: impl Display,
+    ) {
+        if expected == actual {
+            return;
+        }
+
+        let mut missing = Vec::new();
+        let mut extra = Vec::new();
+        let (mut ei, mut ai) = (0, 0);
+        while ei < expected.len() && ai < actual.len() {
+            match expected[ei].cmp(&actual[ai]) {
+                std::cmp::Ordering::Equal => {
+                    ei += 1;
+                    ai += 1;
+                }
+                std::cmp::Ordering::Less => {
+                    missing.push(expected[ei]);
+                    ei += 1;
+                }
+                std::cmp::Ordering::Greater => {
+                    extra.push(actual[ai]);
+                    ai += 1;
+                }
+            }
+        }
+        missing.extend_from_slice(&expected[ei..]);
+        extra.extend_from_slice(&actual[ai..]);
+
+        panic!(
+            "threat mismatch: {context}\n\
+             missing ({count_m}): {missing:?}\n\
+             extra ({count_e}): {extra:?}",
+            count_m = missing.len(),
+            count_e = extra.len(),
+        );
+    }
+
+    #[test]
+    fn startpos_threats_match() {
+        let board = Board::from_fen(STARTPOS).unwrap();
+        let simple = collect_threats_simple(&board);
+        let geometry = collect_threats_geometry(&board);
+        assert_threats_eq(&simple, &geometry, "startpos");
+    }
+
+    #[test]
+    fn kiwipete_threats_match() {
+        let board = Board::from_fen(KIWIPETE).unwrap();
+        let simple = collect_threats_simple(&board);
+        let geometry = collect_threats_geometry(&board);
+        assert_threats_eq(&simple, &geometry, "kiwipete");
+    }
+
+    fn check_threats_after_move(fen: &str, uci_move: &str) {
+        let board = Board::from_fen(fen).unwrap();
+        let m = board.parse_uci(uci_move).unwrap();
+        let mut board_after = board;
+        board_after.make_move_simple(m);
+
+        let simple = collect_threats_simple(&board_after);
+        let geometry = collect_threats_geometry(&board_after);
+        assert_threats_eq(&simple, &geometry, format!("after {uci_move} from {fen}"));
+    }
+
+    fn check_incremental_quiet(fen: &str, uci_move: &str) {
+        let board_before = Board::from_fen(fen).unwrap();
+        let m = board_before.parse_uci(uci_move).unwrap();
+
+        let threats_before = collect_threats_simple(&board_before);
+
+        let mut buf = ThreatUpdateBuffer::default();
+        let piece = board_before.state.mailbox[m.from()].unwrap();
+
+        // Remove threats before the move
+        update_piece_threats_on_change::<Sub>(&mut buf, &board_before, piece, m.from());
+
+        let mut board_after = board_before.clone();
+        board_after.make_move_simple(m);
+
+        // Add threats after the move
+        update_piece_threats_on_change::<Add>(&mut buf, &board_after, piece, m.to());
+
+        // Apply diff: remove subs, add adds, filtering king threats
+        let mut result = threats_before;
+        for &sub in buf.subs() {
+            if !is_king_threat(sub)
+                && let Ok(idx) = result.binary_search(&sub)
+            {
+                result.remove(idx);
+            }
+        }
+        for &add in buf.adds() {
+            if !is_king_threat(add) {
+                let idx = result.binary_search(&add).unwrap_err();
+                result.insert(idx, add);
+            }
+        }
+
+        let expected = collect_threats_simple(&board_after);
+        assert_threats_eq(
+            &expected,
+            &result,
+            format!("incremental after {uci_move} from {fen}"),
+        );
+    }
+
+    #[test]
+    fn startpos_threats_after_moves() {
+        check_threats_after_move(STARTPOS, "e2e4");
+        check_threats_after_move(STARTPOS, "g1f3");
+        check_threats_after_move(STARTPOS, "d2d4");
+    }
+
+    #[test]
+    fn kiwipete_threats_after_moves() {
+        check_threats_after_move(KIWIPETE, "e5d3");
+        check_threats_after_move(KIWIPETE, "f3f5");
+        check_threats_after_move(KIWIPETE, "e5f7");
+        check_threats_after_move(KIWIPETE, "d5e6");
+    }
+
+    #[test]
+    fn startpos_incremental_quiet() {
+        check_incremental_quiet(STARTPOS, "e2e4");
+        check_incremental_quiet(STARTPOS, "g1f3");
+        check_incremental_quiet(STARTPOS, "b1c3");
+    }
+
+    #[test]
+    fn kiwipete_incremental_quiet() {
+        check_incremental_quiet(KIWIPETE, "e5d3");
+        check_incremental_quiet(KIWIPETE, "f3f5");
+        check_incremental_quiet(KIWIPETE, "a1b1");
+    }
+
+    /// Exhaustive: for every legal move, verify geometry matches simple.
+    fn check_all_moves(fen: &str) {
+        let board = Board::from_fen(fen).unwrap();
+        for m in board.legal_moves() {
+            let mut board_after = board.clone();
+            board_after.make_move_simple(m);
+
+            let simple = collect_threats_simple(&board_after);
+            let geometry = collect_threats_geometry(&board_after);
+            assert_threats_eq(&simple, &geometry, format!("after {m:?} from {fen}"));
+        }
+    }
+
+    #[test]
+    fn startpos_all_moves() {
+        check_all_moves(STARTPOS);
+    }
+
+    #[test]
+    fn kiwipete_all_moves() {
+        check_all_moves(KIWIPETE);
+    }
 }
