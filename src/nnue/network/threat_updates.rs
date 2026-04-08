@@ -358,9 +358,9 @@ pub fn on_move(
     let src_idxs = src_perm.indices;
     let dst_idxs = dst_perm.indices;
     push_focus::<Sub, Outgoing>(updates, src_idxs, src_rays, src_outgoing, old_piece, src);
-    push_focus::<Add, Outgoing>(updates, dst_idxs, dst_rays, dst_outgoing, new_piece, src);
+    push_focus::<Add, Outgoing>(updates, dst_idxs, dst_rays, dst_outgoing, new_piece, dst);
     push_focus::<Sub, Incoming>(updates, src_idxs, src_rays, src_incoming, old_piece, src);
-    push_focus::<Add, Incoming>(updates, dst_idxs, dst_rays, dst_incoming, new_piece, src);
+    push_focus::<Add, Incoming>(updates, dst_idxs, dst_rays, dst_incoming, new_piece, dst);
 
     let src_victim_mask = (src_closest & 0xFEFE_FEFE_FEFE_FEFE).rotate_right(32);
     let dst_victim_mask = (dst_closest & 0xFEFE_FEFE_FEFE_FEFE).rotate_right(32);
