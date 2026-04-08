@@ -285,8 +285,8 @@ impl ThreadData<'_> {
             + major * i64::from(self.info.conf.major_corrhist_weight)
             + minor * i64::from(self.info.conf.minor_corrhist_weight)
             + (white + black) * i64::from(self.info.conf.nonpawn_corrhist_weight)
-            + cont12 * i64::from(self.info.conf.continuation_corrhist_weight)
-            + cont14 * i64::from(self.info.conf.continuation_corrhist_weight);
+            + cont12 * i64::from(self.info.conf.continuation_12_corrhist_weight)
+            + cont14 * i64::from(self.info.conf.continuation_14_corrhist_weight);
 
         (adjustment * 12 / 0x40000) as i32
     }
