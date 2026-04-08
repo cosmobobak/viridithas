@@ -581,6 +581,9 @@ impl QuantisedNetwork {
         // permute the feature transformer biases
         repermute_ft_bias(&mut net.l0_biases, &self.l0_biases);
 
+        // repermute the threat plane weights
+        repermute_threat_weights(&mut net.l0_threat, &self.l0_threat);
+
         // transpose FT weights and biases so that packus transposes it back to the intended order
         if use_simd {
             type PermChunk<I> = [I; 8];
@@ -779,6 +782,24 @@ fn repermute_ft_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
             // and write it to the same feature (but the new position) in the target bucket.
             let feature = i * L1_SIZE;
             tgt_bucket[feature + tgt_index] = unsorted[feature + src_index];
+        }
+    }
+}
+
+fn repermute_threat_weights(
+    tgt: &mut Align64<[i8; THREAT_FEATURES * L1_SIZE]>,
+    unsorted: &[i8; THREAT_FEATURES * L1_SIZE],
+) {
+    for i in 0..THREAT_FEATURES {
+        for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
+            let feature = i * L1_SIZE;
+            tgt[feature + tgt_index] = unsorted[feature + src_index];
+        }
+        for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
+            let tgt_index = tgt_index + L1_SIZE / 2;
+            let src_index = src_index + L1_SIZE / 2;
+            let feature = i * L1_SIZE;
+            tgt[feature + tgt_index] = unsorted[feature + src_index];
         }
     }
 }
