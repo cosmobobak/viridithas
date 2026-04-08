@@ -17,7 +17,7 @@ use crate::{cfor, chess::piece::Piece};
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
-pub(crate) struct Bit(u8);
+pub struct Bit(u8);
 
 #[rustfmt::skip]
 impl Bit {
