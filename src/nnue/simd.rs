@@ -1500,7 +1500,4 @@ pub fn trans_i8_i32(vec: VecI8) -> VecI32 {
     unsafe { VecI32::from_raw(std::mem::transmute(vec.inner())) }
 }
 
-#[cfg(any(target_arch = "x86_64", target_feature = "neon"))]
 pub const ARCH: &str = INNER_ARCH;
-#[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
-pub const ARCH: &str = "generic";

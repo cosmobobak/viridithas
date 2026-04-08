@@ -1,9 +1,25 @@
-use std::env;
+use std::{env, error::Error};
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
+    check_simd_support()?;
     prep_net();
     build_dependencies();
     generate_bindings();
+    Ok(())
+}
+
+fn check_simd_support() -> Result<(), Box<dyn Error>> {
+    let features = env::var("CARGO_CFG_TARGET_FEATURE").unwrap_or_default();
+    let supported = features.split(',').any(|f| matches!(f, "avx2" | "neon"));
+    if !supported {
+        return Err(
+            "viridithas requires at least AVX2 (x86_64) or NEON (aarch64). \
+             Hint: build with RUSTFLAGS=-Ctarget-cpu=native or \
+             -Ctarget-feature=+avx2"
+                .into(),
+        );
+    }
+    Ok(())
 }
 
 fn prep_net() {
