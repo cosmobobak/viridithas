@@ -9,9 +9,10 @@ use crate::{
 
 use super::{BitRays, INCOMING_SLIDERS_MASK, INCOMING_THREATS_MASK, PERMUTATION, PIECE_TO_BIT};
 
+#[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct Vector {
-    raw: [uint8x16_t; 4],
+    pub raw: [uint8x16_t; 4],
 }
 
 impl Vector {
@@ -54,8 +55,8 @@ impl Vector {
 }
 
 pub struct Permutation {
-    indices: Vector,
-    valid: Vector,
+    pub indices: Vector,
+    pub valid: Vector,
 }
 
 pub fn permutation_for(focus: Square) -> Permutation {

@@ -6,9 +6,10 @@ use crate::chess::{piece::Piece, types::Square};
 
 use super::{BitRays, INCOMING_SLIDERS_MASK, INCOMING_THREATS_MASK, PERMUTATION, PIECE_TO_BIT};
 
+#[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct Vector {
-    raw: __m512i,
+    pub raw: __m512i,
 }
 
 impl Vector {
@@ -22,8 +23,8 @@ impl Vector {
 }
 
 pub struct Permutation {
-    indices: Vector,
-    valid: u64,
+    pub indices: Vector,
+    pub valid: u64,
 }
 
 pub fn permutation_for(focus: Square) -> Permutation {

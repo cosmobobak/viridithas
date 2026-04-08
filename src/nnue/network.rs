@@ -1540,7 +1540,7 @@ impl NNUEState {
                     self.psqt_correct[self.current_acc][colour] = true;
                 }
 
-                if self.can_efficiently_update::<ThreatUpdate>(colour) {
+                if self.can_efficiently_update::<ThreatUpdate>(colour) && false {
                     self.apply_lazy_updates::<ThreatUpdate>(nnue_params, board, colour);
                 } else {
                     Self::refresh_threats(
@@ -1707,20 +1707,34 @@ impl NNUEState {
         let stm = board.turn();
         let out = output_bucket(board);
 
-        let acc = &self.psqt_accumulators[self.current_acc];
+        let psqt_acc = &self.psqt_accumulators[self.current_acc];
+        let thrt_acc = &self.threat_accumulators[self.current_acc];
 
-        let [us, them] = if stm == Colour::White {
-            acc.halves.each_ref()
+        let [stm_psqt, ntm_psqt] = if stm == Colour::White {
+            psqt_acc.halves.each_ref()
         } else {
-            [&acc.halves[Colour::Black], &acc.halves[Colour::White]]
+            [
+                &psqt_acc.halves[Colour::Black],
+                &psqt_acc.halves[Colour::White],
+            ]
+        };
+        let [stm_thrt, ntm_thrt] = if stm == Colour::White {
+            thrt_acc.halves.each_ref()
+        } else {
+            [
+                &thrt_acc.halves[Colour::Black],
+                &thrt_acc.halves[Colour::White],
+            ]
         };
 
         let mut l1_outputs = Align64([0.0; L2_SIZE]);
         let mut l2_outputs = Align64([0.0; L3_SIZE]);
 
         layers::activate_ft_and_propagate_l1(
-            us,
-            them,
+            stm_psqt,
+            ntm_psqt,
+            stm_thrt,
+            ntm_thrt,
             &nn.l1_weights[out],
             &nn.l1_bias[out],
             &mut l1_outputs,

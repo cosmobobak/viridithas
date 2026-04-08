@@ -257,8 +257,10 @@ mod simd {
         clippy::similar_names
     )]
     pub fn activate_ft_and_propagate_l1(
-        us: &Align64<[i16; L1_SIZE]>,
-        them: &Align64<[i16; L1_SIZE]>,
+        stm_psqt: &Align64<[i16; L1_SIZE]>,
+        ntm_psqt: &Align64<[i16; L1_SIZE]>,
+        stm_thrt: &Align64<[i16; L1_SIZE]>,
+        ntm_thrt: &Align64<[i16; L1_SIZE]>,
         weights: &Align64<[i8; L1_SIZE * L2_SIZE]>,
         biases: &Align64<[f32; L2_SIZE]>,
         output: &mut Align64<[f32; L2_SIZE]>,
@@ -297,70 +299,75 @@ mod simd {
             let increment = simd::v128_splat(8);
 
             let mut offset = 0;
-            for acc in [us, them] {
-                let acc_ptr = acc.as_ptr();
+            for [psqt, thrt] in [[stm_psqt, stm_thrt], [ntm_psqt, ntm_thrt]] {
+                let psqt_ptr = psqt.as_ptr();
+                let thrt_ptr = thrt.as_ptr();
 
-                for i in (0..L1_PAIR_COUNT).step_by(I16_CHUNK * 2 * 2) {
+                for i in (0..L1_PAIR_COUNT).step_by(I16_CHUNK * 2) {
                     // load the left-hand pair inputs
-                    let input0a = simd::load_i16(acc_ptr.add(i + 0 * I16_CHUNK));
-                    let input0b = simd::load_i16(acc_ptr.add(i + 1 * I16_CHUNK));
-                    let input0c = simd::load_i16(acc_ptr.add(i + 2 * I16_CHUNK));
-                    let input0d = simd::load_i16(acc_ptr.add(i + 3 * I16_CHUNK));
+                    let input0ap = simd::load_i16(psqt_ptr.add(i + 0 * I16_CHUNK));
+                    let input0bp = simd::load_i16(psqt_ptr.add(i + 1 * I16_CHUNK));
+                    let input0at = simd::load_i16(thrt_ptr.add(i + 0 * I16_CHUNK));
+                    let input0bt = simd::load_i16(thrt_ptr.add(i + 1 * I16_CHUNK));
+
+                    // combine
+                    let input0a = simd::add_i16(input0ap, input0at);
+                    let input0b = simd::add_i16(input0bp, input0bt);
 
                     // load the right-hand pair inputs
                     let j = i + L1_PAIR_COUNT;
-                    let input1a = simd::load_i16(acc_ptr.add(j + 0 * I16_CHUNK));
-                    let input1b = simd::load_i16(acc_ptr.add(j + 1 * I16_CHUNK));
-                    let input1c = simd::load_i16(acc_ptr.add(j + 2 * I16_CHUNK));
-                    let input1d = simd::load_i16(acc_ptr.add(j + 3 * I16_CHUNK));
+                    let input1ap = simd::load_i16(psqt_ptr.add(j + 0 * I16_CHUNK));
+                    let input1bp = simd::load_i16(psqt_ptr.add(j + 1 * I16_CHUNK));
+                    let input1at = simd::load_i16(thrt_ptr.add(j + 0 * I16_CHUNK));
+                    let input1bt = simd::load_i16(thrt_ptr.add(j + 1 * I16_CHUNK));
+
+                    // combine
+                    let input1a = simd::add_i16(input1ap, input1at);
+                    let input1b = simd::add_i16(input1bp, input1bt);
 
                     // crelu the left-hand inputs
                     let clipped0a = simd::min_i16(simd::max_i16(input0a, ft_zero), ft_one);
                     let clipped0b = simd::min_i16(simd::max_i16(input0b, ft_zero), ft_one);
-                    let clipped0c = simd::min_i16(simd::max_i16(input0c, ft_zero), ft_one);
-                    let clipped0d = simd::min_i16(simd::max_i16(input0d, ft_zero), ft_one);
 
                     // clip the right-hand inputs from above
                     let clipped1a = simd::min_i16(input1a, ft_one);
                     let clipped1b = simd::min_i16(input1b, ft_one);
-                    let clipped1c = simd::min_i16(input1c, ft_one);
-                    let clipped1d = simd::min_i16(input1d, ft_one);
 
-                    // shift and mulhi such that the high bits we get are equal to crelu(x1) × crelu(x2)
+                    // shift and mulhi such that the high bits we get are equal to crelu(x₁) × crelu(x₂)
                     let producta = simd::shift_mul_high_i16::<SHIFT>(clipped0a, clipped1a);
                     let productb = simd::shift_mul_high_i16::<SHIFT>(clipped0b, clipped1b);
-                    let productc = simd::shift_mul_high_i16::<SHIFT>(clipped0c, clipped1c);
-                    let productd = simd::shift_mul_high_i16::<SHIFT>(clipped0d, clipped1d);
 
                     // pack the resulting values in to u8s
                     let product_one = simd::pack_i16_to_u8(producta, productb);
-                    let product_two = simd::pack_i16_to_u8(productc, productd);
 
                     // store to the ft output buffer
-                    let ft_o_ptr = ft_outputs.as_mut_ptr();
-                    simd::store_u8(ft_o_ptr.add(offset + i).cast(), product_one);
-                    simd::store_u8(ft_o_ptr.add(offset + i + U8_CHUNK).cast(), product_two);
-
-                    // determine which parts of the result are non-zero, to allow l1 propagation to happen sparsely
-                    let mut nnz_mask = 0;
-                    nnz_mask |= u32::from(simd::nonzero_mask_i32(simd::trans_i8_i32(product_one)));
-                    nnz_mask |= u32::from(simd::nonzero_mask_i32(simd::trans_i8_i32(product_two)))
-                        << NNZ_INPUT_SIMD_WIDTH;
-
-                    // store the non-zero indices into the nnz buffer
-                    for j in 0..NNZ_OUTPUTS_PER_CHUNK {
-                        let lookup = (nnz_mask >> (j * 8)) & 0xFF;
-                        let entry = NNZ_TABLE.table.as_ptr().add(lookup as usize);
-                        let offsets = simd::v128_load(entry.cast());
-                        simd::v128_store(
-                            nnz.as_mut_ptr().add(nnz_count).cast(),
-                            simd::v128_add(base, offsets),
-                        );
-                        nnz_count += u32::count_ones(lookup) as usize;
-                        base = simd::v128_add(base, increment);
-                    }
+                    simd::store_u8(ft_outputs.as_mut_ptr().add(offset + i).cast(), product_one);
                 }
                 offset += L1_PAIR_COUNT;
+            }
+
+            // determine which parts of the result are non-zero, to allow l1 propagation to happen sparsely
+            for i in (0..L1_SIZE).step_by(U8_CHUNK * 2) {
+                let product_one = simd::load_u8(ft_outputs.as_ptr().add(i).cast());
+                let product_two = simd::load_u8(ft_outputs.as_ptr().add(i + U8_CHUNK).cast());
+
+                let mut nnz_mask = 0;
+                nnz_mask |= u32::from(simd::nonzero_mask_i32(simd::trans_i8_i32(product_one)));
+                nnz_mask |= u32::from(simd::nonzero_mask_i32(simd::trans_i8_i32(product_two)))
+                    << NNZ_INPUT_SIMD_WIDTH;
+
+                // store the non-zero indices into the nnz buffer
+                for j in 0..NNZ_OUTPUTS_PER_CHUNK {
+                    let lookup = (nnz_mask >> (j * 8)) & 0xFF;
+                    let entry = NNZ_TABLE.table.as_ptr().add(lookup as usize);
+                    let offsets = simd::v128_load(entry.cast());
+                    simd::v128_store(
+                        nnz.as_mut_ptr().add(nnz_count).cast(),
+                        simd::v128_add(base, offsets),
+                    );
+                    nnz_count += u32::count_ones(lookup) as usize;
+                    base = simd::v128_add(base, increment);
+                }
             }
 
             let nnz_slice = std::slice::from_raw_parts(nnz.as_ptr().cast::<u16>(), nnz_count);

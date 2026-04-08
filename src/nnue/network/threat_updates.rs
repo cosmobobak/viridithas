@@ -67,6 +67,7 @@ mod vbmi {
         piece: Piece,              // piece on the focus square
         sq: Square,                // the focus square
     ) {
+        // Safety: TODO
         unsafe {
             #[rustfmt::skip]
             let pair2_shuffle = _mm512_set_epi8(
@@ -85,8 +86,8 @@ mod vbmi {
             let pair1 = _mm512_set1_epi16(piece as i16 | ((sq as i16) << 8));
 
             // non-focus:
-            let pair2_sq = _mm512_maskz_compress_epi8(br.0, indices.raw);
-            let pair2_piece = _mm512_maskz_compress_epi8(br.0, rays.raw);
+            let pair2_sq = _mm512_maskz_compress_epi8(br, indices.raw);
+            let pair2_piece = _mm512_maskz_compress_epi8(br, rays.raw);
             let pair2 = _mm512_permutex2var_epi8(pair2_piece, pair2_shuffle, pair2_sq);
 
             let mask = if Dir::OUTGOING {
@@ -97,7 +98,7 @@ mod vbmi {
 
             let vector = _mm512_mask_mov_epi8(pair1, mask, pair2);
 
-            let mut buffer = if Op::ADD {
+            let buffer = if Op::ADD {
                 &mut updates.add
             } else {
                 &mut updates.sub
@@ -107,7 +108,7 @@ mod vbmi {
 
             _mm512_storeu_si512(ptr.cast(), vector);
 
-            buffer.set_len(buffer.len() + br.0.count_ones() as usize);
+            buffer.set_len(buffer.len() + br.count_ones() as usize);
         }
     }
 
@@ -118,17 +119,18 @@ mod vbmi {
         sliders: geometry::BitRays,
         victims: geometry::BitRays,
     ) {
+        // Safety: TODO
         unsafe {
-            let count = victims.0.count_ones();
+            let count = victims.count_ones();
 
-            debug_assert_eq!(count, sliders.0.count_ones());
+            debug_assert_eq!(count, sliders.count_ones());
 
-            let p1 = _mm512_castsi512_si128(_mm512_maskz_compress_epi8(sliders.0, rays.raw));
-            let sq1 = _mm512_castsi512_si128(_mm512_maskz_compress_epi8(sliders.0, idxs.raw));
+            let p1 = _mm512_castsi512_si128(_mm512_maskz_compress_epi8(sliders, rays.raw));
+            let sq1 = _mm512_castsi512_si128(_mm512_maskz_compress_epi8(sliders, idxs.raw));
             let rays = rays.flip();
             let idxs = idxs.flip();
-            let p2 = _mm512_castsi512_si128(_mm512_maskz_compress_epi8(victims.0, rays.raw));
-            let sq2 = _mm512_castsi512_si128(_mm512_maskz_compress_epi8(victims.0, idxs.raw));
+            let p2 = _mm512_castsi512_si128(_mm512_maskz_compress_epi8(victims, rays.raw));
+            let sq2 = _mm512_castsi512_si128(_mm512_maskz_compress_epi8(victims, idxs.raw));
 
             let pair1 = _mm_unpacklo_epi8(p1, sq1);
             let pair2 = _mm_unpacklo_epi8(p2, sq2);
@@ -262,7 +264,7 @@ mod generic {
 }
 
 #[cfg(target_feature = "avx512vbmi")]
-pub use vmbi::*;
+pub use vbmi::*;
 
 #[cfg(not(target_feature = "avx512vbmi"))]
 pub use generic::*;
