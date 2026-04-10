@@ -14,7 +14,7 @@ use crate::chess::{piece::Piece, types::Square};
 
 use super::{BitRays, INCOMING_SLIDERS_MASK, INCOMING_THREATS_MASK, PERMUTATION, PIECE_TO_BIT};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 #[repr(transparent)]
 pub struct Vector {
     pub raw: __m512i,
@@ -101,4 +101,8 @@ pub fn incoming_sliders(bits: Vector, closest: BitRays) -> BitRays {
         let mask = _mm512_loadu_si512(INCOMING_SLIDERS_MASK.as_ptr().cast());
         _mm512_test_epi8_mask(bits.raw, mask) & closest & 0xFEFE_FEFE_FEFE_FEFE
     }
+}
+
+pub fn king_positions(bits: Vector) -> BitRays {
+    unsafe { _mm512_test_epi8_mask(bits.raw, _mm512_set1_epi8(super::Bit::KING.0 as i8)) }
 }

@@ -1,7 +1,11 @@
 use std::mem::offset_of;
 
 use crate::{
-    chess::{board::Board, piece::Piece, types::Square},
+    chess::{
+        board::Board,
+        piece::{Piece, PieceType},
+        types::Square,
+    },
     nnue::{
         geometry,
         network::{ThreatFeatureUpdate, ThreatUpdateBuffer},
@@ -15,6 +19,12 @@ const _: () = const {
     assert!(offset_of!(ThreatFeatureUpdate, victim) == 2);
     assert!(offset_of!(ThreatFeatureUpdate, to) == 3);
 };
+
+#[cfg(debug_assertions)]
+fn is_king_threat(t: ThreatFeatureUpdate) -> bool {
+    t.attacker.piece_type() == crate::chess::piece::PieceType::King
+        || t.victim.piece_type() == crate::chess::piece::PieceType::King
+}
 
 pub trait AddSub {
     const ADD: bool;
@@ -72,6 +82,7 @@ mod vbmi {
         sq: Square,                // the focus square
     ) {
         // Safety: TODO
+        #[expect(clippy::debug_assert_with_mut_call)]
         unsafe {
             #[rustfmt::skip]
             let pair2_shuffle = _mm512_set_epi8(
@@ -108,11 +119,42 @@ mod vbmi {
                 &mut updates.sub
             };
 
+            debug_assert!(
+                buffer.len() + (br.count_ones() as usize) <= buffer.capacity(),
+                "threat update buffer overflow: cannot fit {count} more updates (len {}, capacity {})",
+                buffer.len(),
+                buffer.capacity(),
+                count = br.count_ones(),
+            );
+
+            // also make sure the writes themselves are of a reasonable size,
+            // we’re doing one SIMD store of 512 bits, which is 16 updates, so we should
+            // never have less than 16 capacity remaining.
+            debug_assert!(
+                buffer.capacity() - buffer.len() >= 16,
+                "threat update buffer overflow: cannot fit {count} more updates (len {}, capacity {}), and SIMD stores require at least 16 capacity remaining",
+                buffer.len(),
+                buffer.capacity(),
+                count = br.count_ones(),
+            );
+
             let ptr = buffer.as_mut_ptr().add(buffer.len());
 
             _mm512_storeu_si512(ptr.cast(), vector);
 
             buffer.set_len(buffer.len() + br.count_ones() as usize);
+
+            // check that no added threat is a king threat.
+            debug_assert!(
+                buffer[buffer.len() - br.count_ones() as usize..]
+                    .iter()
+                    .all(|t| !crate::nnue::network::threat_updates::is_king_threat(*t)),
+                "king threat added in focus threat update: ({piece} on {sq} with rays {rays:?} and indices {indices:?} and bitrays {br:064b})\n\
+                this arose when processing a change that caused {count} discovered threats, and the {verb} threats were {added:?}",
+                count = br.count_ones() as usize,
+                added = &buffer[buffer.len() - br.count_ones() as usize..],
+                verb = if Op::ADD { "added" } else { "removed" },
+            );
         }
     }
 
@@ -124,7 +166,7 @@ mod vbmi {
         victims: geometry::BitRays,
     ) {
         // Safety: TODO
-        #[expect(clippy::cast_ptr_alignment)]
+        #[expect(clippy::cast_ptr_alignment, clippy::debug_assert_with_mut_call)]
         unsafe {
             let count = victims.count_ones();
 
@@ -151,12 +193,42 @@ mod vbmi {
                 &mut updates.add
             };
 
+            debug_assert!(
+                buffer.len() + (count as usize) <= buffer.capacity(),
+                "threat update buffer overflow: cannot fit {count} more updates (len {}, capacity {})",
+                buffer.len(),
+                buffer.capacity(),
+            );
+
+            // also make sure the writes themselves are of a reasonable size,
+            // we’re doing two SIMD stores of 128 bits each, which is 4 updates
+            // per store, so we should never have less than 8 capacity remaining.
+            debug_assert!(
+                buffer.capacity() - buffer.len() >= 8,
+                "threat update buffer overflow: cannot fit {count} more updates (len {}, capacity {}), and SIMD stores require at least 8 capacity remaining",
+                buffer.len(),
+                buffer.capacity(),
+            );
+
             let ptr = buffer.as_mut_ptr().add(buffer.len());
 
             _mm_storeu_si128(ptr.cast::<__m128i>().add(0), tuple1);
             _mm_storeu_si128(ptr.cast::<__m128i>().add(1), tuple2);
 
             buffer.set_len(buffer.len() + count as usize);
+
+            // check that no added threat is a king threat.
+            debug_assert!(
+                buffer[buffer.len() - count as usize..]
+                    .iter()
+                    .all(|t| !crate::nnue::network::threat_updates::is_king_threat(*t)),
+                "king threat added in discovered threat update:\n\
+                 this arose when processing a change that caused {count} discovered threats, and the {verb} threats were {added:?}\n\
+                 arguments: idxs {idxs:?}, rays {rays:?}, sliders {sliders:064b}, victims {victims:064b}",
+                count = count,
+                added = &buffer[buffer.len() - count as usize..],
+                verb = if Op::ADD { "added" } else { "removed" },
+            );
         }
     }
 }
@@ -286,18 +358,21 @@ pub fn on_change<Op: AddSub>(
 
     // focus-square relative threats
     let closest = geometry::closest_occupied(bits);
-    let outgoing_threats = geometry::outgoing_threats(piece, closest);
-    let incoming_attackers = geometry::incoming_attackers(bits, closest);
+    let kings = geometry::king_positions(bits);
+    let outgoing_threats = geometry::outgoing_threats(piece, closest, kings);
     let incoming_sliders = geometry::incoming_sliders(bits, closest);
 
     // push focus-square relative threats
     push_focus::<Op, Outgoing>(updates, perm.indices, rays, outgoing_threats, piece, sq);
-    push_focus::<Op, Incoming>(updates, perm.indices, rays, incoming_attackers, piece, sq);
+    if piece.piece_type() != PieceType::King {
+        let incoming_attackers = geometry::incoming_attackers(bits, closest);
+        push_focus::<Op, Incoming>(updates, perm.indices, rays, incoming_attackers, piece, sq);
+    }
 
     // find discovered threats, from sliders looking through the focus square.
     // this is somewhat arcane, but one has it on good authority that it finds
     // all valid discovered threats ^^
-    let victim_mask = (closest & 0xFEFE_FEFE_FEFE_FEFE).rotate_right(32);
+    let victim_mask = (closest & 0xFEFE_FEFE_FEFE_FEFE & !kings).rotate_right(32);
     let valid = geometry::ray_fill(victim_mask) & geometry::ray_fill(incoming_sliders);
 
     push_discovered::<Op>(
@@ -322,14 +397,24 @@ pub fn on_mutate(
 
     // focus-square relative threats
     let closest = geometry::closest_occupied(bits);
-    let old_outgoing = geometry::outgoing_threats(old_piece, closest);
-    let new_outgoing = geometry::outgoing_threats(new_piece, closest);
-    let incoming = geometry::incoming_attackers(bits, closest);
+    let kings = geometry::king_positions(bits);
+    let old_outgoing = geometry::outgoing_threats(old_piece, closest, kings);
+    let new_outgoing = geometry::outgoing_threats(new_piece, closest, kings);
 
     push_focus::<Sub, Outgoing>(updates, perm.indices, rays, old_outgoing, old_piece, sq);
     push_focus::<Add, Outgoing>(updates, perm.indices, rays, new_outgoing, new_piece, sq);
-    push_focus::<Sub, Incoming>(updates, perm.indices, rays, incoming, old_piece, sq);
-    push_focus::<Add, Incoming>(updates, perm.indices, rays, incoming, new_piece, sq);
+    // Kings are not valid victims, so skip incoming threats when the focus piece is a king.
+    let old_is_king = old_piece.piece_type() == PieceType::King;
+    let new_is_king = new_piece.piece_type() == PieceType::King;
+    if !old_is_king || !new_is_king {
+        let incoming = geometry::incoming_attackers(bits, closest);
+        if !old_is_king {
+            push_focus::<Sub, Incoming>(updates, perm.indices, rays, incoming, old_piece, sq);
+        }
+        if !new_is_king {
+            push_focus::<Add, Incoming>(updates, perm.indices, rays, incoming, new_piece, sq);
+        }
+    }
 }
 
 pub fn on_move(
@@ -348,10 +433,10 @@ pub fn on_move(
 
     let src_closest = geometry::closest_occupied(src_bits);
     let dst_closest = geometry::closest_occupied(dst_bits);
-    let src_outgoing = geometry::outgoing_threats(old_piece, src_closest);
-    let dst_outgoing = geometry::outgoing_threats(new_piece, dst_closest);
-    let src_incoming = geometry::incoming_attackers(src_bits, src_closest);
-    let dst_incoming = geometry::incoming_attackers(dst_bits, dst_closest);
+    let src_kings = geometry::king_positions(src_bits);
+    let dst_kings = geometry::king_positions(dst_bits);
+    let src_outgoing = geometry::outgoing_threats(old_piece, src_closest, src_kings);
+    let dst_outgoing = geometry::outgoing_threats(new_piece, dst_closest, dst_kings);
     let src_sliders = geometry::incoming_sliders(src_bits, src_closest);
     let dst_sliders = geometry::incoming_sliders(dst_bits, dst_closest);
 
@@ -359,11 +444,17 @@ pub fn on_move(
     let dst_idxs = dst_perm.indices;
     push_focus::<Sub, Outgoing>(updates, src_idxs, src_rays, src_outgoing, old_piece, src);
     push_focus::<Add, Outgoing>(updates, dst_idxs, dst_rays, dst_outgoing, new_piece, dst);
-    push_focus::<Sub, Incoming>(updates, src_idxs, src_rays, src_incoming, old_piece, src);
-    push_focus::<Add, Incoming>(updates, dst_idxs, dst_rays, dst_incoming, new_piece, dst);
+    if old_piece.piece_type() != PieceType::King {
+        let src_incoming = geometry::incoming_attackers(src_bits, src_closest);
+        push_focus::<Sub, Incoming>(updates, src_idxs, src_rays, src_incoming, old_piece, src);
+    }
+    if new_piece.piece_type() != PieceType::King {
+        let dst_incoming = geometry::incoming_attackers(dst_bits, dst_closest);
+        push_focus::<Add, Incoming>(updates, dst_idxs, dst_rays, dst_incoming, new_piece, dst);
+    }
 
-    let src_victim_mask = (src_closest & 0xFEFE_FEFE_FEFE_FEFE).rotate_right(32);
-    let dst_victim_mask = (dst_closest & 0xFEFE_FEFE_FEFE_FEFE).rotate_right(32);
+    let src_victim_mask = (src_closest & 0xFEFE_FEFE_FEFE_FEFE & !src_kings).rotate_right(32);
+    let dst_victim_mask = (dst_closest & 0xFEFE_FEFE_FEFE_FEFE & !dst_kings).rotate_right(32);
     let src_valid = geometry::ray_fill(src_victim_mask) & geometry::ray_fill(src_sliders);
     let dst_valid = geometry::ray_fill(dst_victim_mask) & geometry::ray_fill(dst_sliders);
 
@@ -394,17 +485,13 @@ mod tests {
             board::{Board, movegen::attacks_by_type},
             piece::PieceType,
         },
-        nnue::network::feature::ThreatFeatureIndex,
+        nnue::network::{UpdateBuffer, feature::ThreatFeatureIndex},
     };
 
     use super::*;
 
     const STARTPOS: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     const KIWIPETE: &str = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
-
-    fn is_king_threat(t: ThreatFeatureUpdate) -> bool {
-        t.attacker.piece_type() == PieceType::King || t.victim.piece_type() == PieceType::King
-    }
 
     /// Collect threats using the simple attack-table method.
     /// Each threat appears exactly once.
@@ -429,53 +516,6 @@ mod tests {
         }
         threats.sort();
         threats
-    }
-
-    /// Collect threats using the geometry module.
-    /// Each threat should appear exactly twice (once outgoing, once incoming).
-    /// We verify the duplication, then deduplicate.
-    fn collect_threats_geometry(board: &Board) -> Vec<ThreatFeatureUpdate> {
-        let bbs = &board.state.bbs;
-        let occ = bbs.occupied();
-        let non_kings = occ & !bbs.pieces[PieceType::King];
-
-        let mut buf = ThreatUpdateBuffer::default();
-        for sq in non_kings {
-            let piece = board.state.mailbox[sq].unwrap();
-            on_change::<Add>(&mut buf, board, piece, sq);
-        }
-
-        // Filter out king threats, then sort to group duplicates.
-        let mut threats: Vec<_> = buf
-            .adds()
-            .iter()
-            .copied()
-            .filter(|&t| !is_king_threat(t))
-            .collect();
-        threats.sort();
-
-        // Every non-king threat must appear exactly twice
-        // (once as outgoing from attacker's focus, once as incoming to victim's focus).
-        assert!(
-            threats.len().is_multiple_of(2),
-            "odd number of threats {len}, cannot be all duplicates",
-            len = threats.len(),
-        );
-        threats
-            .as_chunks::<2>()
-            .0
-            .iter()
-            .map(|&[a, b]| {
-                assert!(
-                    a == b,
-                    "threat {t:?} does not appear exactly twice (position {i} of {len})",
-                    t = a,
-                    i = threats.as_ptr_range().start as usize / size_of::<ThreatFeatureUpdate>(),
-                    len = threats.len(),
-                );
-                a
-            })
-            .collect()
     }
 
     fn assert_threats_eq(
@@ -518,31 +558,26 @@ mod tests {
         );
     }
 
-    #[test]
-    fn startpos_threats_match() {
-        let board = Board::from_fen(STARTPOS).unwrap();
-        let simple = collect_threats_simple(&board);
-        let geometry = collect_threats_geometry(&board);
-        assert_threats_eq(&simple, &geometry, "startpos");
-    }
-
-    #[test]
-    fn kiwipete_threats_match() {
-        let board = Board::from_fen(KIWIPETE).unwrap();
-        let simple = collect_threats_simple(&board);
-        let geometry = collect_threats_geometry(&board);
-        assert_threats_eq(&simple, &geometry, "kiwipete");
-    }
-
     fn check_threats_after_move(fen: &str, uci_move: &str) {
         let board = Board::from_fen(fen).unwrap();
         let m = board.parse_uci(uci_move).unwrap();
+
+        let before = collect_threats_simple(&board);
+
         let mut board_after = board;
-        board_after.make_move_simple(m);
+
+        let mut buf = UpdateBuffer::default();
+        board_after.make_move_base(m, &mut buf);
 
         let simple = collect_threats_simple(&board_after);
-        let geometry = collect_threats_geometry(&board_after);
-        assert_threats_eq(&simple, &geometry, format!("after {uci_move} from {fen}"));
+
+        let incremental = apply_threat_diff(before, buf.threat.subs(), buf.threat.adds());
+
+        assert_threats_eq(
+            &simple,
+            &incremental,
+            format!("after {uci_move} from {fen}"),
+        );
     }
 
     fn check_incremental_quiet(fen: &str, uci_move: &str) {
@@ -616,16 +651,50 @@ mod tests {
         check_incremental_quiet(KIWIPETE, "a1b1");
     }
 
+    fn apply_threat_diff(
+        mut before: Vec<ThreatFeatureUpdate>,
+        subs: &[ThreatFeatureUpdate],
+        adds: &[ThreatFeatureUpdate],
+    ) -> Vec<ThreatFeatureUpdate> {
+        before.extend_from_slice(adds);
+        // before.retain(|t| !is_king_threat(*t));
+        before.sort_unstable();
+        for sub in subs {
+            // if is_king_threat(*sub) {
+            //     continue;
+            // }
+            if let Ok(idx) = before.binary_search(sub) {
+                before.remove(idx);
+            } else {
+                panic!("attempted to remove non-existent threat {sub:?}");
+            }
+        }
+        before
+    }
+
     /// Exhaustive: for every legal move, verify geometry matches simple.
     fn check_all_moves(fen: &str) {
         let board = Board::from_fen(fen).unwrap();
+        let threats_before = collect_threats_simple(&board);
         for m in board.legal_moves() {
+            eprintln!("checking move {m:?} from {fen}");
+
             let mut board_after = board.clone();
-            board_after.make_move_simple(m);
+            let mut buffer = UpdateBuffer::default();
+            board_after.make_move_base(m, &mut buffer);
 
             let simple = collect_threats_simple(&board_after);
-            let geometry = collect_threats_geometry(&board_after);
-            assert_threats_eq(&simple, &geometry, format!("after {m:?} from {fen}"));
+
+            let incremental = apply_threat_diff(
+                threats_before.clone(),
+                buffer.threat.subs(),
+                buffer.threat.adds(),
+            );
+            assert_threats_eq(
+                &simple,
+                &incremental,
+                format!("incremental after {m:?} from {fen}"),
+            );
         }
     }
 

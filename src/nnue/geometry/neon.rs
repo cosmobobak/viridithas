@@ -198,3 +198,18 @@ pub fn incoming_sliders(bits: Vector, closest: BitRays) -> BitRays {
         v.to_mask() & closest & 0xFEFE_FEFE_FEFE_FEFE
     }
 }
+
+pub fn king_positions(bits: Vector) -> BitRays {
+    unsafe {
+        let king_mask = vdupq_n_u8(super::Bit::KING.0);
+        let v = Vector {
+            raw: [
+                vtstq_u8(bits.raw[0], king_mask),
+                vtstq_u8(bits.raw[1], king_mask),
+                vtstq_u8(bits.raw[2], king_mask),
+                vtstq_u8(bits.raw[3], king_mask),
+            ],
+        };
+        v.to_mask()
+    }
+}

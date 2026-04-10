@@ -13,7 +13,10 @@ mod neon;
 #[cfg(target_feature = "neon")]
 pub use neon::*;
 
-use crate::{cfor, chess::piece::Piece};
+use crate::{
+    cfor,
+    chess::piece::Piece,
+};
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
@@ -140,6 +143,6 @@ pub fn ray_fill(mut br: BitRays) -> BitRays {
 }
 
 #[inline]
-pub fn outgoing_threats(piece: Piece, closest: BitRays) -> BitRays {
-    OUTGOING_THREATS[piece as usize] & closest
+pub fn outgoing_threats(piece: Piece, closest: BitRays, kings: BitRays) -> BitRays {
+    OUTGOING_THREATS[piece as usize] & closest & !kings
 }

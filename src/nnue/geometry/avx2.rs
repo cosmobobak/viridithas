@@ -209,3 +209,22 @@ pub fn incoming_sliders(bits: Vector, closest: BitRays) -> BitRays {
         !v.mask() & closest & 0xFEFE_FEFE_FEFE_FEFE
     }
 }
+
+pub fn king_positions(bits: Vector) -> BitRays {
+    unsafe {
+        let king_mask = _mm256_set1_epi8(super::Bit::KING.0 as i8);
+        let v = Vector {
+            raw: [
+                _mm256_cmpeq_epi8(
+                    _mm256_and_si256(bits.raw[0], king_mask),
+                    _mm256_setzero_si256(),
+                ),
+                _mm256_cmpeq_epi8(
+                    _mm256_and_si256(bits.raw[1], king_mask),
+                    _mm256_setzero_si256(),
+                ),
+            ],
+        };
+        !v.mask()
+    }
+}
