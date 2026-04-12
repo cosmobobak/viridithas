@@ -1331,6 +1331,20 @@ pub fn alpha_beta<NT: NodeType>(
             {
                 move_picker.skip_quiets = true;
             }
+
+            // futility pruning for tactical moves
+            let tactical_futility_value = eval + 70 * depth + 25;
+            if depth < 11
+                && move_picker.stage > Stage::YieldGoodCaptures
+                && !is_quiet
+                && tactical_futility_value < alpha
+                && !t.board.gives_check(m)
+            {
+                if !is_decisive(best_score) && best_score < tactical_futility_value {
+                    best_score = tactical_futility_value;
+                }
+                break;
+            }
         }
 
         // static exchange evaluation pruning
