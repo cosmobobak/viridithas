@@ -514,17 +514,12 @@ mod tests {
         // Apply diff: remove subs, add adds, filtering king threats
         let mut result = threats_before;
         for &sub in buf.subs() {
-            if !is_king_threat(sub)
-                && let Ok(idx) = result.binary_search(&sub)
-            {
-                result.remove(idx);
-            }
+            let idx = result.binary_search(&sub).unwrap();
+            result.remove(idx);
         }
         for &add in buf.adds() {
-            if !is_king_threat(add) {
-                let idx = result.binary_search(&add).unwrap_err();
-                result.insert(idx, add);
-            }
+            let idx = result.binary_search(&add).unwrap_err();
+            result.insert(idx, add);
         }
 
         let expected = collect_threats_simple(&board_after);
@@ -562,6 +557,11 @@ mod tests {
         check_incremental_quiet(KIWIPETE, "e5d3");
         check_incremental_quiet(KIWIPETE, "f3f5");
         check_incremental_quiet(KIWIPETE, "a1b1");
+    }
+
+    #[test]
+    fn kiwipete_c3b1_king_victim() {
+        check_incremental_quiet(KIWIPETE, "c3b1");
     }
 
     fn apply_threat_diff(
