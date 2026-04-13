@@ -283,10 +283,11 @@ pub fn on_change<Op: AddSub>(
     // make an index-list & rays for `sq`, the focus-square.
     let perm = geometry::permutation_for(sq);
     let (rays, bits) = geometry::permute_mailbox(&perm, &board.state.mailbox);
+    let non_king = !geometry::test_bit(bits, geometry::Bit::KING);
 
     // focus-square relative threats
     let closest = geometry::closest_occupied(bits);
-    let outgoing_threats = geometry::outgoing_threats(piece, closest);
+    let outgoing_threats = geometry::outgoing_threats(piece, closest & non_king);
     let incoming_attackers = geometry::incoming_attackers(bits, closest);
     let incoming_sliders = geometry::incoming_sliders(bits, closest);
 
@@ -294,8 +295,6 @@ pub fn on_change<Op: AddSub>(
     push_focus::<Op, Outgoing>(updates, perm.indices, rays, outgoing_threats, piece, sq);
     push_focus::<Op, Incoming>(updates, perm.indices, rays, incoming_attackers, piece, sq);
 
-    // mask off kings, which cannot be victims:
-    let non_king = !geometry::test_bit(bits, geometry::Bit::KING);
     // find discovered threats, from sliders looking through the focus square.
     // this is somewhat arcane, but one has it on good authority that it finds
     // all valid discovered threats ^^
@@ -321,11 +320,12 @@ pub fn on_mutate(
     // make an index-list & rays for `sq`, the focus-square.
     let perm = geometry::permutation_for(sq);
     let (rays, bits) = geometry::permute_mailbox(&perm, &board.state.mailbox);
+    let non_king = !geometry::test_bit(bits, geometry::Bit::KING);
 
     // focus-square relative threats
     let closest = geometry::closest_occupied(bits);
-    let old_outgoing = geometry::outgoing_threats(old_piece, closest);
-    let new_outgoing = geometry::outgoing_threats(new_piece, closest);
+    let old_outgoing = geometry::outgoing_threats(old_piece, closest & non_king);
+    let new_outgoing = geometry::outgoing_threats(new_piece, closest & non_king);
     let incoming = geometry::incoming_attackers(bits, closest);
 
     push_focus::<Sub, Outgoing>(updates, perm.indices, rays, old_outgoing, old_piece, sq);
@@ -347,11 +347,13 @@ pub fn on_move(
     let (src_rays, src_bits) =
         geometry::permute_mailbox_ignoring(&src_perm, &board.state.mailbox, dst);
     let (dst_rays, dst_bits) = geometry::permute_mailbox(&dst_perm, &board.state.mailbox);
+    let src_non_king = !geometry::test_bit(src_bits, geometry::Bit::KING);
+    let dst_non_king = !geometry::test_bit(dst_bits, geometry::Bit::KING);
 
     let src_closest = geometry::closest_occupied(src_bits);
     let dst_closest = geometry::closest_occupied(dst_bits);
-    let src_outgoing = geometry::outgoing_threats(old_piece, src_closest);
-    let dst_outgoing = geometry::outgoing_threats(new_piece, dst_closest);
+    let src_outgoing = geometry::outgoing_threats(old_piece, src_closest & src_non_king);
+    let dst_outgoing = geometry::outgoing_threats(new_piece, dst_closest & dst_non_king);
     let src_incoming = geometry::incoming_attackers(src_bits, src_closest);
     let dst_incoming = geometry::incoming_attackers(dst_bits, dst_closest);
     let src_sliders = geometry::incoming_sliders(src_bits, src_closest);
@@ -364,9 +366,6 @@ pub fn on_move(
     push_focus::<Sub, Incoming>(updates, src_idxs, src_rays, src_incoming, old_piece, src);
     push_focus::<Add, Incoming>(updates, dst_idxs, dst_rays, dst_incoming, new_piece, dst);
 
-    // mask off kings, which cannot be victims:
-    let src_non_king = !geometry::test_bit(src_bits, geometry::Bit::KING);
-    let dst_non_king = !geometry::test_bit(dst_bits, geometry::Bit::KING);
     let src_victim_mask = (src_closest & src_non_king & 0xFEFE_FEFE_FEFE_FEFE).rotate_right(32);
     let dst_victim_mask = (dst_closest & dst_non_king & 0xFEFE_FEFE_FEFE_FEFE).rotate_right(32);
     let src_valid = geometry::ray_fill(src_victim_mask) & geometry::ray_fill(src_sliders);
@@ -406,10 +405,6 @@ mod tests {
 
     const STARTPOS: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     const KIWIPETE: &str = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
-
-    fn is_king_threat(t: ThreatFeatureUpdate) -> bool {
-        t.attacker.piece_type() == PieceType::King || t.victim.piece_type() == PieceType::King
-    }
 
     /// Collect threats using the simple attack-table method.
     /// Each threat appears exactly once.
