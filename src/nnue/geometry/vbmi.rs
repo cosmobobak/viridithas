@@ -10,7 +10,10 @@ use std::arch::x86_64::{
     _mm512_shuffle_i64x2, _mm512_test_epi8_mask, _mm512_testn_epi8_mask,
 };
 
-use crate::chess::{piece::Piece, types::Square};
+use crate::{
+    chess::{piece::Piece, types::Square},
+    nnue::geometry::Bit,
+};
 
 use super::{BitRays, INCOMING_SLIDERS_MASK, INCOMING_THREATS_MASK, PERMUTATION, PIECE_TO_BIT};
 
@@ -101,4 +104,8 @@ pub fn incoming_sliders(bits: Vector, closest: BitRays) -> BitRays {
         let mask = _mm512_loadu_si512(INCOMING_SLIDERS_MASK.as_ptr().cast());
         _mm512_test_epi8_mask(bits.raw, mask) & closest & 0xFEFE_FEFE_FEFE_FEFE
     }
+}
+
+pub fn test_bit(bits: Vector, bit: Bit) -> BitRays {
+    unsafe { _mm512_test_epi8_mask(bits.raw, _mm512_set1_epi8(bit.0 as i8)) }
 }
