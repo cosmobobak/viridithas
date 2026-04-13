@@ -451,6 +451,8 @@ mod tests {
         actual: &[ThreatFeatureUpdate],
         context: impl Display,
     ) {
+        use std::cmp::Ordering::{Equal, Greater, Less};
+
         if expected == actual {
             return;
         }
@@ -460,15 +462,15 @@ mod tests {
         let (mut ei, mut ai) = (0, 0);
         while ei < expected.len() && ai < actual.len() {
             match expected[ei].cmp(&actual[ai]) {
-                std::cmp::Ordering::Equal => {
+                Equal => {
                     ei += 1;
                     ai += 1;
                 }
-                std::cmp::Ordering::Less => {
+                Less => {
                     missing.push(expected[ei]);
                     ei += 1;
                 }
-                std::cmp::Ordering::Greater => {
+                Greater => {
                     extra.push(actual[ai]);
                     ai += 1;
                 }
