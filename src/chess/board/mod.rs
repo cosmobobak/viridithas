@@ -854,11 +854,6 @@ impl Board {
             update_buffer.psqt.add_piece(to, promo_piece);
         } else if castle {
             self.state.bbs.set_piece_at(to, piece); // stupid hack for piece-swapping
-            // update mailbox for castling: king and rook both moved.
-            // clear old positions, set new positions.
-            // TODO: check if this OoO is okay given threat updates looking at the mailbox.
-            self.state.mailbox[from] = None;
-            self.state.mailbox[to] = Some(piece);
             // rook movement: rook_from is the original `to` of the castle-encoded move.
             let rook_from = m.to();
             let rook_to = if to.file() == File::G {
@@ -868,9 +863,10 @@ impl Board {
             };
             if rook_from != rook_to {
                 let rook = Piece::new(side, PieceType::Rook);
+                // update rook mailbox, then compute threats
+                // (on_move expects src empty, dst occupied)
                 self.state.mailbox[rook_from] = None;
                 self.state.mailbox[rook_to] = Some(rook);
-                // geometry: king moved, rook moved
                 threat_updates::on_move(
                     &mut update_buffer.threat,
                     self,
@@ -880,7 +876,9 @@ impl Board {
                     rook_to,
                 );
             }
-            // king move
+            // update king mailbox, then compute threats
+            self.state.mailbox[from] = None;
+            self.state.mailbox[to] = Some(piece);
             threat_updates::on_move(&mut update_buffer.threat, self, piece, from, piece, to);
         } else if captured.is_some() {
             self.state.bbs.move_piece(from, to, piece);
