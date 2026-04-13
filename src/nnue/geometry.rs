@@ -27,7 +27,7 @@ impl Bit {
     const BISHOP     : Self = Self(0x08);
     const ROOK       : Self = Self(0x10);
     const QUEEN      : Self = Self(0x20);
-    const KING       : Self = Self(0x40);
+    pub const KING   : Self = Self(0x40);
 }
 
 pub type BitRays = u64;

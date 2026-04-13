@@ -294,10 +294,12 @@ pub fn on_change<Op: AddSub>(
     push_focus::<Op, Outgoing>(updates, perm.indices, rays, outgoing_threats, piece, sq);
     push_focus::<Op, Incoming>(updates, perm.indices, rays, incoming_attackers, piece, sq);
 
+    // mask off kings, which cannot be victims:
+    let non_king = !geometry::test_bit(bits, geometry::Bit::KING);
     // find discovered threats, from sliders looking through the focus square.
     // this is somewhat arcane, but one has it on good authority that it finds
     // all valid discovered threats ^^
-    let victim_mask = (closest & 0xFEFE_FEFE_FEFE_FEFE).rotate_right(32);
+    let victim_mask = (closest & non_king & 0xFEFE_FEFE_FEFE_FEFE).rotate_right(32);
     let valid = geometry::ray_fill(victim_mask) & geometry::ray_fill(incoming_sliders);
 
     push_discovered::<Op>(
@@ -362,8 +364,11 @@ pub fn on_move(
     push_focus::<Sub, Incoming>(updates, src_idxs, src_rays, src_incoming, old_piece, src);
     push_focus::<Add, Incoming>(updates, dst_idxs, dst_rays, dst_incoming, new_piece, dst);
 
-    let src_victim_mask = (src_closest & 0xFEFE_FEFE_FEFE_FEFE).rotate_right(32);
-    let dst_victim_mask = (dst_closest & 0xFEFE_FEFE_FEFE_FEFE).rotate_right(32);
+    // mask off kings, which cannot be victims:
+    let src_non_king = !geometry::test_bit(src_bits, geometry::Bit::KING);
+    let dst_non_king = !geometry::test_bit(dst_bits, geometry::Bit::KING);
+    let src_victim_mask = (src_closest & src_non_king & 0xFEFE_FEFE_FEFE_FEFE).rotate_right(32);
+    let dst_victim_mask = (dst_closest & dst_non_king & 0xFEFE_FEFE_FEFE_FEFE).rotate_right(32);
     let src_valid = geometry::ray_fill(src_victim_mask) & geometry::ray_fill(src_sliders);
     let dst_valid = geometry::ray_fill(dst_victim_mask) & geometry::ray_fill(dst_sliders);
 
