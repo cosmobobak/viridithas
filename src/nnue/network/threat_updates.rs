@@ -584,7 +584,7 @@ mod tests {
         let m = board.parse_uci(uci_move).unwrap();
         let threats_before = collect_threats_simple(&board);
 
-        let mut board_after = board.clone();
+        let mut board_after = board;
         let mut buffer = UpdateBuffer::default();
         board_after.make_move_base(m, &mut buffer);
 
