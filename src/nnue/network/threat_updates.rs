@@ -335,11 +335,12 @@ pub fn on_mutate(
     let incoming = geometry::incoming_attackers(bits, closest);
 
     debug_assert!(old_piece.piece_type() != PieceType::King);
-    debug_assert!(new_piece.piece_type() != PieceType::King);
     push_focus::<Sub, Outgoing>(updates, perm.indices, rays, old_outgoing, old_piece, sq);
-    push_focus::<Add, Outgoing>(updates, perm.indices, rays, new_outgoing, new_piece, sq);
     push_focus::<Sub, Incoming>(updates, perm.indices, rays, incoming, old_piece, sq);
-    push_focus::<Add, Incoming>(updates, perm.indices, rays, incoming, new_piece, sq);
+    if new_piece.piece_type() != PieceType::King {
+        push_focus::<Add, Outgoing>(updates, perm.indices, rays, new_outgoing, new_piece, sq);
+        push_focus::<Add, Incoming>(updates, perm.indices, rays, incoming, new_piece, sq);
+    }
 }
 
 pub fn on_move(
