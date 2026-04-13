@@ -1,7 +1,11 @@
 use std::mem::offset_of;
 
 use crate::{
-    chess::{board::Board, piece::Piece, types::Square},
+    chess::{
+        board::Board,
+        piece::{Piece, PieceType},
+        types::Square,
+    },
     nnue::{
         geometry,
         network::{ThreatFeatureUpdate, ThreatUpdateBuffer},
@@ -291,9 +295,11 @@ pub fn on_change<Op: AddSub>(
     let incoming_attackers = geometry::incoming_attackers(bits, closest);
     let incoming_sliders = geometry::incoming_sliders(bits, closest);
 
-    // push focus-square relative threats
-    push_focus::<Op, Outgoing>(updates, perm.indices, rays, outgoing_threats, piece, sq);
-    push_focus::<Op, Incoming>(updates, perm.indices, rays, incoming_attackers, piece, sq);
+    // push focus-square relative threats (kings are neither attackers nor victims)
+    if piece.piece_type() != PieceType::King {
+        push_focus::<Op, Outgoing>(updates, perm.indices, rays, outgoing_threats, piece, sq);
+        push_focus::<Op, Incoming>(updates, perm.indices, rays, incoming_attackers, piece, sq);
+    }
 
     // find discovered threats, from sliders looking through the focus square.
     // this is somewhat arcane, but one has it on good authority that it finds
@@ -328,6 +334,8 @@ pub fn on_mutate(
     let new_outgoing = geometry::outgoing_threats(new_piece, closest & non_king);
     let incoming = geometry::incoming_attackers(bits, closest);
 
+    debug_assert!(old_piece.piece_type() != PieceType::King);
+    debug_assert!(new_piece.piece_type() != PieceType::King);
     push_focus::<Sub, Outgoing>(updates, perm.indices, rays, old_outgoing, old_piece, sq);
     push_focus::<Add, Outgoing>(updates, perm.indices, rays, new_outgoing, new_piece, sq);
     push_focus::<Sub, Incoming>(updates, perm.indices, rays, incoming, old_piece, sq);
@@ -361,10 +369,16 @@ pub fn on_move(
 
     let src_idxs = src_perm.indices;
     let dst_idxs = dst_perm.indices;
-    push_focus::<Sub, Outgoing>(updates, src_idxs, src_rays, src_outgoing, old_piece, src);
-    push_focus::<Add, Outgoing>(updates, dst_idxs, dst_rays, dst_outgoing, new_piece, dst);
-    push_focus::<Sub, Incoming>(updates, src_idxs, src_rays, src_incoming, old_piece, src);
-    push_focus::<Add, Incoming>(updates, dst_idxs, dst_rays, dst_incoming, new_piece, dst);
+    debug_assert!(
+        old_piece.piece_type() != PieceType::King || old_piece == new_piece,
+        "cannot transmute to/from king"
+    );
+    if old_piece.piece_type() != PieceType::King {
+        push_focus::<Sub, Outgoing>(updates, src_idxs, src_rays, src_outgoing, old_piece, src);
+        push_focus::<Add, Outgoing>(updates, dst_idxs, dst_rays, dst_outgoing, new_piece, dst);
+        push_focus::<Sub, Incoming>(updates, src_idxs, src_rays, src_incoming, old_piece, src);
+        push_focus::<Add, Incoming>(updates, dst_idxs, dst_rays, dst_incoming, new_piece, dst);
+    }
 
     let src_victim_mask = (src_closest & src_non_king & 0xFEFE_FEFE_FEFE_FEFE).rotate_right(32);
     let dst_victim_mask = (dst_closest & dst_non_king & 0xFEFE_FEFE_FEFE_FEFE).rotate_right(32);
@@ -588,7 +602,7 @@ mod tests {
     fn check_all_moves(fen: &str) {
         let board = Board::from_fen(fen).unwrap();
         for m in board.legal_moves() {
-            let uci = format!("{m:?}");
+            let uci = format!("{}", m.display(false));
             check_move(fen, &uci);
         }
     }
