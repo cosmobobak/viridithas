@@ -471,28 +471,6 @@ mod tests {
         );
     }
 
-    fn check_threats_after_move(fen: &str, uci_move: &str) {
-        let board = Board::from_fen(fen).unwrap();
-        let m = board.parse_uci(uci_move).unwrap();
-
-        let before = collect_threats_simple(&board);
-
-        let mut board_after = board;
-
-        let mut buf = UpdateBuffer::default();
-        board_after.make_move_base(m, &mut buf);
-
-        let simple = collect_threats_simple(&board_after);
-
-        let incremental = apply_threat_diff(before, buf.threat.subs(), buf.threat.adds());
-
-        assert_threats_eq(
-            &simple,
-            &incremental,
-            format!("after {uci_move} from {fen}"),
-        );
-    }
-
     fn check_incremental_quiet(fen: &str, uci_move: &str) {
         let board_before = Board::from_fen(fen).unwrap();
         let m = board_before.parse_uci(uci_move).unwrap();
@@ -532,17 +510,17 @@ mod tests {
 
     #[test]
     fn startpos_threats_after_moves() {
-        check_threats_after_move(STARTPOS, "e2e4");
-        check_threats_after_move(STARTPOS, "g1f3");
-        check_threats_after_move(STARTPOS, "d2d4");
+        check_move(STARTPOS, "e2e4");
+        check_move(STARTPOS, "g1f3");
+        check_move(STARTPOS, "d2d4");
     }
 
     #[test]
     fn kiwipete_threats_after_moves() {
-        check_threats_after_move(KIWIPETE, "e5d3");
-        check_threats_after_move(KIWIPETE, "f3f5");
-        check_threats_after_move(KIWIPETE, "e5f7");
-        check_threats_after_move(KIWIPETE, "d5e6");
+        check_move(KIWIPETE, "e5d3");
+        check_move(KIWIPETE, "f3f5");
+        check_move(KIWIPETE, "e5f7");
+        check_move(KIWIPETE, "d5e6");
     }
 
     #[test]
@@ -564,6 +542,11 @@ mod tests {
         check_incremental_quiet(KIWIPETE, "c3b1");
     }
 
+    #[test]
+    fn kiwipete_e1d1_king_victim() {
+        check_move(KIWIPETE, "e1d1");
+    }
+
     fn apply_threat_diff(
         mut before: Vec<ThreatFeatureUpdate>,
         subs: &[ThreatFeatureUpdate],
@@ -581,29 +564,32 @@ mod tests {
         before
     }
 
+    fn check_move(fen: &str, uci_move: &str) {
+        let board = Board::from_fen(fen).unwrap();
+        let m = board.parse_uci(uci_move).unwrap();
+        let threats_before = collect_threats_simple(&board);
+
+        let mut board_after = board.clone();
+        let mut buffer = UpdateBuffer::default();
+        board_after.make_move_base(m, &mut buffer);
+
+        let simple = collect_threats_simple(&board_after);
+
+        let incremental =
+            apply_threat_diff(threats_before, buffer.threat.subs(), buffer.threat.adds());
+        assert_threats_eq(
+            &simple,
+            &incremental,
+            format!("incremental after {uci_move} from {fen}"),
+        );
+    }
+
     /// Exhaustive: for every legal move, verify geometry matches simple.
     fn check_all_moves(fen: &str) {
         let board = Board::from_fen(fen).unwrap();
-        let threats_before = collect_threats_simple(&board);
         for m in board.legal_moves() {
-            eprintln!("checking move {m:?} from {fen}");
-
-            let mut board_after = board.clone();
-            let mut buffer = UpdateBuffer::default();
-            board_after.make_move_base(m, &mut buffer);
-
-            let simple = collect_threats_simple(&board_after);
-
-            let incremental = apply_threat_diff(
-                threats_before.clone(),
-                buffer.threat.subs(),
-                buffer.threat.adds(),
-            );
-            assert_threats_eq(
-                &simple,
-                &incremental,
-                format!("incremental after {m:?} from {fen}"),
-            );
+            let uci = format!("{m:?}");
+            check_move(fen, &uci);
         }
     }
 

@@ -856,6 +856,7 @@ impl Board {
             self.state.bbs.set_piece_at(to, piece); // stupid hack for piece-swapping
             // update mailbox for castling: king and rook both moved.
             // clear old positions, set new positions.
+            // TODO: check if this OoO is okay given threat updates looking at the mailbox.
             self.state.mailbox[from] = None;
             self.state.mailbox[to] = Some(piece);
             // rook movement: rook_from is the original `to` of the castle-encoded move.
