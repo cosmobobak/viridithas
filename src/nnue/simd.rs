@@ -408,7 +408,7 @@ mod avx512 {
     pub const F32_CHUNK: usize = std::mem::size_of::<VecF32>() / std::mem::size_of::<f32>();
 }
 
-#[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
+#[cfg(not(any(target_feature = "neon", target_feature = "avx512f")))]
 mod avx2 {
     #![allow(non_camel_case_types)]
     use std::arch::x86_64::*;
@@ -1163,19 +1163,17 @@ mod neon {
 #[cfg(target_feature = "avx512f")]
 pub use avx512::*;
 
-#[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
+#[cfg(not(any(target_feature = "neon", target_feature = "avx512f")))]
 pub use avx2::*;
 
 #[cfg(target_feature = "neon")]
 pub use neon::*;
 
-#[cfg(any(target_arch = "x86_64", target_feature = "neon"))]
 #[inline(always)]
 pub fn trans_i32_i8(vec: VecI32) -> VecI8 {
     unsafe { VecI8::from_raw(std::mem::transmute(vec.inner())) }
 }
 
-#[cfg(any(target_arch = "x86_64", target_feature = "neon"))]
 #[inline(always)]
 pub fn trans_i8_i32(vec: VecI8) -> VecI32 {
     unsafe { VecI32::from_raw(std::mem::transmute(vec.inner())) }
