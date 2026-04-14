@@ -1,11 +1,16 @@
 #![expect(clippy::cast_sign_loss, clippy::undocumented_unsafe_blocks)]
 
-use std::arch::x86_64::*;
+use std::arch::x86_64::{
+    __m128i, __m256i, _mm_loadu_si128, _mm256_and_si256, _mm256_andnot_si256, _mm256_blendv_epi8,
+    _mm256_broadcastsi128_si256, _mm256_cmpeq_epi8, _mm256_loadu_si256, _mm256_movemask_epi8,
+    _mm256_permute2x128_si256, _mm256_set1_epi8, _mm256_setzero_si256, _mm256_shuffle_epi8,
+    _mm256_slli_epi64,
+};
 
 use crate::{
     chess::{piece::Piece, types::Square},
     nnue::geometry::Bit,
-    util::Align64,
+    util::{self, Align64},
 };
 
 use super::{BitRays, INCOMING_SLIDERS_MASK, INCOMING_THREATS_MASK, PERMUTATION, PIECE_TO_BIT};
@@ -17,12 +22,6 @@ pub struct Vector {
 }
 
 impl Vector {
-    pub fn flip(self) -> Self {
-        Self {
-            raw: [self.raw[1], self.raw[0]],
-        }
-    }
-
     fn mask(self) -> BitRays {
         unsafe {
             let a = u64::from(_mm256_movemask_epi8(self.raw[0]) as u32);
@@ -44,7 +43,7 @@ impl Vector {
     }
 
     unsafe fn cast<T>(v: &T) -> Self {
-        unsafe { Self::load((v as *const T).cast::<u8>()) }
+        unsafe { Self::load(util::from_ref(v).cast::<u8>()) }
     }
 }
 
@@ -58,8 +57,8 @@ pub fn permutation_for(focus: Square) -> Permutation {
         let indices = Vector::cast(&PERMUTATION[focus.index()]);
         let invalid = Vector {
             raw: [
-                _mm256_cmpeq_epi8(indices.raw[0], _mm256_set1_epi8(0x80u8 as i8)),
-                _mm256_cmpeq_epi8(indices.raw[1], _mm256_set1_epi8(0x80u8 as i8)),
+                _mm256_cmpeq_epi8(indices.raw[0], _mm256_set1_epi8(0x80u8.cast_signed())),
+                _mm256_cmpeq_epi8(indices.raw[1], _mm256_set1_epi8(0x80u8.cast_signed())),
             ],
         };
         Permutation { indices, invalid }
@@ -67,6 +66,7 @@ pub fn permutation_for(focus: Square) -> Permutation {
 }
 
 fn permute_mailbox_inner(permutation: &Permutation, masked_mailbox: Vector) -> (Vector, Vector) {
+    #[expect(clippy::cast_ptr_alignment)]
     unsafe {
         let lut =
             _mm256_broadcastsi128_si256(_mm_loadu_si128(PIECE_TO_BIT.as_ptr().cast::<__m128i>()));
@@ -137,7 +137,7 @@ pub fn permute_mailbox_ignoring(
             46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
         ]);
         let iota = Vector::load(iota.0.as_ptr());
-        let ignore_vec = _mm256_set1_epi8(ignore.inner() as i8);
+        let ignore_vec = _mm256_set1_epi8(ignore.inner().cast_signed());
         // None<Piece> is represented as 12 due to niche optimisation.
         let none_vec = _mm256_set1_epi8(12);
         let mb = Vector::load(mailbox.as_ptr().cast::<u8>());
@@ -213,7 +213,7 @@ pub fn incoming_sliders(bits: Vector, closest: BitRays) -> BitRays {
 
 pub fn test_bit(bits: Vector, bit: Bit) -> BitRays {
     unsafe {
-        let king_mask = _mm256_set1_epi8(bit.0 as i8);
+        let king_mask = _mm256_set1_epi8(bit.0.cast_signed());
         let v = Vector {
             raw: [
                 _mm256_cmpeq_epi8(
