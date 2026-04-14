@@ -10,7 +10,7 @@ pub struct Accumulator {
 
 #[allow(clippy::inline_always)]
 #[inline(always)]
-unsafe fn slice_to_aligned(slice: &[i16]) -> &Align64<[i16; L1_SIZE]> {
+unsafe fn slice_to_aligned<T>(slice: &[T]) -> &Align64<[T; L1_SIZE]> {
     debug_assert_eq!(slice.len(), L1_SIZE);
     // don't immediately cast to Align64, as we want to check the alignment first.
     let ptr = slice.as_ptr();
@@ -26,7 +26,10 @@ mod simd {
     use arrayvec::ArrayVec;
 
     use super::{Align64, L1_SIZE, PSQT_FEATURES, PsqtFeatureIndex, slice_to_aligned};
-    use crate::nnue::simd::{self, I16_CHUNK};
+    use crate::nnue::{
+        network::{THREAT_FEATURES, feature::ThreatFeatureIndex},
+        simd::{self, I16_CHUNK},
+    };
 
     /// Apply add/subtract updates in place.
     pub fn vector_update_inplace(
@@ -71,6 +74,61 @@ mod simd {
                     for (r_idx, reg) in registers.iter_mut().enumerate() {
                         let src = add_block.as_ptr().add(unroll_offset + r_idx * I16_CHUNK);
                         *reg = simd::add_i16(*reg, simd::load_i16(src));
+                    }
+                }
+                for (r_idx, reg) in registers.iter().enumerate() {
+                    let dst = input.as_mut_ptr().add(unroll_offset + r_idx * I16_CHUNK);
+                    simd::store_i16(dst, *reg);
+                }
+            }
+        }
+    }
+
+    /// Apply add/subtract updates in place.
+    pub fn vector_update_inplace_threat(
+        input: &mut Align64<[i16; L1_SIZE]>,
+        bucket: &Align64<[i8; THREAT_FEATURES * L1_SIZE]>,
+        adds: &[ThreatFeatureIndex],
+        subs: &[ThreatFeatureIndex],
+    ) {
+        const REGISTERS: usize = 16;
+        const UNROLL: usize = I16_CHUNK * REGISTERS;
+        // SAFETY: we never hold multiple mutable references, we never mutate immutable memory,
+        // we use iterators to ensure that we're staying in-bounds, etc.
+        unsafe {
+            let mut add_blocks = ArrayVec::<_, 128>::new();
+            let mut sub_blocks = ArrayVec::<_, 128>::new();
+            for &add_index in adds {
+                let add_index = add_index.index() * L1_SIZE;
+                add_blocks.push(slice_to_aligned(
+                    bucket.get_unchecked(add_index..add_index + L1_SIZE),
+                ));
+            }
+            for &sub_index in subs {
+                let sub_index = sub_index.index() * L1_SIZE;
+                sub_blocks.push(slice_to_aligned(
+                    bucket.get_unchecked(sub_index..sub_index + L1_SIZE),
+                ));
+            }
+            let mut registers = [simd::zero_i16(); REGISTERS];
+            for i in 0..L1_SIZE / UNROLL {
+                let unroll_offset = i * UNROLL;
+                for (r_idx, reg) in registers.iter_mut().enumerate() {
+                    let src = input.as_ptr().add(unroll_offset + r_idx * I16_CHUNK);
+                    *reg = simd::load_i16(src);
+                }
+                // todo: is load_extend_i8 the fastest way to do this?
+                // check if the compiler is smart enough to load in a sensible way.
+                for &sub_block in &sub_blocks {
+                    for (r_idx, reg) in registers.iter_mut().enumerate() {
+                        let src = sub_block.as_ptr().add(unroll_offset + r_idx * I16_CHUNK);
+                        *reg = simd::sub_i16(*reg, simd::load_extend_i8(src));
+                    }
+                }
+                for &add_block in &add_blocks {
+                    for (r_idx, reg) in registers.iter_mut().enumerate() {
+                        let src = add_block.as_ptr().add(unroll_offset + r_idx * I16_CHUNK);
+                        *reg = simd::add_i16(*reg, simd::load_extend_i8(src));
                     }
                 }
                 for (r_idx, reg) in registers.iter().enumerate() {

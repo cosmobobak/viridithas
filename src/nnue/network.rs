@@ -22,7 +22,10 @@ use crate::{
         types::Square,
     },
     image::{self, Image},
-    nnue::{self, network::feature::threat_index},
+    nnue::{
+        self,
+        network::feature::{ThreatFeatureIndex, threat_index},
+    },
     util::{self, Align64, MAX_DEPTH},
 };
 
@@ -1228,6 +1231,12 @@ pub struct ThreatFeatureUpdate {
     pub to: Square,
 }
 
+impl ThreatFeatureUpdate {
+    pub fn index(self, colour: Colour, king: Square) -> Option<ThreatFeatureIndex> {
+        feature::threat_index(colour, king, self.attacker, self.victim, self.from, self.to)
+    }
+}
+
 impl Display for PsqtFeatureUpdate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{piece} on {sq}", piece = self.piece, sq = self.sq)
@@ -1502,6 +1511,11 @@ impl NNUEState {
     }
 
     fn can_efficiently_update<A: AccUpdateType>(&self, colour: Colour) -> bool {
+        let correct_table = if A::PSQT {
+            &self.psqt_correct
+        } else {
+            &self.threat_correct
+        };
         let mut curr_idx = self.current_acc;
         loop {
             curr_idx -= 1;
@@ -1514,7 +1528,7 @@ impl NNUEState {
             if piece.colour() == colour && Self::requires_refresh::<A>(piece, from, to) {
                 return false;
             }
-            if self.psqt_correct[curr_idx][colour] {
+            if correct_table[curr_idx][colour] {
                 return true;
             }
         }
@@ -1553,9 +1567,26 @@ impl NNUEState {
             let (front, back) = stack.split_at_mut(curr_index + 1);
             let src_acc = front.last().unwrap();
             let tgt_acc = back.first_mut().unwrap();
-            let updates = &self.updates[curr_index].psqt;
 
-            Self::materialise_new_acc_from(src_acc, tgt_acc, updates, king, colour, nnue_params);
+            if A::PSQT {
+                Self::materialise_new_psqt_acc_from(
+                    src_acc,
+                    tgt_acc,
+                    &self.updates[curr_index].psqt,
+                    king,
+                    colour,
+                    nnue_params,
+                );
+            } else {
+                Self::materialise_new_threat_acc_from(
+                    src_acc,
+                    tgt_acc,
+                    &self.updates[curr_index].threat,
+                    king,
+                    colour,
+                    nnue_params,
+                );
+            }
 
             correct[curr_index + 1][colour] = true;
 
@@ -1585,8 +1616,10 @@ impl NNUEState {
                     );
                     self.psqt_correct[self.current_acc][colour] = true;
                 }
+            }
 
-                if self.can_efficiently_update::<ThreatUpdate>(colour) && false {
+            if !self.threat_correct[self.current_acc][colour] {
+                if self.can_efficiently_update::<ThreatUpdate>(colour) {
                     self.apply_lazy_updates::<ThreatUpdate>(nnue_params, board, colour);
                 } else {
                     Self::refresh_threats(
@@ -1700,7 +1733,7 @@ impl NNUEState {
         }
     }
 
-    pub fn materialise_new_acc_from(
+    pub fn materialise_new_psqt_acc_from(
         src_acc: &Accumulator,
         tgt_acc: &mut Accumulator,
         updates: &PsqtUpdateBuffer,
@@ -1741,6 +1774,37 @@ impl NNUEState {
         }
     }
 
+    pub fn materialise_new_threat_acc_from(
+        src_acc: &Accumulator,
+        tgt_acc: &mut Accumulator,
+        updates: &ThreatUpdateBuffer,
+        king: Square,
+        colour: Colour,
+        nnue_params: &NNUEParams,
+    ) {
+        let src = &src_acc.halves[colour];
+        let tgt = &mut tgt_acc.halves[colour];
+
+        // todo: don’t double-buffer.
+        let mut adds = ArrayVec::<ThreatFeatureIndex, 128>::new();
+        let mut subs = ArrayVec::<ThreatFeatureIndex, 128>::new();
+
+        for &add in updates.adds() {
+            if let Some(index) = add.index(colour, king) {
+                adds.push(index);
+            }
+        }
+        for &sub in updates.subs() {
+            if let Some(index) = sub.index(colour, king) {
+                subs.push(index);
+            }
+        }
+
+        // just copy & use vector_update_inplace.
+        tgt.copy_from_slice(&**src);
+        accumulator::vector_update_inplace_threat(tgt, &nnue_params.l0_threat, &adds, &subs);
+    }
+
     /// Evaluate the final layer on the partial activations.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     pub fn evaluate(&self, nn: &NNUEParams, board: &Board) -> i32 {
@@ -1748,6 +1812,10 @@ impl NNUEState {
 
         debug_assert!(
             self.psqt_correct[self.current_acc][0] && self.psqt_correct[self.current_acc][1]
+        );
+
+        debug_assert!(
+            self.threat_correct[self.current_acc][0] && self.threat_correct[self.current_acc][1]
         );
 
         let stm = board.turn();
