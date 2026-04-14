@@ -26,7 +26,7 @@ use crate::{
     lookups::{CASTLE_KEYS, EP_KEYS, HM_CLOCK_KEYS, PIECE_KEYS, SIDE_KEY},
     nnue::network::{
         MovedPiece, NNUEState, PsqtFeatureUpdate, UpdateBuffer,
-        threat_updates::{self, Add, Sub},
+        threat_updates::{self, Sub},
     },
     search::pv::PVariation,
 };
