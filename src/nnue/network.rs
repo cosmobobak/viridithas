@@ -42,7 +42,7 @@ const _: () = assert!(!EMBEDDED_NNUE_VERBATIM || EMBEDDED_NNUE.len() == size_of:
 /// Whether to perform the king-plane merging optimisation.
 pub const MERGE_KING_PLANES: bool = true;
 /// Whether the unquantised network has a feature factoriser.
-pub const UNQUANTISED_HAS_FACTORISER: bool = false;
+pub const UNQUANTISED_HAS_FACTORISER: bool = true;
 /// The number of features present in PSQT part of the input.
 pub const PSQT_FEATURES: usize = (12 - MERGE_KING_PLANES as usize) * 64;
 /// The number of features present in the threat part of the input.
@@ -54,7 +54,7 @@ pub const SCALE: i32 = 240;
 /// The size of one-half of the hidden layer of the network.
 pub const L1_SIZE: usize = 1024;
 /// The size of the second layer of the network.
-pub const L2_SIZE: usize = 16;
+pub const L2_SIZE: usize = 32;
 /// The size of the third layer of the network.
 pub const L3_SIZE: usize = 32;
 /// The number of output heads.
@@ -118,9 +118,9 @@ pub fn nnue_checksum() -> u64 {
 #[rustfmt::skip]
 #[repr(C)]
 struct UnquantisedNetwork {
+    l0_threat:     [f32; THREAT_FEATURES * L1_SIZE],
     // extra bucket for the feature-factoriser.
     l0_weights:    [f32; 12 * 64 * L1_SIZE * (BUCKETS + UNQUANTISED_HAS_FACTORISER as usize)],
-    l0_threat:     [f32; THREAT_FEATURES * L1_SIZE],
     l0_biases:     [f32; L1_SIZE],
     l1_weights:  [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:    [[f32; L2_SIZE]; OUTPUT_BUCKETS],
@@ -138,8 +138,8 @@ struct UnquantisedNetwork {
 #[rustfmt::skip]
 #[repr(C)]
 struct MergedNetwork {
-    l0_weights:   [f32; 12 * 64 * L1_SIZE * BUCKETS],
     l0_threat:    [f32; THREAT_FEATURES * L1_SIZE],
+    l0_weights:   [f32; 12 * 64 * L1_SIZE * BUCKETS],
     l0_biases:    [f32; L1_SIZE],
     l1_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
@@ -154,8 +154,8 @@ struct MergedNetwork {
 #[repr(C)]
 #[derive(PartialEq, Debug)]
 struct QuantisedNetwork {
-    l0_weights:   [i16; PSQT_FEATURES * L1_SIZE * BUCKETS],
     l0_threat:    [ i8; THREAT_FEATURES * L1_SIZE],
+    l0_weights:   [i16; PSQT_FEATURES * L1_SIZE * BUCKETS],
     l0_biases:    [i16; L1_SIZE],
     l1_weights: [[[ i8; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
@@ -170,8 +170,8 @@ struct QuantisedNetwork {
 #[rustfmt::skip]
 #[repr(C)]
 pub struct NNUEParams {
-    pub l0_weights:   Align64<[i16; PSQT_FEATURES * L1_SIZE * BUCKETS]>,
     pub l0_threat:    Align64<[ i8; THREAT_FEATURES * L1_SIZE]>,
+    pub l0_weights:   Align64<[i16; PSQT_FEATURES * L1_SIZE * BUCKETS]>,
     pub l0_biases:    Align64<[i16; L1_SIZE]>,
     pub l1_weights:  [Align64<[ i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
     pub l1_bias:     [Align64<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
