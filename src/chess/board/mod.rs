@@ -855,15 +855,20 @@ impl Board {
             debug_assert!(promo_piece.piece_type().legal_promo());
             self.state.bbs.clear_piece_at(from, piece);
             self.state.bbs.set_piece_at(to, promo_piece);
-            // interleave mailbox updates with threat calls:
-            // 1. remove pawn from `from` (on_change::<Sub> sees `to` not yet occupied)
             self.state.mailbox[from] = None;
-            threat_updates::on_change::<Sub>(&mut update_buffer.threat, self, piece, from);
             if captured.is_none() {
-                // 2. non-capture: place promo at `to` then add its threats
-                // (for captures, on_mutate already handled captured → promo at `to`)
+                // if we’re not capturing, we can call the fused move path.
                 self.state.mailbox[to] = Some(promo_piece);
-                threat_updates::on_change::<Add>(&mut update_buffer.threat, self, promo_piece, to);
+                threat_updates::on_move(
+                    &mut update_buffer.threat,
+                    self,
+                    piece,
+                    from,
+                    promo_piece,
+                    to,
+                );
+            } else {
+                threat_updates::on_change::<Sub>(&mut update_buffer.threat, self, piece, from);
             }
             update_buffer.psqt.add_piece(to, promo_piece);
         } else if castle {
