@@ -622,7 +622,11 @@ mod tests {
 
     // ---- active index tests ----
 
-    use crate::{chess::piece::Colour, nnue::network::feature::threat_index};
+    use crate::{
+        chess::piece::Colour,
+        nnue::network::{L1_SIZE, NNUEParams, NNUEState, feature::threat_index},
+        util::Align64,
+    };
 
     /// Compute sorted threat feature indices for a given perspective.
     fn threat_indices(board: &Board, colour: Colour) -> ArrayVec<usize, 128> {
@@ -686,5 +690,48 @@ mod tests {
             &black_expected[..],
             "black threats"
         );
+    }
+
+    // ---- accumulator correctness tests ----
+
+    /// manually sum the `l0_threat` weight rows for each active threat feature,
+    /// and verify that `refresh_threats` produces the same accumulator.
+    fn check_threat_accumulator(fen: &str) {
+        let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
+        let board = Board::from_fen(fen).unwrap();
+
+        for colour in [Colour::White, Colour::Black] {
+            // compute expected accumulator by summing weight rows
+            let indices = threat_indices(&board, colour);
+            let mut expected = Align64([0i16; L1_SIZE]);
+            for &idx in &indices {
+                let start = idx * L1_SIZE;
+                let row = &nnue_params.l0_threat[start..start + L1_SIZE];
+                for (e, &r) in expected.0.iter_mut().zip(row) {
+                    *e += i16::from(r);
+                }
+            }
+
+            // compute actual accumulator via refresh_threats
+            let mut acc = crate::nnue::accumulator::Accumulator {
+                halves: [Align64([0i16; L1_SIZE]), Align64([0i16; L1_SIZE])],
+            };
+            NNUEState::refresh_threats(nnue_params, &board, colour, &mut acc);
+
+            assert_eq!(
+                acc.halves[colour].0, expected.0,
+                "threat accumulator mismatch for {colour:?} in {fen}"
+            );
+        }
+    }
+
+    #[test]
+    fn startpos_threat_accumulator() {
+        check_threat_accumulator(STARTPOS);
+    }
+
+    #[test]
+    fn kiwipete_threat_accumulator() {
+        check_threat_accumulator(KIWIPETE);
     }
 }
