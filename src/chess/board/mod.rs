@@ -808,8 +808,19 @@ impl Board {
 
         if let Some(captured) = captured {
             self.state.fifty_move_counter = 0;
-            threat_updates::on_mutate(&mut update_buffer.threat, self, captured, piece, to);
-            self.state.mailbox[to] = Some(piece);
+            // for promotion-captures, the piece that ends up at `to` is the promoted piece,
+            // not the pawn that moved there.
+            let new_piece_at_to = m
+                .promotion_type()
+                .map_or(piece, |promo| Piece::new(side, promo));
+            threat_updates::on_mutate(
+                &mut update_buffer.threat,
+                self,
+                captured,
+                new_piece_at_to,
+                to,
+            );
+            self.state.mailbox[to] = Some(new_piece_at_to);
             self.state.bbs.clear_piece_at(to, captured);
             update_buffer.psqt.clear_piece(to, captured);
         }
@@ -844,13 +855,16 @@ impl Board {
             debug_assert!(promo_piece.piece_type().legal_promo());
             self.state.bbs.clear_piece_at(from, piece);
             self.state.bbs.set_piece_at(to, promo_piece);
-            // update mailbox: remove pawn, place promoted piece
+            // interleave mailbox updates with threat calls:
+            // 1. remove pawn from `from` (on_change::<Sub> sees `to` not yet occupied)
             self.state.mailbox[from] = None;
-            self.state.mailbox[to] = Some(promo_piece);
-            // geometry: pawn removed from `from`, promoted piece added at `to`
-            // todo: is on_move correct instead?
             threat_updates::on_change::<Sub>(&mut update_buffer.threat, self, piece, from);
-            threat_updates::on_change::<Add>(&mut update_buffer.threat, self, promo_piece, to);
+            if captured.is_none() {
+                // 2. non-capture: place promo at `to` then add its threats
+                // (for captures, on_mutate already handled captured → promo at `to`)
+                self.state.mailbox[to] = Some(promo_piece);
+                threat_updates::on_change::<Add>(&mut update_buffer.threat, self, promo_piece, to);
+            }
             update_buffer.psqt.add_piece(to, promo_piece);
         } else if castle {
             self.state.bbs.set_piece_at(to, piece); // stupid hack for piece-swapping
