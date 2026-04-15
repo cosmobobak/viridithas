@@ -142,6 +142,10 @@ mod simd {
 
             let mut offset = 0;
             for [psqt, thrt] in [[stm_psqt, stm_thrt], [ntm_psqt, ntm_thrt]] {
+                // separate accumulators are maintained for the two input feature-sets, as
+                // threat inputs are un-bucketed and can be more reliably updated without
+                // refreshes. the PSQT accumulator additionally stores the biases,
+                // the threat accumulator stores only the sum of threat matrix rows.
                 let psqt_ptr = psqt.as_ptr();
                 let thrt_ptr = thrt.as_ptr();
 
@@ -152,7 +156,7 @@ mod simd {
                     let input0at = simd::load_i16(thrt_ptr.add(i + 0 * I16_CHUNK));
                     let input0bt = simd::load_i16(thrt_ptr.add(i + 1 * I16_CHUNK));
 
-                    // combine
+                    // combine PSQT and threat preäctivations
                     let input0a = simd::add_i16(input0ap, input0at);
                     let input0b = simd::add_i16(input0bp, input0bt);
 
@@ -163,7 +167,7 @@ mod simd {
                     let input1at = simd::load_i16(thrt_ptr.add(j + 0 * I16_CHUNK));
                     let input1bt = simd::load_i16(thrt_ptr.add(j + 1 * I16_CHUNK));
 
-                    // combine
+                    // combine PSQT and threat preäctivations
                     let input1a = simd::add_i16(input1ap, input1at);
                     let input1b = simd::add_i16(input1bp, input1bt);
 
@@ -188,11 +192,16 @@ mod simd {
                 offset += L1_PAIR_COUNT;
             }
 
-            // determine which parts of the result are non-zero, to allow l1 propagation to happen sparsely
+            // determine which parts of the result are nonzero, s.t. L1 forward can be sparse.
             for i in (0..L1_SIZE).step_by(U8_CHUNK * 2) {
+                // load from the output of L0
                 let product_one = simd::load_u8(ft_outputs.as_ptr().add(i).cast());
                 let product_two = simd::load_u8(ft_outputs.as_ptr().add(i + U8_CHUNK).cast());
 
+                // compute a bitmask, grouping in blocks of 4.
+                // this means that a set of activations that looks like
+                //     [ 0, 11,  0,  0,  0,  0, 17,  0] will not benefit from sparsity,
+                // but [ 0,  0,  0,  0,  0, 11, 17,  0] will, as the first four are 0.
                 let mut nnz_mask = 0;
                 nnz_mask |= u32::from(simd::nonzero_mask_i32(simd::trans_i8_i32(product_one)));
                 nnz_mask |= u32::from(simd::nonzero_mask_i32(simd::trans_i8_i32(product_two)))
