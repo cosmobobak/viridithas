@@ -295,6 +295,11 @@ impl Square {
         }
     }
 
+    pub const fn wrapping_add(self, offset: u8) -> Self {
+        // Safety: in-bounds due to modulus
+        unsafe { Self::new_unchecked((self as u8 + offset) % 64) }
+    }
+
     /// SAFETY: You may not call this function with a square and offset such that
     /// `square as i8 + offset` is outwith `0..64`.
     pub const unsafe fn add_unchecked(self, offset: i8) -> Self {
