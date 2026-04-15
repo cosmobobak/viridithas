@@ -22,6 +22,13 @@ pub struct Vector {
 }
 
 impl Vector {
+    #[expect(unused)]
+    pub fn flip(self) -> Self {
+        Self {
+            raw: [self.raw[1], self.raw[0]],
+        }
+    }
+
     fn mask(self) -> BitRays {
         unsafe {
             let a = u64::from(_mm256_movemask_epi8(self.raw[0]) as u32);

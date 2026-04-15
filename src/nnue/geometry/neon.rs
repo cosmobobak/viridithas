@@ -17,6 +17,7 @@ pub struct Vector {
 }
 
 impl Vector {
+    #[expect(unused)]
     pub fn flip(self) -> Self {
         Self {
             raw: [self.raw[2], self.raw[3], self.raw[0], self.raw[1]],
