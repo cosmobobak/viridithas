@@ -156,7 +156,7 @@ pub fn eval_stats(
     const BIN_SIZE: i32 = 10;
 
     let f = File::open(input).with_context(|| format!("Failed to open {}", input.display()))?;
-    let mut board = Board::default();
+    let mut board = Board::startpos();
     let nnue_params = NNUEParams::decompress_and_alloc()?;
     let mut nnue = NNUEState::new(&board, nnue_params);
 
@@ -191,7 +191,7 @@ pub fn eval_stats(
             continue;
         }
 
-        nnue.reinit_from(&board, nnue_params);
+        nnue.reïnit_from(&board, nnue_params);
         let eval = nnue.evaluate(nnue_params, &board);
 
         count += 1;

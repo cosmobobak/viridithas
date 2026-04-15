@@ -1,5 +1,6 @@
 use std::{
     mem::{MaybeUninit, size_of},
+    ptr::slice_from_raw_parts_mut,
     sync::atomic::{AtomicU8, AtomicU64, Ordering},
 };
 
@@ -247,7 +248,7 @@ impl TT {
                 std::alloc::handle_alloc_error(layout);
             }
             threaded_memset_zero(ptr.cast(), new_len * size_of::<TTClusterMemory>(), threads);
-            self.table = Vec::from_raw_parts(ptr.cast(), new_len, new_len);
+            self.table = Box::from_raw(slice_from_raw_parts_mut(ptr.cast(), new_len)).into();
         }
         println!(
             "info string hash initialisation of {}mb complete in {}us",

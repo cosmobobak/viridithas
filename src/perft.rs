@@ -111,8 +111,8 @@ pub fn gamut() -> anyhow::Result<()> {
     const NODES_LIMIT: u64 = 60_000_000;
     // open perftsuite.epd
     println!("running perft on perftsuite.epd");
-    let f =
-        File::open("epds/perftsuite.epd").with_context(|| "Failed to open epds/perftsuite.epd")?;
+    let f = File::open("assets/epds/perftsuite.epd")
+        .with_context(|| "Failed to open assets/epds/perftsuite.epd")?;
     let mut pos = Board::empty();
     for line in BufReader::new(f).lines() {
         let line = line?;
@@ -234,7 +234,7 @@ mod tests {
         let tbhits = AtomicU64::new(0);
         let mut t = ThreadData::new(
             0,
-            Board::default(),
+            Board::startpos(),
             tt.view(),
             nnue_params,
             &stopped,
@@ -258,7 +258,7 @@ mod tests {
     fn perft_movepicker_start_position() {
         use super::*;
 
-        let pos = Board::default();
+        let pos = Board::startpos();
         let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
         tt.resize(MEGABYTE * 16, &pool);

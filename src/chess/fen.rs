@@ -528,35 +528,35 @@ mod tests {
 
     #[test]
     fn epd_perftsuite() {
-        let (success, failures) = parse_epd_file("epds/perftsuite.epd");
+        let (success, failures) = parse_epd_file("assets/epds/perftsuite.epd");
         assert!(failures.is_empty(), "failures:\n{}", failures.join("\n"));
         assert_eq!(success, 126);
     }
 
     #[test]
     fn epd_frcperftsuite() {
-        let (success, failures) = parse_epd_file("epds/frcperftsuite.epd");
+        let (success, failures) = parse_epd_file("assets/epds/frcperftsuite.epd");
         assert!(failures.is_empty(), "failures:\n{}", failures.join("\n"));
         assert_eq!(success, 960);
     }
 
     #[test]
     fn epd_wac() {
-        let (success, failures) = parse_epd_file("epds/wac.epd");
+        let (success, failures) = parse_epd_file("assets/epds/wac.epd");
         assert!(failures.is_empty(), "failures:\n{}", failures.join("\n"));
         assert_eq!(success, 300);
     }
 
     #[test]
     fn epd_arasan21() {
-        let (success, failures) = parse_epd_file("epds/arasan21.epd");
+        let (success, failures) = parse_epd_file("assets/epds/arasan21.epd");
         assert!(failures.is_empty(), "failures:\n{}", failures.join("\n"));
         assert_eq!(success, 200);
     }
 
     #[test]
     fn epd_tbtest() {
-        let (success, failures) = parse_epd_file("epds/tbtest.epd");
+        let (success, failures) = parse_epd_file("assets/epds/tbtest.epd");
         assert!(failures.is_empty(), "failures:\n{}", failures.join("\n"));
         assert_eq!(success, 434);
     }
@@ -565,20 +565,20 @@ mod tests {
     fn epd_all_files() {
         // Stress test: parse all EPD files
         let epd_files = [
-            "epds/arasan21.epd",
-            "epds/bt2630.epd",
-            "epds/ecmgcp.epd",
-            "epds/eet.epd",
-            "epds/frcperftsuite.epd",
-            "epds/hardzugs.epd",
-            "epds/iq4.epd",
-            "epds/lapuce2.epd",
-            "epds/perftsuite.epd",
-            "epds/pet.epd",
-            "epds/prof.epd",
-            "epds/tbtest.epd",
-            "epds/wac.epd",
-            "epds/zugts.epd",
+            "assets/epds/arasan21.epd",
+            "assets/epds/bt2630.epd",
+            "assets/epds/ecmgcp.epd",
+            "assets/epds/eet.epd",
+            "assets/epds/frcperftsuite.epd",
+            "assets/epds/hardzugs.epd",
+            "assets/epds/iq4.epd",
+            "assets/epds/lapuce2.epd",
+            "assets/epds/perftsuite.epd",
+            "assets/epds/pet.epd",
+            "assets/epds/prof.epd",
+            "assets/epds/tbtest.epd",
+            "assets/epds/wac.epd",
+            "assets/epds/zugts.epd",
         ];
 
         let mut total_success = 0;

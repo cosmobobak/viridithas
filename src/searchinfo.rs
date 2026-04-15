@@ -69,7 +69,7 @@ impl<'a> SearchInfo<'a> {
             stdin_rx: None,
             print_to_stdout: true,
             conf: Config::default(),
-            lm_table: LMTable::default(),
+            lm_table: LMTable::new(&Config::default()),
             clock: TimeManager::default(),
             #[cfg(feature = "stats")]
             failhigh: 0,

@@ -7,21 +7,22 @@ use crate::{
     },
     search::{
         ASPIRATION_EVAL_DIVISOR, CONT1_HISTORY, CONT1_STAT_SCORE_MUL, CONT2_HISTORY,
-        CONT2_STAT_SCORE_MUL, CONT4_HISTORY, CONT4_STAT_SCORE_MUL, CONTINUATION_CORRHIST_WEIGHT,
-        DELTA_BASE_MUL, DELTA_INITIAL, DELTA_REDUCTION_MUL, DO_DEEPER_BASE_MARGIN,
-        DO_DEEPER_DEPTH_MARGIN, DOUBLE_EXTENSION_MARGIN, EVAL_POLICY_IMPROVEMENT_SCALE,
-        EVAL_POLICY_OFFSET, EVAL_POLICY_UPDATE_MAX, FUTILITY_COEFF_0, FUTILITY_COEFF_1,
-        HINDSIGHT_EXT_DEPTH, HINDSIGHT_RED_DEPTH, HINDSIGHT_RED_EVAL, HISTORY_LMR_DIVISOR,
-        HISTORY_PRUNING_MARGIN, LMR_BASE, LMR_BASE_OFFSET, LMR_CHECK_MUL, LMR_CORR_MUL,
-        LMR_CUT_NODE_MUL, LMR_DIVISION, LMR_NON_IMPROVING_MUL, LMR_NON_PV_MUL, LMR_REFUTATION_MUL,
-        LMR_TT_CAPTURE_MUL, LMR_TTPV_MUL, MAIN_HISTORY, MAIN_SEE_BOUND, MAIN_STAT_SCORE_MUL,
-        MAJOR_CORRHIST_WEIGHT, MINOR_CORRHIST_WEIGHT, NMP_DEPTH_MUL, NMP_IMPROVING_MARGIN,
-        NMP_REDUCTION_EVAL_DIVISOR, NONPAWN_CORRHIST_WEIGHT, OPTIMISM_MATERIAL_BASE,
-        OPTIMISM_OFFSET, PAWN_CORRHIST_WEIGHT, PAWN_HISTORY, PROBCUT_ADA_DIV, PROBCUT_ADA_OFFSET,
-        PROBCUT_EVAL_DIV, PROBCUT_IMPROVING_MARGIN, PROBCUT_MARGIN, PROBCUT_SEE_SCALE, QS_FUTILITY,
-        QS_SEE_BOUND, RAZORING_COEFF_0, RAZORING_COEFF_1, RFP_IMPROVING_MARGIN, RFP_MARGIN,
-        SEE_QUIET_MARGIN, SEE_STAT_SCORE_MUL, SEE_TACTICAL_MARGIN, TACT_STAT_SCORE_MUL,
-        TACTICAL_HISTORY, TRIPLE_EXTENSION_MARGIN,
+        CONT2_STAT_SCORE_MUL, CONT4_HISTORY, CONT4_STAT_SCORE_MUL, CONTINUATION_12_CORRHIST_WEIGHT,
+        CONTINUATION_14_CORRHIST_WEIGHT, DELTA_BASE_MUL, DELTA_INITIAL, DELTA_REDUCTION_MUL,
+        DO_DEEPER_BASE_MARGIN, DO_DEEPER_DEPTH_MARGIN, DOUBLE_EXTENSION_MARGIN,
+        EVAL_POLICY_IMPROVEMENT_SCALE, EVAL_POLICY_OFFSET, EVAL_POLICY_UPDATE_MAX,
+        FUTILITY_COEFF_0, FUTILITY_COEFF_1, HINDSIGHT_EXT_DEPTH, HINDSIGHT_RED_DEPTH,
+        HINDSIGHT_RED_EVAL, HISTORY_LMR_DIVISOR, HISTORY_PRUNING_MARGIN, LMR_BASE, LMR_BASE_OFFSET,
+        LMR_CHECK_MUL, LMR_CORR_MUL, LMR_CUT_NODE_MUL, LMR_DIVISION, LMR_NON_IMPROVING_MUL,
+        LMR_NON_PV_MUL, LMR_REFUTATION_MUL, LMR_TT_CAPTURE_MUL, LMR_TTPV_MUL, MAIN_HISTORY,
+        MAIN_SEE_BOUND, MAIN_STAT_SCORE_MUL, MAJOR_CORRHIST_WEIGHT, MINOR_CORRHIST_WEIGHT,
+        NMP_DEPTH_MUL, NMP_IMPROVING_MARGIN, NMP_REDUCTION_EVAL_DIVISOR, NONPAWN_CORRHIST_WEIGHT,
+        OPTIMISM_MATERIAL_BASE, OPTIMISM_OFFSET, PAWN_CORRHIST_WEIGHT, PAWN_HISTORY,
+        PROBCUT_ADA_DIV, PROBCUT_ADA_OFFSET, PROBCUT_EVAL_DIV, PROBCUT_IMPROVING_MARGIN,
+        PROBCUT_MARGIN, PROBCUT_SEE_SCALE, QS_FUTILITY, QS_SEE_BOUND, RAZORING_COEFF_0,
+        RAZORING_COEFF_1, RFP_IMPROVING_MARGIN, RFP_MARGIN, SEE_QUIET_MARGIN, SEE_STAT_SCORE_MUL,
+        SEE_TACTICAL_MARGIN, TACT_STAT_SCORE_MUL, TACTICAL_HISTORY, TRIPLE_EXTENSION_MARGIN,
+        TTPV_LMR_DEPTH_MUL,
     },
     timemgmt::{
         DEFAULT_MOVES_TO_GO, FAIL_LOW_TM_BONUS, HARD_WINDOW_FRAC, INCREMENT_FRAC,
@@ -126,7 +127,8 @@ pub struct Config {
     pub major_corrhist_weight: i32,
     pub minor_corrhist_weight: i32,
     pub nonpawn_corrhist_weight: i32,
-    pub continuation_corrhist_weight: i32,
+    pub continuation_12_corrhist_weight: i32,
+    pub continuation_14_corrhist_weight: i32,
     pub see_pawn_value: i32,
     pub see_knight_value: i32,
     pub see_bishop_value: i32,
@@ -142,6 +144,7 @@ pub struct Config {
     pub optimism_mat_base: i32,
     pub eval_policy_update_max: i32,
     pub probcut_see_scale: i32,
+    pub ttpv_lmr_depth_mul: i32,
 }
 
 impl Config {
@@ -211,7 +214,8 @@ impl Config {
             major_corrhist_weight: MAJOR_CORRHIST_WEIGHT,
             minor_corrhist_weight: MINOR_CORRHIST_WEIGHT,
             nonpawn_corrhist_weight: NONPAWN_CORRHIST_WEIGHT,
-            continuation_corrhist_weight: CONTINUATION_CORRHIST_WEIGHT,
+            continuation_12_corrhist_weight: CONTINUATION_12_CORRHIST_WEIGHT,
+            continuation_14_corrhist_weight: CONTINUATION_14_CORRHIST_WEIGHT,
             see_pawn_value: SEE_PAWN_VALUE,
             see_knight_value: SEE_KNIGHT_VALUE,
             see_bishop_value: SEE_BISHOP_VALUE,
@@ -227,6 +231,7 @@ impl Config {
             optimism_mat_base: OPTIMISM_MATERIAL_BASE,
             eval_policy_update_max: EVAL_POLICY_UPDATE_MAX,
             probcut_see_scale: PROBCUT_SEE_SCALE,
+            ttpv_lmr_depth_mul: TTPV_LMR_DEPTH_MUL,
         }
     }
 }
@@ -366,7 +371,8 @@ impl Config {
             MAJOR_CORRHIST_WEIGHT = [self.major_corrhist_weight],
             MINOR_CORRHIST_WEIGHT = [self.minor_corrhist_weight],
             NONPAWN_CORRHIST_WEIGHT = [self.nonpawn_corrhist_weight],
-            CONTINUATION_CORRHIST_WEIGHT = [self.continuation_corrhist_weight],
+            CONTINUATION_12_CORRHIST_WEIGHT = [self.continuation_12_corrhist_weight],
+            CONTINUATION_14_CORRHIST_WEIGHT = [self.continuation_14_corrhist_weight],
             SEE_PAWN_VALUE = [self.see_pawn_value],
             SEE_KNIGHT_VALUE = [self.see_knight_value],
             SEE_BISHOP_VALUE = [self.see_bishop_value],
@@ -381,7 +387,8 @@ impl Config {
             OPTIMISM_OFFSET = [self.optimism_offset],
             OPTIMISM_MATERIAL_BASE = [self.optimism_mat_base],
             EVAL_POLICY_UPDATE_MAX = [self.eval_policy_update_max],
-            PROBCUT_SEE_SCALE = [self.probcut_see_scale]
+            PROBCUT_SEE_SCALE = [self.probcut_see_scale],
+            TTPV_LMR_DEPTH_MUL = [self.ttpv_lmr_depth_mul]
         ]
     }
 
@@ -491,7 +498,8 @@ impl Config {
             MAJOR_CORRHIST_WEIGHT = [self.major_corrhist_weight, 1, 4096, 144],
             MINOR_CORRHIST_WEIGHT = [self.minor_corrhist_weight, 1, 4096, 144],
             NONPAWN_CORRHIST_WEIGHT = [self.nonpawn_corrhist_weight, 1, 4096, 144],
-            CONTINUATION_CORRHIST_WEIGHT = [self.continuation_corrhist_weight, 1, 4096, 144],
+            CONTINUATION_12_CORRHIST_WEIGHT = [self.continuation_12_corrhist_weight, 1, 4096, 144],
+            CONTINUATION_14_CORRHIST_WEIGHT = [self.continuation_14_corrhist_weight, 1, 4096, 144],
             SEE_PAWN_VALUE = [self.see_pawn_value, 1, 4096, 16],
             SEE_KNIGHT_VALUE = [self.see_knight_value, 1, 4096, 16],
             SEE_BISHOP_VALUE = [self.see_bishop_value, 1, 4096, 16],
@@ -506,7 +514,8 @@ impl Config {
             OPTIMISM_OFFSET = [self.optimism_offset, -4096, 4096, 16],
             OPTIMISM_MATERIAL_BASE = [self.optimism_mat_base, 1, 8192, 256],
             EVAL_POLICY_UPDATE_MAX = [self.eval_policy_update_max, 1, 4096, 8],
-            PROBCUT_SEE_SCALE = [self.probcut_see_scale, 1, 1024, 16]
+            PROBCUT_SEE_SCALE = [self.probcut_see_scale, 1, 1024, 16],
+            TTPV_LMR_DEPTH_MUL = [self.ttpv_lmr_depth_mul, 1, 2048, 48]
         ]
     }
 

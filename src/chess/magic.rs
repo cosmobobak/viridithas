@@ -20,13 +20,13 @@ macro_rules! cfor {
 /// For example, on a1, a bishop has 7 squares it can move to
 /// along the long diagonal - but the contents of h8 are irrelevant to movegen,
 /// so the number of relevant bits on the board is 6.
-pub const BISHOP_REL_BITS: u64 = 9;
+pub const DIAG_REL_BITS: u64 = 9;
 
 /// The number of relevant bits in the bitboard representation of the attack squareset.
 /// For example, on a1, a rook has 14 squares it can move to
 /// along the file or rank - but the contents of a8 and h1 are irrelevant to movegen,
 /// so the number of relevant bits on the board is 12.
-pub const ROOK_REL_BITS: u64 = 12;
+pub const ORTH_REL_BITS: u64 = 12;
 
 pub const fn set_occupancy(
     index: usize,
@@ -50,7 +50,7 @@ pub const fn set_occupancy(
     occupancy
 }
 
-const fn mask_bishop_attacks(sq: Square) -> SquareSet {
+const fn diag_attack_mask(sq: Square) -> SquareSet {
     let mut attacks = 0;
 
     // file and rank
@@ -76,7 +76,7 @@ const fn mask_bishop_attacks(sq: Square) -> SquareSet {
     SquareSet::from_inner(attacks)
 }
 
-const fn mask_rook_attacks(sq: Square) -> SquareSet {
+const fn orth_attack_mask(sq: Square) -> SquareSet {
     let mut attacks = 0;
 
     // file and rank
@@ -102,7 +102,7 @@ const fn mask_rook_attacks(sq: Square) -> SquareSet {
     SquareSet::from_inner(attacks)
 }
 
-pub const fn bishop_attacks_on_the_fly(square: Square, block: SquareSet) -> SquareSet {
+pub const fn diag_attacks_slow(square: Square, block: SquareSet) -> SquareSet {
     let mut attacks = 0;
 
     // so sue me
@@ -147,7 +147,7 @@ pub const fn bishop_attacks_on_the_fly(square: Square, block: SquareSet) -> Squa
     SquareSet::from_inner(attacks)
 }
 
-pub const fn rook_attacks_on_the_fly(square: Square, block: SquareSet) -> SquareSet {
+pub const fn orth_attacks_slow(square: Square, block: SquareSet) -> SquareSet {
     let mut attacks = 0;
 
     // so sue me
@@ -209,9 +209,9 @@ fn find_magic(square: Square, relevant_bits: u64, is_bishop: bool) -> u64 {
 
     // mask piece attack
     let mask_attack = if is_bishop {
-        mask_bishop_attacks(square)
+        diag_attack_mask(square)
     } else {
-        mask_rook_attacks(square)
+        orth_attack_mask(square)
     };
 
     // occupancy variations
@@ -224,9 +224,9 @@ fn find_magic(square: Square, relevant_bits: u64, is_bishop: bool) -> u64 {
 
         // init attacks
         attacks[count] = if is_bishop {
-            bishop_attacks_on_the_fly(square, occupancies[count])
+            diag_attacks_slow(square, occupancies[count])
         } else {
-            rook_attacks_on_the_fly(square, occupancies[count])
+            orth_attacks_slow(square, occupancies[count])
         };
     });
 
@@ -282,7 +282,7 @@ pub fn init_magics() {
     println!("Generating bishop magics...");
     println!("static BISHOP_MAGICS: [u64; 64] = [");
     for square in Square::all() {
-        let magic = find_magic(square, BISHOP_REL_BITS, true);
+        let magic = find_magic(square, DIAG_REL_BITS, true);
         let magic_str = format!("{magic:016X}");
         // split into blocks of four
         let magic_str = magic_str.chars().collect::<Vec<char>>();
@@ -298,7 +298,7 @@ pub fn init_magics() {
     println!("Generating rook magics...");
     println!("static ROOK_MAGICS: [u64; 64] = [");
     for square in Square::all() {
-        let magic = find_magic(square, ROOK_REL_BITS, false);
+        let magic = find_magic(square, ORTH_REL_BITS, false);
         let magic_str = format!("{magic:016X}");
         // split into blocks of four
         let magic_str = magic_str.chars().collect::<Vec<char>>();
@@ -329,7 +329,7 @@ pub struct MagicEntry {
     pub magic: u64,
 }
 
-pub static BISHOP_TABLE: [MagicEntry; 64] = {
+pub static DIAG_TABLE: [MagicEntry; 64] = {
     let mut table = [MagicEntry {
         mask: SquareSet::EMPTY,
         magic: 0,
@@ -337,15 +337,15 @@ pub static BISHOP_TABLE: [MagicEntry; 64] = {
 
     cfor!(let mut square = 0; square < 64; square += 1; {
         table[square] = MagicEntry {
-            mask: BISHOP_MASKS[square],
-            magic: BISHOP_MAGICS[square],
+            mask: DIAG_MASKS[square],
+            magic: DIAG_MAGICS[square],
         };
     });
 
     table
 };
 
-pub static ROOK_TABLE: [MagicEntry; 64] = {
+pub static ORTH_TABLE: [MagicEntry; 64] = {
     let mut table = [MagicEntry {
         mask: SquareSet::EMPTY,
         magic: 0,
@@ -353,26 +353,26 @@ pub static ROOK_TABLE: [MagicEntry; 64] = {
 
     cfor!(let mut square = 0; square < 64; square += 1; {
         table[square] = MagicEntry {
-            mask: ROOK_MASKS[square],
-            magic: ROOK_MAGICS[square],
+            mask: ORTH_MASKS[square],
+            magic: ORTH_MAGICS[square],
         };
     });
 
     table
 };
 
-const BISHOP_MASKS: [SquareSet; 64] = init_masks_with!(mask_bishop_attacks);
-const ROOK_MASKS: [SquareSet; 64] = init_masks_with!(mask_rook_attacks);
+const DIAG_MASKS: [SquareSet; 64] = init_masks_with!(diag_attack_mask);
+const ORTH_MASKS: [SquareSet; 64] = init_masks_with!(orth_attack_mask);
 
 // SAFETY: All bitpatterns of u64 are valid, and SquareSet is repr(transparent) around u64.
-pub static BISHOP_ATTACKS: [[SquareSet; 512]; 64] =
+pub static DIAG_ATTACKS: [[SquareSet; 512]; 64] =
     unsafe { std::mem::transmute(*include_bytes!("../../embeds/diagonal_attacks.bin")) };
 // SAFETY: All bitpatterns of u64 are valid, and SquareSet is repr(transparent) around u64.
 #[allow(clippy::large_stack_arrays)]
-pub static ROOK_ATTACKS: [[SquareSet; 4096]; 64] =
+pub static ORTH_ATTACKS: [[SquareSet; 4096]; 64] =
     unsafe { std::mem::transmute(*include_bytes!("../../embeds/orthogonal_attacks.bin")) };
 
-const BISHOP_MAGICS: [u64; 64] = [
+const DIAG_MAGICS: [u64; 64] = [
     0x0080_8104_1082_0200,
     0x2010_5204_2240_1000,
     0x88A0_1411_A008_1800,
@@ -439,7 +439,7 @@ const BISHOP_MAGICS: [u64; 64] = [
     0x6010_2200_8060_0502,
 ];
 
-const ROOK_MAGICS: [u64; 64] = [
+const ORTH_MAGICS: [u64; 64] = [
     0x8A80_1040_0080_0020,
     0x0084_0201_0080_4000,
     0x0080_0A10_0004_8020,
