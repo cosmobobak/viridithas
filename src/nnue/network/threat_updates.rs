@@ -278,6 +278,11 @@ pub use vbmi::*;
 #[cfg(not(target_feature = "avx512vbmi"))]
 pub use generic::*;
 
+/// Given the addition or subtraction of a piece on a square,
+/// append the difference in threats induced into the update buffer.
+///
+/// This includes threats directly emitted by or inbound to the piece,
+/// and discovered/blocked threats from sliders through the piece.
 pub fn on_change<Op: AddSub>(
     updates: &mut ThreatUpdateBuffer,
     board: &Board,
@@ -316,6 +321,10 @@ pub fn on_change<Op: AddSub>(
     );
 }
 
+/// Given the transformation of a piece from one type into another,
+/// append the difference in threats induced into the update buffer.
+///
+/// Because the piece is not moving, no threats are discovered or blocked.
 pub fn on_mutate(
     updates: &mut ThreatUpdateBuffer,
     board: &Board,
@@ -343,6 +352,14 @@ pub fn on_mutate(
     }
 }
 
+/// Given the movement of a piece from a square to another,
+/// append the difference in threats induced into the update buffer.
+///
+/// This includes threats directly emitted by or inbound to the piece,
+/// and discovered/blocked threats from sliders through the piece.
+///
+/// This function takes piece-types for old & new, in case you wish to
+/// transform the type of the piece as it moves (e.g. in case of promotion).
 pub fn on_move(
     updates: &mut ThreatUpdateBuffer,
     board: &Board,

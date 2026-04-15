@@ -31,8 +31,8 @@ mod simd {
         simd::{self, I16_CHUNK},
     };
 
-    /// Apply add/subtract updates in place.
-    pub fn vector_update_inplace(
+    /// Apply add/subtract PSQT updates in place.
+    pub fn vector_update_inplace_psqt(
         input: &mut Align64<[i16; L1_SIZE]>,
         bucket: &Align64<[i16; PSQT_FEATURES * L1_SIZE]>,
         adds: &[PsqtFeatureIndex],
@@ -139,8 +139,8 @@ mod simd {
         }
     }
 
-    /// Move a feature from one square to another.
-    pub fn vector_add_sub(
+    /// Move a PSQT feature from one square to another.
+    pub fn vector_add_sub_psqt(
         input: &Align64<[i16; L1_SIZE]>,
         output: &mut Align64<[i16; L1_SIZE]>,
         bucket: &Align64<[i16; PSQT_FEATURES * L1_SIZE]>,
@@ -171,8 +171,8 @@ mod simd {
         }
     }
 
-    /// Subtract two features and add one feature all at once.
-    pub fn vector_add_sub2(
+    /// Subtract two PSQT features and add one PSQT feature all at once.
+    pub fn vector_add_sub2_psqt(
         input: &Align64<[i16; L1_SIZE]>,
         output: &mut Align64<[i16; L1_SIZE]>,
         bucket: &Align64<[i16; PSQT_FEATURES * L1_SIZE]>,
@@ -209,8 +209,8 @@ mod simd {
         }
     }
 
-    /// Add two features and subtract two features all at once.
-    pub fn vector_add2_sub2(
+    /// Add two PSQT features and subtract two PSQT features all at once.
+    pub fn vector_add2_sub2_psqt(
         input: &Align64<[i16; L1_SIZE]>,
         output: &mut Align64<[i16; L1_SIZE]>,
         bucket: &Align64<[i16; PSQT_FEATURES * L1_SIZE]>,

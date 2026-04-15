@@ -1350,7 +1350,7 @@ impl BucketAccumulatorCache {
 
         let weights = nnue_params.select_feature_weights(bucket);
 
-        accumulator::vector_update_inplace(cache_acc, weights, &adds, &subs);
+        accumulator::vector_update_inplace_psqt(cache_acc, weights, &adds, &subs);
 
         acc.halves[colour] = cache_acc.clone();
 
@@ -1677,7 +1677,7 @@ impl NNUEState {
 
             self.psqt_accumulators[self.current_acc].halves[C::COLOUR] =
                 self.psqt_accumulators[source].halves[C::COLOUR].clone();
-            accumulator::vector_update_inplace(
+            accumulator::vector_update_inplace_psqt(
                 &mut self.psqt_accumulators[self.current_acc].halves[C::COLOUR],
                 weights,
                 &adds,
@@ -1753,14 +1753,14 @@ impl NNUEState {
             (&[add], &[sub]) => {
                 let add = feature::psqt_index(colour, king, add);
                 let sub = feature::psqt_index(colour, king, sub);
-                accumulator::vector_add_sub(src, tgt, bucket, add, sub);
+                accumulator::vector_add_sub_psqt(src, tgt, bucket, add, sub);
             }
             // capture
             (&[add], &[sub1, sub2]) => {
                 let add = feature::psqt_index(colour, king, add);
                 let sub1 = feature::psqt_index(colour, king, sub1);
                 let sub2 = feature::psqt_index(colour, king, sub2);
-                accumulator::vector_add_sub2(src, tgt, bucket, add, sub1, sub2);
+                accumulator::vector_add_sub2_psqt(src, tgt, bucket, add, sub1, sub2);
             }
             // castling
             (&[add1, add2], &[sub1, sub2]) => {
@@ -1768,7 +1768,7 @@ impl NNUEState {
                 let add2 = feature::psqt_index(colour, king, add2);
                 let sub1 = feature::psqt_index(colour, king, sub1);
                 let sub2 = feature::psqt_index(colour, king, sub2);
-                accumulator::vector_add2_sub2(src, tgt, bucket, add1, add2, sub1, sub2);
+                accumulator::vector_add2_sub2_psqt(src, tgt, bucket, add1, add2, sub1, sub2);
             }
             (_, _) => panic!("invalid update buffer: {updates:?}"),
         }

@@ -15,6 +15,7 @@ pub use neon::*;
 
 use crate::{cfor, chess::piece::Piece};
 
+/// Bits that can be queried in order to extract masks from `BitRays`.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct Bit(u8);
@@ -32,6 +33,9 @@ impl Bit {
 
 pub type BitRays = u64;
 
+/// Given a square, return a permutation that allows the transformation
+/// of a mailbox into a ray-vector, as specified in
+/// <https://87flowers.com/byteboard-attack-tables-1/#perm>
 #[expect(clippy::cast_possible_truncation)]
 pub const PERMUTATION: [[u8; 64]; 64] = {
     let offsets = [
@@ -60,6 +64,7 @@ pub const PERMUTATION: [[u8; 64]; 64] = {
     permutations
 };
 
+/// Given a piece, get the `Bit` mask used to extract a mask from `BitRays`.
 pub const PIECE_TO_BIT: [Bit; 16] = {
     let mut lut = [Bit(0); 16];
 
@@ -79,6 +84,34 @@ pub const PIECE_TO_BIT: [Bit; 16] = {
     lut
 };
 
+/// The ray-vector format attacks of a piece.
+/// Read <https://87flowers.com/byteboard-attack-tables-1/>
+/// for an introduction to this format.
+///
+/// The layout is
+///
+/// ```text
+/// knight [     north ray attacks]
+/// knight [north-east ray attacks]
+/// knight [      east ray attacks]
+/// knight [south-east ray attacks]
+/// knight [     south ray attacks]
+/// knight [south-west ray attacks]
+/// knight [      west ray attacks]
+/// knight [north-west ray attacks]
+/// ```
+///
+/// As such, white pawns use `0x02_00_00_00_00_00_02_00`,
+/// encoding a bit in index [1] of second and last rows,
+/// or index [0] in the north-east & north-west ray attacks.
+///
+/// Similarly, knights use `0x01_01_01_01_01_01_01_01`, as
+/// they fill all the knight attack slots and none of the
+/// ray slots.
+///
+/// King threats are zeroed as a quirk of the particular
+/// feature-set we use, which fully excludes king threats
+/// – ordinarily, they’d be `0x02_02_02_02_02_02_02_02`.
 const OUTGOING_THREATS: [BitRays; 12] = {
     let mut lut = [0; 12];
     lut[Piece::WP as usize] = 0x02_00_00_00_00_00_02_00;
@@ -96,6 +129,7 @@ const OUTGOING_THREATS: [BitRays; 12] = {
     lut
 };
 
+/// Given a ray-vector index, which sorts of piece can attack it?
 pub const INCOMING_THREATS_MASK: [Bit; 64] = {
     const HORS: Bit = Bit::KNIGHT;
     const ORTH: Bit = Bit(Bit::QUEEN.0 | Bit::ROOK.0);
@@ -116,6 +150,7 @@ pub const INCOMING_THREATS_MASK: [Bit; 64] = {
     ]
 };
 
+/// Given a ray-vector index, which sliders can attack it?
 pub const INCOMING_SLIDERS_MASK: [Bit; 64] = {
     const ORTH: Bit = Bit(Bit::QUEEN.0 | Bit::ROOK.0);
     const DIAG: Bit = Bit(Bit::QUEEN.0 | Bit::BISHOP.0);
@@ -133,12 +168,15 @@ pub const INCOMING_SLIDERS_MASK: [Bit; 64] = {
     ]
 };
 
+/// Given some bit-rays, selects every ray that has a nonzero
+/// element, and fills the whole ray.
 #[inline]
 pub fn ray_fill(mut br: BitRays) -> BitRays {
     br = (br.wrapping_add(0x7E_7E_7E_7E_7E_7E_7E_7E)) & 0x80_80_80_80_80_80_80_80;
     br.wrapping_sub(br >> 7)
 }
 
+/// Determine which of `closest` are seen by this piece.
 #[inline]
 pub fn outgoing_threats(piece: Piece, closest: BitRays) -> BitRays {
     OUTGOING_THREATS[piece as usize] & closest
