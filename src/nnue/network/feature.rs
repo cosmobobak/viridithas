@@ -325,7 +325,8 @@ static ATTACK_INDEX: [[[u32; 2]; 12]; 12] = {
 };
 
 /// Compute an index from 0 to `THREAT_FEATURES` representing the given threat,
-/// for use in the NNUE feature transformer.
+/// for use in the NNUE feature transformer. Returns `None` if the threat isn’t
+/// part of the feature-set.
 pub fn threat_index(
     colour: Colour,
     // The king’s position is relevant for horizontal mirroring, but is not part of the feature index itself.
