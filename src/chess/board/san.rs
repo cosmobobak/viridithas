@@ -52,7 +52,7 @@ impl Display for SanThunk<'_> {
         let possible_ambiguous_attackers = if moved_piece.piece_type() == PieceType::Pawn {
             SquareSet::EMPTY
         } else {
-            movegen::attacks_by_type(moved_piece.piece_type(), to_sq, board.state.bbs.occupied())
+            movegen::attacks_by_type(moved_piece, to_sq, board.state.bbs.occupied())
                 & board.state.bbs.piece_bb(moved_piece)
         };
         let needs_disambiguation =

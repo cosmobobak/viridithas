@@ -24,7 +24,10 @@ use crate::{
     cuckoo,
     errors::MoveParseError,
     lookups::{CASTLE_KEYS, EP_KEYS, HM_CLOCK_KEYS, PIECE_KEYS, SIDE_KEY},
-    nnue::network::{FeatureUpdate, MovedPiece, NNUEState, UpdateBuffer},
+    nnue::network::{
+        MovedPiece, NNUEState, PsqtFeatureUpdate, UpdateBuffer,
+        threat_updates::{self, Sub},
+    },
     search::pv::PVariation,
 };
 
@@ -544,8 +547,7 @@ impl Board {
             return false;
         }
 
-        movegen::attacks_by_type(moved_piece.piece_type(), from, self.state.bbs.occupied())
-            .contains_square(to)
+        movegen::attacks_by_type(moved_piece, from, self.state.bbs.occupied()).contains_square(to)
     }
 
     pub fn is_pseudo_legal_castling(&self, m: Move) -> bool {
@@ -762,9 +764,9 @@ impl Board {
         if !castle {
             if m.is_promo() {
                 // just remove the source piece, as a different piece will be arriving here
-                update_buffer.clear_piece(from, piece);
+                update_buffer.psqt.clear_piece(from, piece);
             } else {
-                update_buffer.move_piece(from, to, piece);
+                update_buffer.psqt.move_piece(from, to, piece);
             }
         }
 
@@ -775,8 +777,10 @@ impl Board {
             }
             .unwrap();
             let to_clear = Piece::new(side.flip(), PieceType::Pawn);
+            threat_updates::on_change::<Sub>(&mut update_buffer.threat, self, to_clear, clear_at);
+            self.state.mailbox[clear_at] = None;
             self.state.bbs.clear_piece_at(clear_at, to_clear);
-            update_buffer.clear_piece(clear_at, to_clear);
+            update_buffer.psqt.clear_piece(clear_at, to_clear);
         } else if castle {
             self.state.bbs.clear_piece_at(from, piece);
             let to_file = Some(to.file());
@@ -791,12 +795,12 @@ impl Board {
                 unreachable!()
             };
             if from != to {
-                update_buffer.move_piece(from, to, piece);
+                update_buffer.psqt.move_piece(from, to, piece);
             }
             if rook_from != rook_to {
                 let rook = Piece::new(side, PieceType::Rook);
                 self.state.bbs.move_piece(rook_from, rook_to, rook);
-                update_buffer.move_piece(rook_from, rook_to, rook);
+                update_buffer.psqt.move_piece(rook_from, rook_to, rook);
             }
         }
 
@@ -804,8 +808,21 @@ impl Board {
 
         if let Some(captured) = captured {
             self.state.fifty_move_counter = 0;
+            // for promotion-captures, the piece that ends up at `to` is the promoted piece,
+            // not the pawn that moved there.
+            let new_piece_at_to = m
+                .promotion_type()
+                .map_or(piece, |promo| Piece::new(side, promo));
+            threat_updates::on_mutate(
+                &mut update_buffer.threat,
+                self,
+                captured,
+                new_piece_at_to,
+                to,
+            );
+            self.state.mailbox[to] = Some(new_piece_at_to);
             self.state.bbs.clear_piece_at(to, captured);
-            update_buffer.clear_piece(to, captured);
+            update_buffer.psqt.clear_piece(to, captured);
         }
 
         if let Some(ep_sq) = self.state.ep_square {
@@ -834,15 +851,65 @@ impl Board {
         }
 
         if let Some(promo) = m.promotion_type() {
-            let promo = Piece::new(side, promo);
-            debug_assert!(promo.piece_type().legal_promo());
+            let promo_piece = Piece::new(side, promo);
+            debug_assert!(promo_piece.piece_type().legal_promo());
             self.state.bbs.clear_piece_at(from, piece);
-            self.state.bbs.set_piece_at(to, promo);
-            update_buffer.add_piece(to, promo);
+            self.state.bbs.set_piece_at(to, promo_piece);
+            self.state.mailbox[from] = None;
+            if captured.is_none() {
+                // if we’re not capturing, we can call the fused move path.
+                self.state.mailbox[to] = Some(promo_piece);
+                threat_updates::on_move(
+                    &mut update_buffer.threat,
+                    self,
+                    piece,
+                    from,
+                    promo_piece,
+                    to,
+                );
+            } else {
+                threat_updates::on_change::<Sub>(&mut update_buffer.threat, self, piece, from);
+            }
+            update_buffer.psqt.add_piece(to, promo_piece);
         } else if castle {
             self.state.bbs.set_piece_at(to, piece); // stupid hack for piece-swapping
+            // rook movement: rook_from is the original `to` of the castle-encoded move.
+            let rook_from = m.to();
+            let rook_to = if to.file() == File::G {
+                Square::F1.relative_to(side)
+            } else {
+                Square::D1.relative_to(side)
+            };
+            if rook_from != rook_to {
+                let rook = Piece::new(side, PieceType::Rook);
+                // update rook mailbox, then compute threats
+                // (on_move expects src empty, dst occupied)
+                self.state.mailbox[rook_from] = None;
+                self.state.mailbox[rook_to] = Some(rook);
+                threat_updates::on_move(
+                    &mut update_buffer.threat,
+                    self,
+                    rook,
+                    rook_from,
+                    rook,
+                    rook_to,
+                );
+            }
+            // update king mailbox, then compute threats
+            self.state.mailbox[from] = None;
+            self.state.mailbox[to] = Some(piece);
+            threat_updates::on_move(&mut update_buffer.threat, self, piece, from, piece, to);
+        } else if captured.is_some() {
+            self.state.bbs.move_piece(from, to, piece);
+            // update mailbox and compute threats for the moving piece
+            self.state.mailbox[from] = None;
+            threat_updates::on_change::<Sub>(&mut update_buffer.threat, self, piece, from);
         } else {
             self.state.bbs.move_piece(from, to, piece);
+            // update mailbox and compute threats for the moving piece
+            self.state.mailbox[from] = None;
+            self.state.mailbox[to] = Some(piece);
+            threat_updates::on_move(&mut update_buffer.threat, self, piece, from, piece, to);
         }
 
         self.side = self.side.flip();
@@ -877,8 +944,7 @@ impl Board {
 
         // apply all the updates to the zobrist hash
         self.state.keys.zobrist ^= SIDE_KEY;
-        for &FeatureUpdate { sq, piece } in update_buffer.subs() {
-            self.state.mailbox[sq] = None;
+        for &PsqtFeatureUpdate { sq, piece } in update_buffer.psqt.subs() {
             let piece_key = PIECE_KEYS[piece][sq];
             self.state.keys.zobrist ^= piece_key;
             if piece.piece_type() == PieceType::Pawn {
@@ -895,8 +961,7 @@ impl Board {
                 }
             }
         }
-        for &FeatureUpdate { sq, piece } in update_buffer.adds() {
-            self.state.mailbox[sq] = Some(piece);
+        for &PsqtFeatureUpdate { sq, piece } in update_buffer.psqt.adds() {
             let piece_key = PIECE_KEYS[piece][sq];
             self.state.keys.zobrist ^= piece_key;
             if piece.piece_type() == PieceType::Pawn {
@@ -998,19 +1063,20 @@ impl Board {
     }
 
     pub fn make_move_nnue(&mut self, m: Move, nnue: &mut NNUEState) {
-        let mut update_buffer = UpdateBuffer::default();
+        let update_buffer = &mut nnue.updates[nnue.current_acc];
+        update_buffer.clear();
         let piece = self.state.mailbox[m.from()].unwrap();
 
-        self.make_move_base(m, &mut update_buffer);
+        self.make_move_base(m, update_buffer);
 
-        nnue.accumulators[nnue.current_acc].mv = MovedPiece {
+        nnue.moves[nnue.current_acc] = MovedPiece {
             from: m.from(),
             to: m.to(),
             piece,
         };
-        nnue.accumulators[nnue.current_acc].update_buffer = update_buffer;
+        nnue.psqt_correct[nnue.current_acc + 1] = [false; 2];
+        nnue.threat_correct[nnue.current_acc + 1] = [false; 2];
         nnue.current_acc += 1;
-        nnue.accumulators[nnue.current_acc].correct = [false; 2];
     }
 
     pub fn unmake_move_nnue(&mut self, nnue: &mut NNUEState) {

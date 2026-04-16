@@ -9,6 +9,7 @@ use crate::{
         CORRECTION_HISTORY_MAX, HASH_HISTORY_SIZE, history_bonus, history_malus,
         update_cont_history, update_correction, update_history,
     },
+    lookups::PIECE_KEYS,
     threadlocal::ThreadData,
     util::MAX_DEPTH,
 };
@@ -226,9 +227,19 @@ impl ThreadData<'_> {
         if height > 2 {
             let ch1 = self.ss[height - 1].ch_idx;
             let ch2 = self.ss[height - 2].ch_idx;
-            let pt1 = ch1.piece.piece_type();
-            let pt2 = ch2.piece.piece_type();
-            update(&mut self.continuation_corrhist[ch1.to][pt1][ch2.to][pt2][us]);
+            let mut index = 0;
+            index ^= PIECE_KEYS[ch1.piece][ch1.to];
+            index ^= PIECE_KEYS[ch2.piece][ch2.to];
+            update(self.cont_corrhist.get_mut(us, index));
+        }
+
+        if height > 4 {
+            let ch1 = self.ss[height - 1].ch_idx;
+            let ch2 = self.ss[height - 4].ch_idx;
+            let mut index = 0;
+            index ^= PIECE_KEYS[ch1.piece][ch1.to];
+            index ^= PIECE_KEYS[ch2.piece][ch2.to];
+            update(self.cont_corrhist.get_mut(us, index));
         }
     }
 
@@ -248,12 +259,24 @@ impl ThreadData<'_> {
         let minor = self.minor_corrhist.get(us, keys.minor);
         let major = self.major_corrhist.get(us, keys.major);
 
-        let cont = if height > 2 {
+        let cont12 = if height > 2 {
             let ch1 = self.ss[height - 1].ch_idx;
             let ch2 = self.ss[height - 2].ch_idx;
-            let pt1 = ch1.piece.piece_type();
-            let pt2 = ch2.piece.piece_type();
-            i64::from(self.continuation_corrhist[ch1.to][pt1][ch2.to][pt2][us])
+            let mut index = 0;
+            index ^= PIECE_KEYS[ch1.piece][ch1.to];
+            index ^= PIECE_KEYS[ch2.piece][ch2.to];
+            self.cont_corrhist.get(us, index)
+        } else {
+            0
+        };
+
+        let cont14 = if height > 4 {
+            let ch1 = self.ss[height - 1].ch_idx;
+            let ch2 = self.ss[height - 4].ch_idx;
+            let mut index = 0;
+            index ^= PIECE_KEYS[ch1.piece][ch1.to];
+            index ^= PIECE_KEYS[ch2.piece][ch2.to];
+            self.cont_corrhist.get(us, index)
         } else {
             0
         };
@@ -262,7 +285,8 @@ impl ThreadData<'_> {
             + major * i64::from(self.info.conf.major_corrhist_weight)
             + minor * i64::from(self.info.conf.minor_corrhist_weight)
             + (white + black) * i64::from(self.info.conf.nonpawn_corrhist_weight)
-            + cont * i64::from(self.info.conf.continuation_corrhist_weight);
+            + cont12 * i64::from(self.info.conf.continuation_12_corrhist_weight)
+            + cont14 * i64::from(self.info.conf.continuation_14_corrhist_weight);
 
         (adjustment * 12 / 0x40000) as i32
     }

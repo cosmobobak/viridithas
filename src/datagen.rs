@@ -487,8 +487,8 @@ fn generate_on_thread<'a>(
         let [white, black] = &mut thread_data;
         white.board = startpos.clone();
         black.board = startpos.clone();
-        white.nnue.reinit_from(&startpos, white.nnue_params);
-        black.nnue.reinit_from(&startpos, black.nnue_params);
+        white.nnue.reïnit_from(&startpos, white.nnue_params);
+        black.nnue.reïnit_from(&startpos, black.nnue_params);
 
         let mut td = &mut thread_data[startpos.turn()];
 
@@ -525,7 +525,7 @@ fn generate_on_thread<'a>(
             td.board = other.board.clone();
             // │ pointlessly reflowing
             // └────────────────────▼
-            td.nnue.reinit_from(&td.board, td.nnue_params);
+            td.nnue.reïnit_from(&td.board, td.nnue_params);
 
             if let Some(outcome) = td.board.outcome() {
                 break outcome;
@@ -1091,7 +1091,7 @@ fn relabel_binpacks(
             // beyond the 128 ply limit that we have at time of writing.
             // this *is* needlessly slow. converting a whole master-quality
             // dataset will take small double-digit hours because of this.
-            nnue_state.reinit_from(&rollout, nnue_params);
+            nnue_state.reïnit_from(&rollout, nnue_params);
             let value = i32::from(slot.get());
             // we preserve decisive evaluations.
             // the ×2 is because we have changed the mate value

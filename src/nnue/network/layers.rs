@@ -27,164 +27,6 @@ pub static FT_OUTPUT_FILE: std::sync::LazyLock<
     std::sync::Mutex::new(w)
 });
 
-#[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
-mod generic {
-    use super::{
-        super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA},
-        AVX512CHUNK, FT_SHIFT, L1_MUL, SWISH_K,
-    };
-
-    #[allow(
-        clippy::cast_possible_truncation,
-        clippy::cast_precision_loss,
-        clippy::cast_sign_loss
-    )]
-    fn activate_ft(
-        us: &Align64<[i16; L1_SIZE]>,
-        them: &Align64<[i16; L1_SIZE]>,
-        output: &mut Align64<[u8; L1_SIZE]>,
-    ) {
-        for (a, acc) in [us, them].into_iter().enumerate() {
-            for i in 0..L1_SIZE / 2 {
-                // SAFETY: the largest index into `acc` that we construct is `L1_SIZE / 2 + (L1_SIZE / 2 - 1)`.
-                // this is in-bounds.
-                unsafe {
-                    let l = *acc.get_unchecked(i);
-                    let r = *acc.get_unchecked(L1_SIZE / 2 + i);
-                    let cl = i16::clamp(l, 0, QA);
-                    let cr = i16::clamp(r, 0, QA);
-                    *output.get_unchecked_mut(i + a * L1_SIZE / 2) =
-                        ((i32::from(cl) * i32::from(cr)) >> FT_SHIFT) as u8;
-                }
-            }
-        }
-    }
-
-    #[allow(clippy::needless_range_loop, clippy::cast_precision_loss)]
-    fn propagate_l1(
-        inputs: &Align64<[u8; L1_SIZE]>,
-        weights: &Align64<[i8; L1_SIZE * L2_SIZE]>,
-        biases: &Align64<[f32; L2_SIZE]>,
-        output: &mut Align64<[f32; L2_SIZE]>,
-    ) {
-        // this is just autovec'd for the moment.
-        let mut sums = [0; L2_SIZE];
-        for i in 0..L1_SIZE {
-            // SAFETY: `sums` is `L2_SIZE` long, `inputs` is `L1_SIZE` long,
-            // and `weights` is `L1_SIZE * L2_SIZE` long. As such, the
-            // indices that we construct are valid.
-            unsafe {
-                let input = *inputs.get_unchecked(i);
-                if input == 0 {
-                    continue;
-                }
-                for j in 0..L2_SIZE {
-                    let weight = *weights.get_unchecked(j * L1_SIZE + i);
-                    *sums.get_unchecked_mut(j) += i32::from(input) * i32::from(weight);
-                }
-            }
-        }
-
-        // Hard-Swish activation
-        // act(x) = x · clamp(x + k/2, 0, k) / k
-        for i in 0..L2_SIZE {
-            // SAFETY: `sums` is `L2_SIZE` long, and `output` is `L2_SIZE` long.
-            // As such, the indices that we construct are valid.
-            unsafe {
-                let preact =
-                    (*sums.get_unchecked(i) as f32).mul_add(L1_MUL, *biases.get_unchecked(i));
-                let clamped = f32::clamp(preact + SWISH_K / 2.0, 0.0, SWISH_K);
-                *output.get_unchecked_mut(i) = preact * clamped / SWISH_K;
-            }
-        }
-    }
-
-    pub fn activate_ft_and_propagate_l1(
-        us: &Align64<[i16; L1_SIZE]>,
-        them: &Align64<[i16; L1_SIZE]>,
-        weights: &Align64<[i8; L1_SIZE * L2_SIZE]>,
-        biases: &Align64<[f32; L2_SIZE]>,
-        output: &mut Align64<[f32; L2_SIZE]>,
-    ) {
-        let mut ft_outputs = Align64([0; L1_SIZE]);
-        activate_ft(us, them, &mut ft_outputs);
-        propagate_l1(&ft_outputs, weights, biases, output);
-    }
-
-    #[allow(clippy::needless_range_loop)]
-    pub fn propagate_l2(
-        inputs: &Align64<[f32; L2_SIZE]>,
-        weights: &Align64<[f32; L2_SIZE * L3_SIZE * 2]>,
-        biases: &Align64<[f32; L3_SIZE * 2]>,
-        output: &mut Align64<[f32; L3_SIZE]>,
-    ) {
-        // this is just autovec'd for the moment.
-        let mut sums = biases.clone();
-
-        // affine transform for l2
-        for i in 0..L2_SIZE {
-            // SAFETY: `sums` is `L3_SIZE * 2` long, `inputs` is `L2_SIZE` long,
-            // and `weights` is `L2_SIZE * L3_SIZE * 2` long. As such, the
-            // indices that we construct are valid.
-            unsafe {
-                let input = *inputs.get_unchecked(i);
-                for j in 0..L3_SIZE * 2 {
-                    let sum = *sums.get_unchecked(j);
-                    let w = *weights.get_unchecked(i * L3_SIZE * 2 + j);
-                    *sums.get_unchecked_mut(j) = input.mul_add(w, sum);
-                }
-            }
-        }
-
-        // SwiGLU activation
-        // act(x) = HardSwish6(gate) * id
-        for i in 0..L3_SIZE {
-            // SAFETY: `sums` is `L3_SIZE * 2` long, and `output` is `L3_SIZE` long.
-            // As such, the indices that we construct are valid.
-            unsafe {
-                let gate_preact = *sums.get_unchecked(i);
-                let id_preact = *sums.get_unchecked(i + L3_SIZE);
-                let clamped = f32::clamp(gate_preact + SWISH_K / 2.0, 0.0, SWISH_K);
-                let swish = gate_preact * clamped / SWISH_K;
-                *output.get_unchecked_mut(i) = swish * id_preact;
-            }
-        }
-    }
-
-    pub fn propagate_l3(
-        inputs: &Align64<[f32; L3_SIZE]>,
-        weights: &Align64<[f32; L3_SIZE]>,
-        bias: f32,
-        output: &mut f32,
-    ) {
-        /// Software implementation of the spec for simd stuff,
-        /// to retain order of operations.
-        #[inline]
-        fn reduce_add(sums: &mut [f32]) -> f32 {
-            let n = sums.len();
-            if n == 2 {
-                return sums[0] + sums[1];
-            }
-            for i in 0..n / 2 {
-                sums[i] += sums[i + n / 2];
-            }
-
-            reduce_add(&mut sums[..n / 2])
-        }
-
-        const NUM_SUMS: usize = AVX512CHUNK;
-        let mut sums = [0f32; NUM_SUMS];
-
-        // Affine transform for L3
-        for (i, (v, w)) in inputs.iter().zip(weights.iter()).enumerate() {
-            sums[i % NUM_SUMS] = f32::mul_add(*v, *w, sums[i % NUM_SUMS]);
-        }
-
-        *output = reduce_add(&mut sums) + bias;
-    }
-}
-
-#[cfg(any(target_arch = "x86_64", target_feature = "neon"))]
 mod simd {
     use crate::{
         nnue::{
@@ -257,8 +99,10 @@ mod simd {
         clippy::similar_names
     )]
     pub fn activate_ft_and_propagate_l1(
-        us: &Align64<[i16; L1_SIZE]>,
-        them: &Align64<[i16; L1_SIZE]>,
+        stm_psqt: &Align64<[i16; L1_SIZE]>,
+        ntm_psqt: &Align64<[i16; L1_SIZE]>,
+        stm_thrt: &Align64<[i16; L1_SIZE]>,
+        ntm_thrt: &Align64<[i16; L1_SIZE]>,
         weights: &Align64<[i8; L1_SIZE * L2_SIZE]>,
         biases: &Align64<[f32; L2_SIZE]>,
         output: &mut Align64<[f32; L2_SIZE]>,
@@ -297,70 +141,84 @@ mod simd {
             let increment = simd::v128_splat(8);
 
             let mut offset = 0;
-            for acc in [us, them] {
-                let acc_ptr = acc.as_ptr();
+            for [psqt, thrt] in [[stm_psqt, stm_thrt], [ntm_psqt, ntm_thrt]] {
+                // separate accumulators are maintained for the two input feature-sets, as
+                // threat inputs are un-bucketed and can be more reliably updated without
+                // refreshes. the PSQT accumulator additionally stores the biases,
+                // the threat accumulator stores only the sum of threat matrix rows.
+                let psqt_ptr = psqt.as_ptr();
+                let thrt_ptr = thrt.as_ptr();
 
-                for i in (0..L1_PAIR_COUNT).step_by(I16_CHUNK * 2 * 2) {
+                for i in (0..L1_PAIR_COUNT).step_by(I16_CHUNK * 2) {
                     // load the left-hand pair inputs
-                    let input0a = simd::load_i16(acc_ptr.add(i + 0 * I16_CHUNK));
-                    let input0b = simd::load_i16(acc_ptr.add(i + 1 * I16_CHUNK));
-                    let input0c = simd::load_i16(acc_ptr.add(i + 2 * I16_CHUNK));
-                    let input0d = simd::load_i16(acc_ptr.add(i + 3 * I16_CHUNK));
+                    let input0ap = simd::load_i16(psqt_ptr.add(i + 0 * I16_CHUNK));
+                    let input0bp = simd::load_i16(psqt_ptr.add(i + 1 * I16_CHUNK));
+                    let input0at = simd::load_i16(thrt_ptr.add(i + 0 * I16_CHUNK));
+                    let input0bt = simd::load_i16(thrt_ptr.add(i + 1 * I16_CHUNK));
+
+                    // combine PSQT and threat preäctivations
+                    let input0a = simd::add_i16(input0ap, input0at);
+                    let input0b = simd::add_i16(input0bp, input0bt);
 
                     // load the right-hand pair inputs
                     let j = i + L1_PAIR_COUNT;
-                    let input1a = simd::load_i16(acc_ptr.add(j + 0 * I16_CHUNK));
-                    let input1b = simd::load_i16(acc_ptr.add(j + 1 * I16_CHUNK));
-                    let input1c = simd::load_i16(acc_ptr.add(j + 2 * I16_CHUNK));
-                    let input1d = simd::load_i16(acc_ptr.add(j + 3 * I16_CHUNK));
+                    let input1ap = simd::load_i16(psqt_ptr.add(j + 0 * I16_CHUNK));
+                    let input1bp = simd::load_i16(psqt_ptr.add(j + 1 * I16_CHUNK));
+                    let input1at = simd::load_i16(thrt_ptr.add(j + 0 * I16_CHUNK));
+                    let input1bt = simd::load_i16(thrt_ptr.add(j + 1 * I16_CHUNK));
+
+                    // combine PSQT and threat preäctivations
+                    let input1a = simd::add_i16(input1ap, input1at);
+                    let input1b = simd::add_i16(input1bp, input1bt);
 
                     // crelu the left-hand inputs
                     let clipped0a = simd::min_i16(simd::max_i16(input0a, ft_zero), ft_one);
                     let clipped0b = simd::min_i16(simd::max_i16(input0b, ft_zero), ft_one);
-                    let clipped0c = simd::min_i16(simd::max_i16(input0c, ft_zero), ft_one);
-                    let clipped0d = simd::min_i16(simd::max_i16(input0d, ft_zero), ft_one);
 
                     // clip the right-hand inputs from above
                     let clipped1a = simd::min_i16(input1a, ft_one);
                     let clipped1b = simd::min_i16(input1b, ft_one);
-                    let clipped1c = simd::min_i16(input1c, ft_one);
-                    let clipped1d = simd::min_i16(input1d, ft_one);
 
-                    // shift and mulhi such that the high bits we get are equal to crelu(x1) × crelu(x2)
+                    // shift and mulhi such that the high bits we get are equal to crelu(x₁) × crelu(x₂)
                     let producta = simd::shift_mul_high_i16::<SHIFT>(clipped0a, clipped1a);
                     let productb = simd::shift_mul_high_i16::<SHIFT>(clipped0b, clipped1b);
-                    let productc = simd::shift_mul_high_i16::<SHIFT>(clipped0c, clipped1c);
-                    let productd = simd::shift_mul_high_i16::<SHIFT>(clipped0d, clipped1d);
 
                     // pack the resulting values in to u8s
                     let product_one = simd::pack_i16_to_u8(producta, productb);
-                    let product_two = simd::pack_i16_to_u8(productc, productd);
 
                     // store to the ft output buffer
-                    let ft_o_ptr = ft_outputs.as_mut_ptr();
-                    simd::store_u8(ft_o_ptr.add(offset + i).cast(), product_one);
-                    simd::store_u8(ft_o_ptr.add(offset + i + U8_CHUNK).cast(), product_two);
-
-                    // determine which parts of the result are non-zero, to allow l1 propagation to happen sparsely
-                    let mut nnz_mask = 0;
-                    nnz_mask |= u32::from(simd::nonzero_mask_i32(simd::trans_i8_i32(product_one)));
-                    nnz_mask |= u32::from(simd::nonzero_mask_i32(simd::trans_i8_i32(product_two)))
-                        << NNZ_INPUT_SIMD_WIDTH;
-
-                    // store the non-zero indices into the nnz buffer
-                    for j in 0..NNZ_OUTPUTS_PER_CHUNK {
-                        let lookup = (nnz_mask >> (j * 8)) & 0xFF;
-                        let entry = NNZ_TABLE.table.as_ptr().add(lookup as usize);
-                        let offsets = simd::v128_load(entry.cast());
-                        simd::v128_store(
-                            nnz.as_mut_ptr().add(nnz_count).cast(),
-                            simd::v128_add(base, offsets),
-                        );
-                        nnz_count += u32::count_ones(lookup) as usize;
-                        base = simd::v128_add(base, increment);
-                    }
+                    simd::store_u8(ft_outputs.as_mut_ptr().add(offset + i).cast(), product_one);
                 }
                 offset += L1_PAIR_COUNT;
+            }
+
+            // determine which parts of the result are nonzero, s.t. L1 forward can be sparse.
+            for i in (0..L1_SIZE).step_by(U8_CHUNK * 2) {
+                // load from the output of L0
+                let product_one = simd::load_u8(ft_outputs.as_ptr().add(i).cast());
+                let product_two = simd::load_u8(ft_outputs.as_ptr().add(i + U8_CHUNK).cast());
+
+                // compute a bitmask, grouping in blocks of 4.
+                // this means that a set of activations that looks like
+                //     [ 0, 11,  0,  0,  0,  0, 17,  0] will not benefit from sparsity,
+                // but [ 0,  0,  0,  0,  0, 11, 17,  0] will, as the first four are 0.
+                let mut nnz_mask = 0;
+                nnz_mask |= u32::from(simd::nonzero_mask_i32(simd::trans_i8_i32(product_one)));
+                nnz_mask |= u32::from(simd::nonzero_mask_i32(simd::trans_i8_i32(product_two)))
+                    << NNZ_INPUT_SIMD_WIDTH;
+
+                // store the non-zero indices into the nnz buffer
+                for j in 0..NNZ_OUTPUTS_PER_CHUNK {
+                    let lookup = (nnz_mask >> (j * 8)) & 0xFF;
+                    let entry = NNZ_TABLE.table.as_ptr().add(lookup as usize);
+                    let offsets = simd::v128_load(entry.cast());
+                    simd::v128_store(
+                        nnz.as_mut_ptr().add(nnz_count).cast(),
+                        simd::v128_add(base, offsets),
+                    );
+                    nnz_count += u32::count_ones(lookup) as usize;
+                    base = simd::v128_add(base, increment);
+                }
             }
 
             let nnz_slice = std::slice::from_raw_parts(nnz.as_ptr().cast::<u16>(), nnz_count);
@@ -572,6 +430,7 @@ mod simd {
         }
     }
 
+    #[allow(clippy::modulo_one)]
     pub fn propagate_l3(
         inputs: &Align64<[f32; L3_SIZE]>,
         weights: &Align64<[f32; L3_SIZE]>,
@@ -602,11 +461,7 @@ mod simd {
     }
 }
 
-#[cfg(any(target_arch = "x86_64", target_feature = "neon"))]
 pub use simd::*;
-
-#[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
-pub use generic::*;
 
 use super::{QA, QB};
 

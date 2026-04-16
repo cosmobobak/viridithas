@@ -191,7 +191,7 @@ pub fn eval_stats(
             continue;
         }
 
-        nnue.reinit_from(&board, nnue_params);
+        nnue.reïnit_from(&board, nnue_params);
         let eval = nnue.evaluate(nnue_params, &board);
 
         count += 1;
