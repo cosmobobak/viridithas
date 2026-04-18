@@ -85,8 +85,9 @@ mod simd {
     }
 
     /// Apply add/subtract updates in place.
-    pub fn vector_update_inplace_threat(
-        input: &mut Align64<[i16; L1_SIZE]>,
+    pub fn vector_update_threats(
+        src_acc: &Align64<[i16; L1_SIZE]>,
+        dst_acc: &mut Align64<[i16; L1_SIZE]>,
         bucket: &Align64<[i8; THREAT_FEATURES * L1_SIZE]>,
         adds: &[ThreatFeatureIndex],
         subs: &[ThreatFeatureIndex],
@@ -114,7 +115,7 @@ mod simd {
             for i in 0..L1_SIZE / UNROLL {
                 let unroll_offset = i * UNROLL;
                 for (r_idx, reg) in registers.iter_mut().enumerate() {
-                    let src = input.as_ptr().add(unroll_offset + r_idx * I16_CHUNK);
+                    let src = src_acc.as_ptr().add(unroll_offset + r_idx * I16_CHUNK);
                     *reg = simd::load_i16(src);
                 }
                 // todo: is load_extend_i8 the fastest way to do this?
@@ -132,7 +133,7 @@ mod simd {
                     }
                 }
                 for (r_idx, reg) in registers.iter().enumerate() {
-                    let dst = input.as_mut_ptr().add(unroll_offset + r_idx * I16_CHUNK);
+                    let dst = dst_acc.as_mut_ptr().add(unroll_offset + r_idx * I16_CHUNK);
                     simd::store_i16(dst, *reg);
                 }
             }
