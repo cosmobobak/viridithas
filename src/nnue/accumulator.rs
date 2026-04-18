@@ -110,6 +110,11 @@ mod simd {
                     bucket.get_unchecked(sub_index..sub_index + L1_SIZE),
                 ));
             }
+            let common_blocks = add_blocks.len().min(sub_blocks.len());
+            let sub_common = &sub_blocks[..common_blocks];
+            let add_common = &add_blocks[..common_blocks];
+            let sub_tail = &sub_blocks[common_blocks..];
+            let add_tail = &add_blocks[common_blocks..];
             let mut registers = [simd::zero_i16(); REGISTERS];
             for i in 0..L1_SIZE / UNROLL {
                 let unroll_offset = i * UNROLL;
@@ -117,15 +122,23 @@ mod simd {
                     let src = input.as_ptr().add(unroll_offset + r_idx * I16_CHUNK);
                     *reg = simd::load_i16(src);
                 }
+                for (&sub_block, &add_block) in sub_common.iter().zip(add_common.iter()) {
+                    for (r_idx, reg) in registers.iter_mut().enumerate() {
+                        let src_sub = sub_block.as_ptr().add(unroll_offset + r_idx * I16_CHUNK);
+                        let src_add = add_block.as_ptr().add(unroll_offset + r_idx * I16_CHUNK);
+                        *reg = simd::sub_i16(*reg, simd::load_extend_i8(src_sub));
+                        *reg = simd::add_i16(*reg, simd::load_extend_i8(src_add));
+                    }
+                }
                 // todo: is load_extend_i8 the fastest way to do this?
                 // check if the compiler is smart enough to load in a sensible way.
-                for &sub_block in &sub_blocks {
+                for &sub_block in sub_tail {
                     for (r_idx, reg) in registers.iter_mut().enumerate() {
                         let src = sub_block.as_ptr().add(unroll_offset + r_idx * I16_CHUNK);
                         *reg = simd::sub_i16(*reg, simd::load_extend_i8(src));
                     }
                 }
-                for &add_block in &add_blocks {
+                for &add_block in add_tail {
                     for (r_idx, reg) in registers.iter_mut().enumerate() {
                         let src = add_block.as_ptr().add(unroll_offset + r_idx * I16_CHUNK);
                         *reg = simd::add_i16(*reg, simd::load_extend_i8(src));
