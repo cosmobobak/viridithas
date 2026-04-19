@@ -1800,9 +1800,7 @@ impl NNUEState {
             }
         }
 
-        // just copy & use vector_update_inplace.
-        tgt.copy_from_slice(&**src);
-        accumulator::vector_update_inplace_threat(tgt, &nnue_params.l0_threat, &adds, &subs);
+        accumulator::vector_update_threats(src, tgt, &nnue_params.l0_threat, &adds, &subs);
     }
 
     /// Evaluate the final layer on the partial activations.
