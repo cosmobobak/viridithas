@@ -26,7 +26,7 @@ use crate::{
     lookups::{CASTLE_KEYS, EP_KEYS, HM_CLOCK_KEYS, PIECE_KEYS, SIDE_KEY},
     nnue::network::{
         MovedPiece, NNUEState, PsqtFeatureUpdate, UpdateBuffer,
-        threat_updates::{self, Sub},
+        threat_updates::{self, Add, Sub},
     },
     search::pv::PVariation,
 };
@@ -616,7 +616,7 @@ impl Board {
         debug_assert!(
             self.is_pseudo_legal(m),
             "got {} in position: {}",
-            m.display(false),
+            m.display(true),
             self
         );
 
@@ -880,25 +880,15 @@ impl Board {
             } else {
                 Square::D1.relative_to(side)
             };
-            if rook_from != rook_to {
-                let rook = Piece::new(side, PieceType::Rook);
-                // update rook mailbox, then compute threats
-                // (on_move expects src empty, dst occupied)
-                self.state.mailbox[rook_from] = None;
-                self.state.mailbox[rook_to] = Some(rook);
-                threat_updates::on_move(
-                    &mut update_buffer.threat,
-                    self,
-                    rook,
-                    rook_from,
-                    rook,
-                    rook_to,
-                );
-            }
-            // update king mailbox, then compute threats
+            let rook = Piece::new(side, PieceType::Rook);
             self.state.mailbox[from] = None;
+            threat_updates::on_change::<Sub>(&mut update_buffer.threat, self, piece, from);
+            self.state.mailbox[rook_from] = None;
+            threat_updates::on_change::<Sub>(&mut update_buffer.threat, self, rook, rook_from);
             self.state.mailbox[to] = Some(piece);
-            threat_updates::on_move(&mut update_buffer.threat, self, piece, from, piece, to);
+            threat_updates::on_change::<Add>(&mut update_buffer.threat, self, piece, to);
+            self.state.mailbox[rook_to] = Some(rook);
+            threat_updates::on_change::<Add>(&mut update_buffer.threat, self, rook, rook_to);
         } else if captured.is_some() {
             self.state.bbs.move_piece(from, to, piece);
             // update mailbox and compute threats for the moving piece
@@ -1563,7 +1553,15 @@ impl std::fmt::UpperHex for Board {
     }
 }
 
+#[cfg(test)]
 mod tests {
+    use crate::chess::{
+        CHESS960,
+        board::Board,
+        chessmove::{Move, MoveFlags},
+        types::Square,
+    };
+
     #[test]
     fn game_end_states() {
         use super::Board;
@@ -1812,5 +1810,18 @@ mod tests {
         let board = Board::from_quick("RxlGB:R:::::9GK:::::Dk::::::O:::::::::::").unwrap();
 
         assert_eq!(board.to_string(), "8/8/6q1/8/p2R4/P3P3/1P1K1k2/8 b - - 0 1");
+    }
+
+    #[test]
+    fn can_make_swap_castle() {
+        CHESS960.store(true, std::sync::atomic::Ordering::Relaxed);
+        let mut board =
+            Board::from_fen("b1q1rrkb/pppppppp/3nn3/8/P7/1PPP4/4PPPP/BQNNRKRB w GE - 1 9").unwrap();
+        let castle_move = Move::new_with_flags(Square::F1, Square::G1, MoveFlags::Castle);
+
+        assert!(board.is_pseudo_legal(castle_move));
+        assert!(board.is_legal(castle_move));
+
+        board.make_move_simple(castle_move);
     }
 }
