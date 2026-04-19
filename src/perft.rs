@@ -143,7 +143,7 @@ pub fn gamut() -> anyhow::Result<()> {
     // open frcperftsuite.epd
     println!("running perft on frcperftsuite.epd");
     CHESS960.store(true, Ordering::SeqCst);
-    let f = File::open("epds/frcperftsuite.epd").unwrap();
+    let f = File::open("assets/epds/frcperftsuite.epd").unwrap();
     let mut pos = Board::empty();
     for line in BufReader::new(f).lines() {
         let line = line.unwrap();
