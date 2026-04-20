@@ -881,14 +881,28 @@ impl Board {
                 Square::D1.relative_to(side)
             };
             let rook = Piece::new(side, PieceType::Rook);
-            self.state.mailbox[from] = None;
-            threat_updates::on_change::<Sub>(&mut update_buffer.threat, self, piece, from);
-            self.state.mailbox[rook_from] = None;
-            threat_updates::on_change::<Sub>(&mut update_buffer.threat, self, rook, rook_from);
-            self.state.mailbox[to] = Some(piece);
-            threat_updates::on_change::<Add>(&mut update_buffer.threat, self, piece, to);
-            self.state.mailbox[rook_to] = Some(rook);
-            threat_updates::on_change::<Add>(&mut update_buffer.threat, self, rook, rook_to);
+            let king_moving = from != to;
+            let rook_moving = rook_from != rook_to;
+            if king_moving {
+                self.state.mailbox[from] = None;
+                threat_updates::on_change::<Sub>(&mut update_buffer.threat, self, piece, from);
+            }
+            if rook_moving {
+                self.state.mailbox[rook_from] = None;
+                self.state.mailbox[rook_to] = Some(rook);
+                threat_updates::on_move(
+                    &mut update_buffer.threat,
+                    self,
+                    rook,
+                    rook_from,
+                    rook,
+                    rook_to,
+                );
+            }
+            if king_moving {
+                self.state.mailbox[to] = Some(piece);
+                threat_updates::on_change::<Add>(&mut update_buffer.threat, self, piece, to);
+            }
         } else if captured.is_some() {
             self.state.bbs.move_piece(from, to, piece);
             // update mailbox and compute threats for the moving piece
