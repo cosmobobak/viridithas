@@ -2,7 +2,9 @@ use std::cell::Cell;
 
 use crate::{
     chess::{
-        board::movegen::{AllMoves, MoveList, MoveListEntry, SkipQuiets, pawn_attacks_by},
+        board::movegen::{
+            AllMoves, MoveList, MoveListEntry, SkipQuiets, knight_attacks, pawn_attacks_by,
+        },
         chessmove::Move,
         piece::PieceType,
         squareset::SquareSet,
@@ -201,6 +203,18 @@ impl MovePicker {
         let threats = t.board.state.threats.all;
         #[expect(clippy::cast_possible_truncation)]
         let pawn_index = (t.board.state.keys.pawn % HASH_HISTORY_SIZE as u64) as usize;
+        let turn = t.board.turn();
+        let us = t.board.state.bbs.colours[turn];
+        let them = t.board.state.bbs.colours[!turn];
+
+        let our_pawns = t.board.state.bbs.pieces[PieceType::Pawn] & us;
+        let their_king = t.board.state.bbs.pieces[PieceType::King] & them;
+        let their_queens = t.board.state.bbs.pieces[PieceType::Queen] & them;
+        let their_rooks = t.board.state.bbs.pieces[PieceType::Rook] & them;
+        let their_minors = (t.board.state.bbs.pieces[PieceType::Bishop]
+            | t.board.state.bbs.pieces[PieceType::Knight])
+            & them;
+        let their_pawns = t.board.state.bbs.pieces[PieceType::Pawn] & them;
         for m in ms {
             let from = m.mov.from();
             let piece = t.board.state.mailbox[from].unwrap();
@@ -223,19 +237,6 @@ impl MovePicker {
 
             match piece.piece_type() {
                 PieceType::Pawn => {
-                    let turn = t.board.turn();
-                    let us = t.board.state.bbs.colours[turn];
-                    let them = t.board.state.bbs.colours[!turn];
-
-                    let our_pawns = t.board.state.bbs.pieces[PieceType::Pawn] & us;
-                    let their_king = t.board.state.bbs.pieces[PieceType::King] & them;
-                    let their_queens = t.board.state.bbs.pieces[PieceType::Queen] & them;
-                    let their_rooks = t.board.state.bbs.pieces[PieceType::Rook] & them;
-                    let their_minors = (t.board.state.bbs.pieces[PieceType::Bishop]
-                        | t.board.state.bbs.pieces[PieceType::Knight])
-                        & them;
-                    let their_pawns = t.board.state.bbs.pieces[PieceType::Pawn] & them;
-
                     if pawn_attacks_by(to.as_set(), !turn) & our_pawns != SquareSet::EMPTY {
                         // bonus for creating threats
                         let pawn_attacks = pawn_attacks_by(to.as_set(), turn);
@@ -252,12 +253,30 @@ impl MovePicker {
                         }
                     }
                 }
-                PieceType::Knight | PieceType::Bishop => {
+                pt @ (PieceType::Knight | PieceType::Bishop) => {
                     if t.board.state.threats.leq_pawn.contains_square(from) {
                         score += 4000;
                     }
                     if t.board.state.threats.leq_pawn.contains_square(to) {
                         score -= 4000;
+                    } else {
+                        // bonus for creating threats
+                        // only knights atm because the movegen is quicker
+                        if pt == PieceType::Knight {
+                            let knight_attacks = knight_attacks(to);
+                            if knight_attacks & their_king != SquareSet::EMPTY {
+                                score += 10_000;
+                            } else if knight_attacks & their_queens != SquareSet::EMPTY {
+                                score += 6_000;
+                            } else if knight_attacks & their_rooks != SquareSet::EMPTY {
+                                score += 3_000;
+                            }
+                            // and forks:
+                            let fork_targets = their_king | their_queens | their_rooks;
+                            if (knight_attacks & fork_targets).many() {
+                                score += 6_000;
+                            }
+                        }
                     }
                 }
                 PieceType::Rook => {
