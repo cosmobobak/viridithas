@@ -387,6 +387,8 @@ mod simd {
         biases: &Align64<[f32; L3_SIZE * 2]>,
         output: &mut Align64<[f32; L3_SIZE]>,
     ) {
+        // skip connection safety:
+        const { assert!(L2_SIZE == L3_SIZE) };
         // SAFETY: Breaking it down by unsafe operations:
         // 1. get_unchecked[_mut] / .as[_mut]_ptr().add(): We only ever index at most (L3_SIZE * 2 / F32_CHUNK - 1) * F32_CHUNK
         // into the `sums` and `biases` arrays. This is in bounds, as `sums` has length L3_SIZE * 2 and
@@ -425,6 +427,9 @@ mod simd {
                     simd::min_f32(simd::max_f32(simd::add_f32(gate_preact, half_k), zero), k);
                 let swish = simd::mul_f32(simd::mul_f32(gate_preact, clamped), inv_k);
                 let act = simd::mul_f32(swish, id_preact);
+                // skip connection
+                let input = simd::load_f32(inputs.as_ptr().add(i * F32_CHUNK));
+                let act = simd::add_f32(act, input);
                 simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK), act);
             }
         }
