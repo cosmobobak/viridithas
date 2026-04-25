@@ -89,6 +89,7 @@ const SEE_STAT_SCORE_MUL: i32 = 25;
 const LMR_REFUTATION_MUL: i32 = 775;
 const LMR_NON_PV_MUL: i32 = 987;
 const LMR_TTPV_MUL: i32 = 1289;
+const LMR_TTPV_FAIL_LOW_MUL: i32 = 1136;
 const LMR_CUT_NODE_MUL: i32 = 1601;
 const LMR_NON_IMPROVING_MUL: i32 = 613;
 const LMR_TT_CAPTURE_MUL: i32 = 999;
@@ -1457,6 +1458,11 @@ pub fn alpha_beta<NT: NodeType>(
                 // reduce more on non-PV nodes
                 r += i32::from(!NT::PV) * t.info.conf.lmr_non_pv_mul;
                 r -= i32::from(t.ss[height].ttpv) * t.info.conf.lmr_ttpv_mul;
+                // reduce more for ttpv positions whose TT score is <= alpha
+                r += i32::from(
+                    t.ss[height].ttpv
+                        && tt_hit.is_some_and(|tte| tte.value != VALUE_NONE && tte.value <= alpha),
+                ) * t.info.conf.lmr_ttpv_fail_low_mul;
                 // reduce more on cut nodes
                 r += i32::from(cut_node) * t.info.conf.lmr_cut_node_mul;
                 // extend/reduce using the stat_score of the move
