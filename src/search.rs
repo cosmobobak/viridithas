@@ -82,6 +82,7 @@ const QS_SEE_BOUND: i32 = -141;
 const MAIN_SEE_BOUND: i32 = -93;
 const DO_DEEPER_BASE_MARGIN: i32 = 32;
 const DO_DEEPER_DEPTH_MARGIN: i32 = 8;
+const DO_SHALLOWER_MARGIN: i32 = 16;
 const HISTORY_PRUNING_MARGIN: i32 = -3186;
 const QS_FUTILITY: i32 = 350;
 const SEE_STAT_SCORE_MUL: i32 = 25;
@@ -1507,7 +1508,7 @@ pub fn alpha_beta<NT: NodeType>(
                 if is_quiet && (score <= alpha || score >= beta) {
                     t.update_cont_hist_single(hist_to, moved, new_depth, height, score > alpha);
                 }
-            } else if score > alpha && score < best_score + 16 {
+            } else if score > alpha && score < best_score + t.info.conf.do_shallower_margin {
                 new_depth -= 1;
             }
             // if we failed completely, then do full-window search
