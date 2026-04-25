@@ -1086,13 +1086,13 @@ pub fn alpha_beta<NT: NodeType>(
         // if we can give the opponent a free move while retaining
         // a score above beta, we can prune the node.
         if cut_node
-            && t.ss[height - 1].searching.is_some()
             && depth > 2
+            && height >= t.min_nmp_ply
+            && t.ss[height - 1].searching.is_some()
             && static_eval
                 + i32::from(improving) * t.info.conf.nmp_improving_margin
                 + depth * t.info.conf.nmp_depth_mul
                 >= beta
-            && !t.nmp_banned_for(t.board.turn())
             && t.board.zugzwang_unlikely()
             // don't nmp when the tt thinks it’s worthless:
             && !matches!(tt_hit, Some(TTHit { bound: Bound::Upper, value, .. }) if value < beta)
@@ -1122,8 +1122,9 @@ pub fn alpha_beta<NT: NodeType>(
                 return 0;
             }
             if null_score >= beta {
-                // only perform verification when depth is high or mates are flying.
-                if depth < 12 && !is_decisive(beta) {
+                // only perform verification when depth is high, mates are flying,
+                // and we’re not already verifying further up the stack.
+                if (depth < 12 || t.min_nmp_ply > 0) && !is_decisive(beta) {
                     // don't return game-theoretic scores,
                     // as they arise from a different game than
                     // the one this program is playing.
@@ -1132,14 +1133,14 @@ pub fn alpha_beta<NT: NodeType>(
                     }
                     return null_score;
                 }
-                // verify that pruning makes sense by doing a search with NMP disabled.
-                // the verification search is much like probcut, in that it's just
-                // a normal search with reduced depth. To verify, we disallow NMP for
-                // the side to move, and if we hit the other side deeper in the tree
-                // with sufficient depth, we'll disallow it for them too.
-                t.ban_nmp_for(t.board.turn());
+                // verify that pruning makes sense by doing a search with NMP disabled
+                // for the next few plies. the verification search is much like probcut:
+                // a normal search with reduced depth. setting `min_nmp_ply` here both
+                // gates NMP at this and nearby plies and trips the early-return above,
+                // so verification cannot recurse on itself.
+                t.min_nmp_ply = height + ((nm_depth.max(0).cast_unsigned() * 3 / 4) as usize);
                 let veri_score = alpha_beta::<OffPV>(l_pv, t, nm_depth, beta - 1, beta, false);
-                t.unban_nmp_for(t.board.turn());
+                t.min_nmp_ply = 0;
                 if veri_score >= beta {
                     return veri_score;
                 }

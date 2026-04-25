@@ -27,7 +27,6 @@ pub struct ThreadData<'a> {
     // stack array is right-padded by one because singular verification
     // will try to access the next ply in an edge case.
     pub ss: [StackEntry; MAX_DEPTH + 1],
-    pub banned_nmp: u8,
     pub nnue: Box<nnue::network::NNUEState>,
     pub nnue_params: &'static NNUEParams,
 
@@ -55,6 +54,7 @@ pub struct ThreadData<'a> {
 
     pub stm_at_root: Colour,
     pub optimism: [i32; 2],
+    pub min_nmp_ply: usize,
 
     pub tt: TTView<'a>,
 
@@ -63,9 +63,6 @@ pub struct ThreadData<'a> {
 }
 
 impl<'a> ThreadData<'a> {
-    const WHITE_BANNED_NMP: u8 = 0b01;
-    const BLACK_BANNED_NMP: u8 = 0b10;
-
     pub fn new(
         thread_id: usize,
         board: Board,
@@ -77,7 +74,7 @@ impl<'a> ThreadData<'a> {
     ) -> Self {
         let mut td = Self {
             ss: array::from_fn(|_| StackEntry::default()),
-            banned_nmp: 0,
+            min_nmp_ply: 0,
             nnue: nnue::network::NNUEState::new(&board, nnue_params),
             nnue_params,
             piece_to_hist: ThreatsHistoryTable::boxed(),
@@ -115,32 +112,6 @@ impl<'a> ThreadData<'a> {
         td.clear_tables();
 
         td
-    }
-
-    pub fn ban_nmp_for(&mut self, colour: Colour) {
-        self.banned_nmp |= if colour == Colour::White {
-            Self::WHITE_BANNED_NMP
-        } else {
-            Self::BLACK_BANNED_NMP
-        };
-    }
-
-    pub fn unban_nmp_for(&mut self, colour: Colour) {
-        self.banned_nmp &= if colour == Colour::White {
-            !Self::WHITE_BANNED_NMP
-        } else {
-            !Self::BLACK_BANNED_NMP
-        };
-    }
-
-    pub fn nmp_banned_for(&self, colour: Colour) -> bool {
-        self.banned_nmp
-            & if colour == Colour::White {
-                Self::WHITE_BANNED_NMP
-            } else {
-                Self::BLACK_BANNED_NMP
-            }
-            != 0
     }
 
     pub fn clear_tables(&mut self) {
