@@ -94,6 +94,7 @@ const LMR_NON_IMPROVING_MUL: i32 = 613;
 const LMR_TT_CAPTURE_MUL: i32 = 999;
 const LMR_CHECK_MUL: i32 = 1361;
 const LMR_CORR_MUL: i32 = 448;
+const LMR_ALPHA_RAISE_MUL: i32 = 384;
 const LMR_BASE_OFFSET: i32 = 226;
 const TTPV_LMR_DEPTH_MUL: i32 = 768;
 const MAIN_HISTORY: HistoryConfig = HistoryConfig::new(357, 226, 2241, 111, 561, 915);
@@ -1264,6 +1265,7 @@ pub fn alpha_beta<NT: NodeType>(
     let mut best_move = None;
     let mut best_score = -INFINITY;
     let mut moves_made = 0;
+    let mut alpha_raises = 0;
 
     // number of quiet moves to try before we start pruning
     let lmp_threshold = t.info.lm_table.lmp_movecount(depth, improving);
@@ -1471,6 +1473,8 @@ pub fn alpha_beta<NT: NodeType>(
                 r -= i32::from(t.board.in_check()) * t.info.conf.lmr_check_mul;
                 // reduce less when the static eval is way off-base
                 r -= correction.abs() * t.info.conf.lmr_corr_mul / 16384;
+                // reduce more for moves tried after several alpha-raises
+                r += alpha_raises * t.info.conf.lmr_alpha_raise_mul;
 
                 t.ss[height].reduction = r;
                 r / 1024
@@ -1538,6 +1542,7 @@ pub fn alpha_beta<NT: NodeType>(
             if score > alpha {
                 best_move = Some(m);
                 alpha = score;
+                alpha_raises += 1;
                 if NT::PV {
                     pv.load_from(m, l_pv);
                 }
