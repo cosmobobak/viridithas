@@ -92,8 +92,17 @@ mod simd {
         adds: &[ThreatFeatureIndex],
         subs: &[ThreatFeatureIndex],
     ) {
+        #[cfg(target_arch = "x86_64")]
+        use std::arch::x86_64::{_MM_HINT_T0, _mm_prefetch};
+
         const REGISTERS: usize = 16;
         const UNROLL: usize = I16_CHUNK * REGISTERS;
+
+        if adds.is_empty() && subs.is_empty() {
+            dst_acc.copy_from_slice(&**src_acc);
+            return;
+        }
+
         // SAFETY: we never hold multiple mutable references, we never mutate immutable memory,
         // we use iterators to ensure that we're staying in-bounds, etc.
         unsafe {
@@ -101,15 +110,17 @@ mod simd {
             let mut sub_blocks = ArrayVec::<_, 128>::new();
             for &add_index in adds {
                 let add_index = add_index.index() * L1_SIZE;
-                add_blocks.push(slice_to_aligned(
-                    bucket.get_unchecked(add_index..add_index + L1_SIZE),
-                ));
+                let slice = slice_to_aligned(bucket.get_unchecked(add_index..add_index + L1_SIZE));
+                #[cfg(target_arch = "x86_64")]
+                _mm_prefetch(crate::util::from_ref(slice).cast::<i8>(), _MM_HINT_T0);
+                add_blocks.push(slice);
             }
             for &sub_index in subs {
                 let sub_index = sub_index.index() * L1_SIZE;
-                sub_blocks.push(slice_to_aligned(
-                    bucket.get_unchecked(sub_index..sub_index + L1_SIZE),
-                ));
+                let slice = slice_to_aligned(bucket.get_unchecked(sub_index..sub_index + L1_SIZE));
+                #[cfg(target_arch = "x86_64")]
+                _mm_prefetch(crate::util::from_ref(slice).cast::<i8>(), _MM_HINT_T0);
+                sub_blocks.push(slice);
             }
             let mut registers = [simd::zero_i16(); REGISTERS];
             for i in 0..L1_SIZE / UNROLL {
