@@ -82,6 +82,7 @@ const QS_SEE_BOUND: i32 = -141;
 const MAIN_SEE_BOUND: i32 = -93;
 const DO_DEEPER_BASE_MARGIN: i32 = 32;
 const DO_DEEPER_DEPTH_MARGIN: i32 = 8;
+const DO_EVEN_DEEPER_MARGIN: i32 = 384;
 const DO_SHALLOWER_MARGIN: i32 = 16;
 const HISTORY_PRUNING_MARGIN: i32 = -3186;
 const QS_FUTILITY: i32 = 350;
@@ -1501,12 +1502,18 @@ pub fn alpha_beta<NT: NodeType>(
                     > (best_score
                         + t.info.conf.do_deeper_base_margin
                         + t.info.conf.do_deeper_depth_margin * r);
+                let do_even_deeper_search = score > best_score + t.info.conf.do_even_deeper_margin;
                 let do_shallower_search = score < best_score + new_depth;
                 // depending on the value that the reduced search kicked out,
                 // we might want to do a deeper search, or a shallower search.
-                new_depth += i32::from(do_deeper_search) - i32::from(do_shallower_search);
-                t.ss[height].reduction =
-                    1024 * (1 + i32::from(do_shallower_search) - i32::from(do_deeper_search));
+                // do_even_deeper stacks with do_deeper for a +2 extension when
+                // the reduced search came back overwhelmingly above best_score.
+                new_depth += i32::from(do_deeper_search) + i32::from(do_even_deeper_search)
+                    - i32::from(do_shallower_search);
+                t.ss[height].reduction = 1024
+                    * (1 + i32::from(do_shallower_search)
+                        - i32::from(do_deeper_search)
+                        - i32::from(do_even_deeper_search));
                 // check if we're actually going to do a deeper search than before
                 // (no point if the re-search is the same as the normal one lol)
                 if new_depth - 1 > reduced_depth {
