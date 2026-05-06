@@ -213,20 +213,7 @@ impl Display for MoveDisplay {
 
 impl Debug for Move {
     fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
-        write!(
-            f,
-            "move from {} ({:?}) to {} ({:?}), promo {}, ispromo {}, ep {}, castle {}",
-            self.from(),
-            self.from(),
-            self.to(),
-            self.to(),
-            self.promotion_type()
-                .and_then(PieceType::promo_char)
-                .unwrap_or('X'),
-            self.is_promo(),
-            self.is_ep(),
-            self.is_castle()
-        )
+        write!(f, "{}, bits: {:016b}", self.display(true), self.data.get())
     }
 }
 

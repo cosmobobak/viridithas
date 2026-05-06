@@ -10,16 +10,19 @@ use crate::{
     transpositiontable::Bound,
 };
 
+/// A buffer to account for communication between the engine and the client.
 const MOVE_OVERHEAD: u64 = 30;
+/// The fraction per mille that we are ever allowed to use of the bank.
+const MAX_BANK_USABLE: u64 = 600;
 
-pub const STRONG_FORCED_TM_FRAC: u32 = 354;
-pub const WEAK_FORCED_TM_FRAC: u32 = 650;
-pub const DEFAULT_MOVES_TO_GO: u32 = 27;
-pub const HARD_WINDOW_FRAC: u32 = 53;
-pub const OPTIMAL_WINDOW_FRAC: u32 = 78;
-pub const INCREMENT_FRAC: u32 = 74;
-pub const NODE_TM_SUBTREE_MULTIPLIER: u32 = 148;
-pub const FAIL_LOW_TM_BONUS: u32 = 306;
+pub const STRONG_FORCED_TM_FRAC: u32 = 386;
+pub const WEAK_FORCED_TM_FRAC: u32 = 627;
+pub const DEFAULT_MOVES_TO_GO: u32 = 24;
+pub const HARD_WINDOW_FRAC: u32 = 46;
+pub const OPTIMAL_WINDOW_FRAC: u32 = 73;
+pub const INCREMENT_FRAC: u32 = 94;
+pub const NODE_TM_SUBTREE_MULTIPLIER: u32 = 140;
+pub const FAIL_LOW_TM_BONUS: u32 = 340;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum ForcedMoveType {
@@ -98,7 +101,7 @@ impl SearchLimit {
     ) -> (u64, u64, u64) {
         // The very highest amount of time we are
         // willing to search in a position, ever.
-        let max_time = (our_clock * 95 / 100).saturating_sub(MOVE_OVERHEAD);
+        let max_time = (our_clock * MAX_BANK_USABLE / 1000).saturating_sub(MOVE_OVERHEAD);
 
         // The maximum time we can spend searching before forcibly stopping:
         let hard_time_window = (our_clock * u64::from(conf.hard_window_frac) / 100).min(max_time);

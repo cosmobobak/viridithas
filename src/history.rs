@@ -6,11 +6,10 @@ use crate::{
         types::Square,
     },
     historytable::{
-        CORRECTION_HISTORY_MAX, HASH_HISTORY_SIZE, cont_history_bonus, cont_history_malus,
-        main_history_bonus, main_history_malus, pawn_history_bonus, pawn_history_malus,
-        tactical_history_bonus, tactical_history_malus, update_cont_history, update_correction,
-        update_history,
+        CORRECTION_HISTORY_MAX, HASH_HISTORY_SIZE, history_bonus, history_malus,
+        update_cont_history, update_correction, update_history,
     },
+    lookups::PIECE_KEYS,
     threadlocal::ThreadData,
     util::MAX_DEPTH,
 };
@@ -21,22 +20,19 @@ impl ThreadData<'_> {
     /// Update the history counters of a batch of moves.
     pub fn update_history(&mut self, moves_to_adjust: &[Move], best_move: Move, depth: i32) {
         let threats = self.board.state.threats.all;
+        let bonus = history_bonus(&self.info.conf.main_history, depth);
+        let malus = -history_malus(&self.info.conf.main_history, depth);
         for &m in moves_to_adjust {
+            let delta = if m == best_move { bonus } else { malus };
             let from = m.from();
-            let piece_moved = self.board.state.mailbox[from];
+            let piece_moved = self.board.state.mailbox[from].unwrap();
             let to = m.history_to_square();
-            let val = self.main_hist.get_mut(
-                piece_moved.unwrap(),
-                to,
-                threats.contains_square(from),
-                threats.contains_square(to),
-            );
-            let delta = if m == best_move {
-                main_history_bonus(&self.info.conf, depth)
-            } else {
-                -main_history_malus(&self.info.conf, depth)
-            };
-            update_history(val, delta);
+            let ft = threats.contains_square(from);
+            let tt = threats.contains_square(to);
+            let piece_to = &mut self.piece_to_hist.get_mut(ft, tt)[piece_moved][to];
+            let from_to = &mut self.from_to_hist.get_mut(ft, tt)[from][to];
+            update_history(piece_to, delta);
+            update_history(from_to, delta);
         }
     }
 
@@ -51,17 +47,16 @@ impl ThreadData<'_> {
         good: bool,
     ) {
         let delta = if good {
-            main_history_bonus(&self.info.conf, depth)
+            history_bonus(&self.info.conf.main_history, depth)
         } else {
-            -main_history_malus(&self.info.conf, depth)
+            -history_malus(&self.info.conf.main_history, depth)
         };
-        let val = self.main_hist.get_mut(
-            moved,
-            to,
-            threats.contains_square(from),
-            threats.contains_square(to),
-        );
+        let ft = threats.contains_square(from);
+        let tt = threats.contains_square(to);
+        let val = &mut self.piece_to_hist.get_mut(ft, tt)[moved][to];
+        let fact_val = &mut self.from_to_hist.get_mut(ft, tt)[from][to];
         update_history(val, delta);
+        update_history(fact_val, delta);
     }
 
     /// Update the pawn-structure history counters of a batch of moves.
@@ -73,9 +68,9 @@ impl ThreadData<'_> {
             #[expect(clippy::cast_possible_truncation)]
             let val = &mut self.pawn_hist[pawn_index as usize][piece_moved][to];
             let delta = if m == best_move {
-                pawn_history_bonus(&self.info.conf, depth)
+                history_bonus(&self.info.conf.pawn_history, depth)
             } else {
-                -pawn_history_malus(&self.info.conf, depth)
+                -history_malus(&self.info.conf.pawn_history, depth)
             };
             update_history(val, delta);
         }
@@ -84,9 +79,9 @@ impl ThreadData<'_> {
     /// Update the pawn-structure history counter for a single move.
     pub fn update_pawn_history_single(&mut self, to: Square, moved: Piece, depth: i32, good: bool) {
         let delta = if good {
-            pawn_history_bonus(&self.info.conf, depth)
+            history_bonus(&self.info.conf.pawn_history, depth)
         } else {
-            -pawn_history_malus(&self.info.conf, depth)
+            -history_malus(&self.info.conf.pawn_history, depth)
         };
         let pawn_index = self.board.state.keys.pawn % HASH_HISTORY_SIZE as u64;
         #[expect(clippy::cast_possible_truncation)]
@@ -109,9 +104,9 @@ impl ThreadData<'_> {
             let to_threat = threats.contains_square(to);
             let val = &mut self.tactical_hist[usize::from(to_threat)][capture][piece_moved][to];
             let delta = if m == best_move {
-                tactical_history_bonus(&self.info.conf, depth)
+                history_bonus(&self.info.conf.tactical_history, depth)
             } else {
-                -tactical_history_malus(&self.info.conf, depth)
+                -history_malus(&self.info.conf.tactical_history, depth)
             };
             update_history(val, delta);
         }
@@ -137,14 +132,37 @@ impl ThreadData<'_> {
         height: usize,
         good: bool,
     ) {
-        let list = [
+        let indexed_multipliers = [
             (1, self.info.conf.cont1_stat_score_mul),
             (2, self.info.conf.cont2_stat_score_mul),
+            // (3, self.info.conf.cont3_stat_score_mul),
             (4, self.info.conf.cont4_stat_score_mul),
+            // (5, self.info.conf.cont5_stat_score_mul),
+            // (6, self.info.conf.cont6_stat_score_mul),
         ];
 
+        let boni = [
+            history_bonus(&self.info.conf.cont1_history, depth),
+            history_bonus(&self.info.conf.cont2_history, depth),
+            // history_bonus(&self.info.conf.cont3_history, depth),
+            history_bonus(&self.info.conf.cont4_history, depth),
+            // history_bonus(&self.info.conf.cont5_history, depth),
+            // history_bonus(&self.info.conf.cont6_history, depth),
+        ];
+
+        let mali = [
+            -history_malus(&self.info.conf.cont1_history, depth),
+            -history_malus(&self.info.conf.cont2_history, depth),
+            // -history_malus(&self.info.conf.cont3_history, depth),
+            -history_malus(&self.info.conf.cont4_history, depth),
+            // -history_malus(&self.info.conf.cont5_history, depth),
+            // -history_malus(&self.info.conf.cont6_history, depth),
+        ];
+
+        let adjustments = if good { boni } else { mali };
+
         let mut sum = 0;
-        for (index, mul) in list {
+        for (index, mul) in indexed_multipliers {
             if height < index {
                 break;
             }
@@ -152,15 +170,10 @@ impl ThreadData<'_> {
         }
         sum /= 32;
 
-        for (index, _) in list {
+        for ((index, _), delta) in indexed_multipliers.into_iter().zip(adjustments) {
             if height < index {
                 break;
             }
-            let delta = if good {
-                cont_history_bonus(&self.info.conf, depth, index)
-            } else {
-                -cont_history_malus(&self.info.conf, depth, index)
-            };
             let val = &mut self.cont_hist[self.ss[height - index].ch_idx][piece][to];
             update_cont_history(val, sum, delta);
         }
@@ -214,9 +227,19 @@ impl ThreadData<'_> {
         if height > 2 {
             let ch1 = self.ss[height - 1].ch_idx;
             let ch2 = self.ss[height - 2].ch_idx;
-            let pt1 = ch1.piece.piece_type();
-            let pt2 = ch2.piece.piece_type();
-            update(&mut self.continuation_corrhist[ch1.to][pt1][ch2.to][pt2][us]);
+            let mut index = 0;
+            index ^= PIECE_KEYS[ch1.piece][ch1.to];
+            index ^= PIECE_KEYS[ch2.piece][ch2.to];
+            update(self.cont_corrhist.get_mut(us, index));
+        }
+
+        if height > 4 {
+            let ch1 = self.ss[height - 1].ch_idx;
+            let ch2 = self.ss[height - 4].ch_idx;
+            let mut index = 0;
+            index ^= PIECE_KEYS[ch1.piece][ch1.to];
+            index ^= PIECE_KEYS[ch2.piece][ch2.to];
+            update(self.cont_corrhist.get_mut(us, index));
         }
     }
 
@@ -236,12 +259,24 @@ impl ThreadData<'_> {
         let minor = self.minor_corrhist.get(us, keys.minor);
         let major = self.major_corrhist.get(us, keys.major);
 
-        let cont = if height > 2 {
+        let cont12 = if height > 2 {
             let ch1 = self.ss[height - 1].ch_idx;
             let ch2 = self.ss[height - 2].ch_idx;
-            let pt1 = ch1.piece.piece_type();
-            let pt2 = ch2.piece.piece_type();
-            i64::from(self.continuation_corrhist[ch1.to][pt1][ch2.to][pt2][us])
+            let mut index = 0;
+            index ^= PIECE_KEYS[ch1.piece][ch1.to];
+            index ^= PIECE_KEYS[ch2.piece][ch2.to];
+            self.cont_corrhist.get(us, index)
+        } else {
+            0
+        };
+
+        let cont14 = if height > 4 {
+            let ch1 = self.ss[height - 1].ch_idx;
+            let ch2 = self.ss[height - 4].ch_idx;
+            let mut index = 0;
+            index ^= PIECE_KEYS[ch1.piece][ch1.to];
+            index ^= PIECE_KEYS[ch2.piece][ch2.to];
+            self.cont_corrhist.get(us, index)
         } else {
             0
         };
@@ -250,7 +285,8 @@ impl ThreadData<'_> {
             + major * i64::from(self.info.conf.major_corrhist_weight)
             + minor * i64::from(self.info.conf.minor_corrhist_weight)
             + (white + black) * i64::from(self.info.conf.nonpawn_corrhist_weight)
-            + cont * i64::from(self.info.conf.continuation_corrhist_weight);
+            + cont12 * i64::from(self.info.conf.continuation_12_corrhist_weight)
+            + cont14 * i64::from(self.info.conf.continuation_14_corrhist_weight);
 
         (adjustment * 12 / 0x40000) as i32
     }

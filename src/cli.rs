@@ -58,6 +58,9 @@ pub enum Subcommands {
         /// Optional path to output histogram data.
         #[clap(short, long)]
         output: Option<PathBuf>,
+        /// Only emit data for a particular output bucket index.
+        #[clap(short, long)]
+        bucket: Option<usize>,
     },
     /// Count the number of positions contained within one or more packed game records.
     #[cfg(feature = "datagen")]
@@ -77,6 +80,14 @@ pub enum Subcommands {
         /// Scaling factor to apply to evaluations
         #[clap(long)]
         scale: f64,
+        /// Path to input packed game record.
+        input: PathBuf,
+        /// Path to output packed game record.
+        output: PathBuf,
+    },
+    /// Relabel evaluations in a packed game record
+    #[cfg(feature = "datagen")]
+    Relabel {
         /// Path to input packed game record.
         input: PathBuf,
         /// Path to output packed game record.
@@ -111,6 +122,9 @@ pub enum Subcommands {
         /// ```
         #[clap(long, verbatim_doc_comment)]
         cfg_path: Option<PathBuf>,
+        /// Annotate moves with evaluations in PGN output.
+        #[clap(long)]
+        annotate: bool,
     },
     /// Generate self-play data
     #[cfg(feature = "datagen")]

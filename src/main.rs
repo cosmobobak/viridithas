@@ -10,6 +10,9 @@ mod macros;
 #[cfg(feature = "datagen")]
 mod datagen;
 
+#[cfg(feature = "stats")]
+pub mod stats;
+
 mod bench;
 mod chess;
 mod cli;
@@ -37,7 +40,7 @@ mod uci;
 mod util;
 
 #[cfg(feature = "datagen")]
-use cli::Subcommands::{Analyse, CountPositions, Datagen, Rescale, Splat};
+use cli::Subcommands::{Analyse, CountPositions, Datagen, Relabel, Rescale, Splat};
 use cli::Subcommands::{
     Bench, EvalStats, Merge, NNUEDryRun, Perft, Quantise, Spsa, Verbatim, VisNNUE,
 };
@@ -50,7 +53,7 @@ pub static VERSION: &str = env!("CARGO_PKG_VERSION");
 fn main() -> anyhow::Result<()> {
     if std::env::args_os().len() == 1 {
         // fast path to UCI:
-        return uci::main_loop();
+        return Ok(uci::main_loop()?);
     }
 
     let cli = <cli::Cli as clap::Parser>::parse();
@@ -62,8 +65,13 @@ fn main() -> anyhow::Result<()> {
             let nodes = std::sync::atomic::AtomicU64::new(0);
             let tbhits = std::sync::atomic::AtomicU64::new(0);
             let info = searchinfo::SearchInfo::new(&stopped, &nodes, &tbhits);
-            uci::bench("openbench", &info.conf, nnue_params, depth, threads)?;
-            Ok(())
+            Ok(uci::bench(
+                "openbench",
+                &info.conf,
+                nnue_params,
+                depth,
+                threads,
+            )?)
         }
         Some(Perft) => perft::gamut(),
         Some(Quantise { input, output }) => nnue::network::quantise(&input, &output),
@@ -85,7 +93,11 @@ fn main() -> anyhow::Result<()> {
             }
             Ok(())
         }
-        Some(EvalStats { input, output }) => evaluation::eval_stats(&input, output.as_deref()),
+        Some(EvalStats {
+            input,
+            output,
+            bucket,
+        }) => evaluation::eval_stats(&input, output.as_deref(), bucket),
         #[cfg(feature = "datagen")]
         Some(Analyse { input }) => datagen::dataset_stats(&input),
         #[cfg(feature = "datagen")]
@@ -97,6 +109,8 @@ fn main() -> anyhow::Result<()> {
             output,
         }) => datagen::run_rescale(&input, &output, scale),
         #[cfg(feature = "datagen")]
+        Some(Relabel { input, output }) => datagen::run_relabel(&input, &output),
+        #[cfg(feature = "datagen")]
         Some(Splat {
             input,
             marlinformat,
@@ -104,9 +118,10 @@ fn main() -> anyhow::Result<()> {
             output,
             limit,
             cfg_path,
+            annotate,
         }) => {
             if pgn {
-                datagen::run_topgn(&input, &output, limit)
+                datagen::run_topgn(&input, &output, limit, annotate)
             } else {
                 datagen::run_splat(&input, &output, cfg_path.as_deref(), marlinformat, limit)
             }
@@ -127,6 +142,6 @@ fn main() -> anyhow::Result<()> {
             nodes,
             dfrc,
         }),
-        None => uci::main_loop(),
+        None => Ok(uci::main_loop()?),
     }
 }

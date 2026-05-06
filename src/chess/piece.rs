@@ -86,7 +86,7 @@ impl Display for PieceType {
 }
 
 #[rustfmt::skip]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
 #[repr(u8)]
 pub enum Piece {
     #[default]
@@ -254,6 +254,11 @@ impl Piece {
     #[allow(dead_code)]
     pub const fn inner(self) -> u8 {
         self as u8
+    }
+
+    pub const fn flip_colour(self) -> Self {
+        // SAFETY: flipping the colour bit of a valid piece always results in a valid piece.
+        unsafe { std::mem::transmute(self as u8 ^ 1) }
     }
 }
 

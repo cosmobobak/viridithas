@@ -1,4 +1,3 @@
-use anyhow::Context;
 use arrayvec::ArrayVec;
 
 use std::{
@@ -14,10 +13,10 @@ use crate::{
         board::Board,
         chessmove::{Move, MoveFlags},
         magic::{
-            BISHOP_ATTACKS, BISHOP_REL_BITS, BISHOP_TABLE, ROOK_ATTACKS, ROOK_REL_BITS, ROOK_TABLE,
-            bishop_attacks_on_the_fly, rook_attacks_on_the_fly, set_occupancy,
+            DIAG_ATTACKS, DIAG_REL_BITS, DIAG_TABLE, ORTH_ATTACKS, ORTH_REL_BITS, ORTH_TABLE,
+            diag_attacks_slow, orth_attacks_slow, set_occupancy,
         },
-        piece::{Black, Col, Colour, PieceType, White},
+        piece::{Black, Col, Colour, Piece, PieceType, White},
         squareset::SquareSet,
         types::{Rank, Square},
     },
@@ -155,8 +154,8 @@ pub static RAY_FULL: [[SquareSet; 64]; 64] = {
     let mut bishop_table = [SquareSet::EMPTY; 64];
     let mut from = Square::A1;
     loop {
-        rook_table[from as usize] = rook_attacks_on_the_fly(from, SquareSet::EMPTY);
-        bishop_table[from as usize] = bishop_attacks_on_the_fly(from, SquareSet::EMPTY);
+        rook_table[from as usize] = orth_attacks_slow(from, SquareSet::EMPTY);
+        bishop_table[from as usize] = diag_attacks_slow(from, SquareSet::EMPTY);
         let Some(next) = from.add(1) else {
             break;
         };
@@ -203,25 +202,10 @@ pub static RAY_FULL: [[SquareSet; 64]; 64] = {
 
 const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [SquareSet; 64] {
     let mut attacks = [SquareSet::EMPTY; 64];
-    let deltas = if IS_KNIGHT {
-        &[17, 15, 10, 6, -17, -15, -10, -6]
-    } else {
-        &[9, 8, 7, 1, -9, -8, -7, -1]
-    };
 
     cfor!(let mut sq = Square::A1; true; sq = sq.saturating_add(1); {
-        let mut attacks_bb = 0;
-        cfor!(let mut idx = 0; idx < 8; idx += 1; {
-            let delta = deltas[idx];
-            let attacked_sq = sq.signed_inner() + delta;
-            #[allow(clippy::cast_sign_loss)]
-            if 0 <= attacked_sq && attacked_sq < 64 && Square::distance(
-                sq,
-                Square::new_clamped(attacked_sq as u8)) <= 2 {
-                attacks_bb |= 1 << attacked_sq;
-            }
-        });
-        attacks[sq.index()] = SquareSet::from_inner(attacks_bb);
+        let bb = jumping_attacks_slow::<IS_KNIGHT>(sq);
+        attacks[sq.index()] = bb;
         if matches!(sq, Square::H8) {
             break;
         }
@@ -230,11 +214,31 @@ const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [SquareSet; 64] {
     attacks
 }
 
-pub fn init_sliders_attacks() -> anyhow::Result<()> {
+const fn jumping_attacks_slow<const IS_KNIGHT: bool>(sq: Square) -> SquareSet {
+    let deltas = if IS_KNIGHT {
+        &[17, 15, 10, 6, -17, -15, -10, -6]
+    } else {
+        &[9, 8, 7, 1, -9, -8, -7, -1]
+    };
+    let mut attacks_bb = 0;
+    cfor!(let mut idx = 0; idx < 8; idx += 1; {
+        let delta = deltas[idx];
+        let attacked_sq = sq.signed_inner() + delta;
+        #[allow(clippy::cast_sign_loss)]
+        if 0 <= attacked_sq && attacked_sq < 64 && Square::distance(
+            sq,
+            Square::new_clamped(attacked_sq as u8)) <= 2 {
+            attacks_bb |= 1 << attacked_sq;
+        }
+    });
+    SquareSet::from_inner(attacks_bb)
+}
+
+pub fn init_sliders_attacks() -> Result<(), std::io::Error> {
     #![allow(clippy::large_stack_arrays)]
     let mut bishop_attacks = vec![[SquareSet::EMPTY; 512]; 64];
     for sq in Square::all() {
-        let entry = &BISHOP_TABLE[sq];
+        let entry = &DIAG_TABLE[sq];
         // init the current mask
         let mask = entry.mask;
         // count attack mask bits
@@ -246,15 +250,15 @@ pub fn init_sliders_attacks() -> anyhow::Result<()> {
             // init occupancies
             let occupancy = set_occupancy(count, bit_count.into(), mask);
             let magic_index: usize = ((occupancy.inner().wrapping_mul(entry.magic))
-                >> (64 - BISHOP_REL_BITS))
+                >> (64 - DIAG_REL_BITS))
                 .try_into()
                 .unwrap();
-            bishop_attacks[sq as usize][magic_index] = bishop_attacks_on_the_fly(sq, occupancy);
+            bishop_attacks[sq as usize][magic_index] = diag_attacks_slow(sq, occupancy);
         }
     }
     let mut rook_attacks = vec![[SquareSet::EMPTY; 4096]; 64];
     for sq in Square::all() {
-        let entry = &ROOK_TABLE[sq];
+        let entry = &ORTH_TABLE[sq];
         // init the current mask
         let mask = entry.mask;
         // count attack mask bits
@@ -266,10 +270,10 @@ pub fn init_sliders_attacks() -> anyhow::Result<()> {
             // init occupancies
             let occupancy = set_occupancy(count, bit_count.into(), mask);
             let magic_index: usize = ((occupancy.inner().wrapping_mul(entry.magic))
-                >> (64 - ROOK_REL_BITS))
+                >> (64 - ORTH_REL_BITS))
                 .try_into()
                 .unwrap();
-            rook_attacks[sq as usize][magic_index] = rook_attacks_on_the_fly(sq, occupancy);
+            rook_attacks[sq as usize][magic_index] = orth_attacks_slow(sq, occupancy);
         }
     }
 
@@ -278,39 +282,33 @@ pub fn init_sliders_attacks() -> anyhow::Result<()> {
     // SAFETY: SquareSet is POD.
     let rook_bytes = unsafe { rook_attacks.align_to::<u8>().1 };
 
-    std::fs::write("embeds/diagonal_attacks.bin", bishop_bytes)
-        .context("failed to write embeds/diagonal_attacks.bin")?;
-    std::fs::write("embeds/orthogonal_attacks.bin", rook_bytes)
-        .context("failed to write embeds/orthogonal_attacks.bin")?;
+    std::fs::write("embeds/diagonal_attacks.bin", bishop_bytes)?;
+    std::fs::write("embeds/orthogonal_attacks.bin", rook_bytes)?;
 
     Ok(())
 }
 
 #[allow(clippy::cast_possible_truncation)]
-pub fn bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-    // const _INDEX_LEGAL: () = assert!(1 << BISHOP_REL_BITS == BISHOP_ATTACKS[0].len());
-    let entry = &BISHOP_TABLE[sq];
+pub fn diag_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
+    let entry = &DIAG_TABLE[sq];
     let relevant_blockers = blockers & entry.mask;
     let data = relevant_blockers.inner().wrapping_mul(entry.magic);
-    // BISHOP_REL_BITS is 9, so this shift is by 55.
-    let idx = (data >> (64 - BISHOP_REL_BITS)) as usize;
+    let idx = (data >> (64 - DIAG_REL_BITS)) as usize;
     // SAFETY: The largest value we can obtain from (data >> 55)
-    // is u64::MAX >> 55, which is 511 (0x1FF). BISHOP_ATTACKS[sq]
+    // is u64::MAX >> 55, which is 511 (0x1FF). DIAG_ATTACKS[sq]
     // is 512 elements long, so this is always in bounds.
-    unsafe { *BISHOP_ATTACKS[sq].get_unchecked(idx) }
+    unsafe { *DIAG_ATTACKS[sq].get_unchecked(idx) }
 }
 #[allow(clippy::cast_possible_truncation)]
-pub fn rook_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-    // const _INDEX_LEGAL: () = assert!(1 << ROOK_REL_BITS == ROOK_ATTACKS[0].len());
-    let entry = &ROOK_TABLE[sq];
+pub fn orth_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
+    let entry = &ORTH_TABLE[sq];
     let relevant_blockers = blockers & entry.mask;
     let data = relevant_blockers.inner().wrapping_mul(entry.magic);
-    // ROOK_REL_BITS is 12, so this shift is by 52.
-    let idx = (data >> (64 - ROOK_REL_BITS)) as usize;
+    let idx = (data >> (64 - ORTH_REL_BITS)) as usize;
     // SAFETY: The largest value we can obtain from (data >> 52)
-    // is u64::MAX >> 52, which is 4095 (0xFFF). ROOK_ATTACKS[sq]
+    // is u64::MAX >> 52, which is 4095 (0xFFF). ORTH_ATTACKS[sq]
     // is 4096 elements long, so this is always in bounds.
-    unsafe { *ROOK_ATTACKS[sq].get_unchecked(idx) }
+    unsafe { *ORTH_ATTACKS[sq].get_unchecked(idx) }
 }
 pub fn knight_attacks(sq: Square) -> SquareSet {
     static KNIGHT_ATTACKS: [SquareSet; 64] = init_jumping_attacks::<true>();
@@ -320,6 +318,12 @@ pub fn king_attacks(sq: Square) -> SquareSet {
     static KING_ATTACKS: [SquareSet; 64] = init_jumping_attacks::<false>();
     KING_ATTACKS[sq]
 }
+pub const fn knight_attacks_slow(sq: Square) -> SquareSet {
+    jumping_attacks_slow::<true>(sq)
+}
+pub const fn king_attacks_slow(sq: Square) -> SquareSet {
+    jumping_attacks_slow::<false>(sq)
+}
 pub fn pawn_attacks<C: Col>(bb: SquareSet) -> SquareSet {
     if C::WHITE {
         bb.north_east_one() | bb.north_west_one()
@@ -327,25 +331,33 @@ pub fn pawn_attacks<C: Col>(bb: SquareSet) -> SquareSet {
         bb.south_east_one() | bb.south_west_one()
     }
 }
-pub fn pawn_attacks_by(bb: SquareSet, colour: Colour) -> SquareSet {
-    if colour == Colour::White {
-        bb.north_east_one() | bb.north_west_one()
+pub const fn pawn_attacks_by(bb: SquareSet, colour: Colour) -> SquareSet {
+    if matches!(colour, Colour::White) {
+        bb.north_east_one().union(bb.north_west_one())
     } else {
-        bb.south_east_one() | bb.south_west_one()
+        bb.south_east_one().union(bb.south_west_one())
     }
 }
 
-pub fn attacks_by_type(pt: PieceType, sq: Square, blockers: SquareSet) -> SquareSet {
-    match pt {
-        PieceType::Pawn => {
-            debug_assert!(false, "Invalid piece type: {pt:?}");
-            SquareSet::EMPTY
-        }
+pub fn attacks_by_type(piece: Piece, sq: Square, blockers: SquareSet) -> SquareSet {
+    match piece.piece_type() {
+        PieceType::Pawn => pawn_attacks_by(sq.as_set(), piece.colour()),
         PieceType::Knight => knight_attacks(sq),
-        PieceType::Bishop => bishop_attacks(sq, blockers),
-        PieceType::Rook => rook_attacks(sq, blockers),
-        PieceType::Queen => bishop_attacks(sq, blockers) | rook_attacks(sq, blockers),
+        PieceType::Bishop => diag_attacks(sq, blockers),
+        PieceType::Rook => orth_attacks(sq, blockers),
+        PieceType::Queen => diag_attacks(sq, blockers) | orth_attacks(sq, blockers),
         PieceType::King => king_attacks(sq),
+    }
+}
+
+pub const fn attacks_by_type_slow(piece: Piece, sq: Square, blockers: SquareSet) -> SquareSet {
+    match piece.piece_type() {
+        PieceType::Pawn => pawn_attacks_by(sq.as_set(), piece.colour()),
+        PieceType::Knight => knight_attacks_slow(sq),
+        PieceType::Bishop => diag_attacks_slow(sq, blockers),
+        PieceType::Rook => orth_attacks_slow(sq, blockers),
+        PieceType::Queen => diag_attacks_slow(sq, blockers).union(orth_attacks_slow(sq, blockers)),
+        PieceType::King => king_attacks_slow(sq),
     }
 }
 
@@ -551,7 +563,7 @@ impl Board {
     fn generate_moves_for<C: Col>(&self, move_list: &mut MoveList) {
         use PieceType::{Bishop, King, Knight, Queen, Rook};
         #[cfg(debug_assertions)]
-        self.check_validity().unwrap();
+        self.check_validity();
 
         let bbs = &self.state.bbs;
         let our_pieces = bbs.colours[C::COLOUR];
@@ -599,7 +611,7 @@ impl Board {
         let our_diagonal_sliders = (bbs.pieces[Queen] | bbs.pieces[Bishop]) & our_pieces;
         let blockers = bbs.occupied();
         for sq in our_diagonal_sliders {
-            let moves = bishop_attacks(sq, blockers) & valid_target_squares;
+            let moves = diag_attacks(sq, blockers) & valid_target_squares;
             for to in moves & (their_pieces | freespace) {
                 move_list.push(Move::new(sq, to));
             }
@@ -608,7 +620,7 @@ impl Board {
         // rooks and queens
         let our_orthogonal_sliders = (bbs.pieces[Queen] | bbs.pieces[Rook]) & our_pieces;
         for sq in our_orthogonal_sliders {
-            let moves = rook_attacks(sq, blockers) & valid_target_squares;
+            let moves = orth_attacks(sq, blockers) & valid_target_squares;
             for to in moves & (their_pieces | freespace) {
                 move_list.push(Move::new(sq, to));
             }
@@ -632,7 +644,7 @@ impl Board {
     fn generate_captures_for<C: Col, Mode: MoveGenMode>(&self, move_list: &mut MoveList) {
         use PieceType::{Bishop, King, Knight, Queen, Rook};
         #[cfg(debug_assertions)]
-        self.check_validity().unwrap();
+        self.check_validity();
 
         let bbs = &self.state.bbs;
         let our_pieces = bbs.colours[C::COLOUR];
@@ -682,7 +694,7 @@ impl Board {
         let our_diagonal_sliders = (bbs.pieces[Queen] | bbs.pieces[Bishop]) & our_pieces;
         let blockers = bbs.occupied();
         for sq in our_diagonal_sliders {
-            let moves = bishop_attacks(sq, blockers) & valid_target_squares;
+            let moves = diag_attacks(sq, blockers) & valid_target_squares;
             for to in moves & their_pieces {
                 move_list.push(Move::new(sq, to));
             }
@@ -691,7 +703,7 @@ impl Board {
         // rooks and queens
         let our_orthogonal_sliders = (bbs.pieces[Queen] | bbs.pieces[Rook]) & our_pieces;
         for sq in our_orthogonal_sliders {
-            let moves = rook_attacks(sq, blockers) & valid_target_squares;
+            let moves = orth_attacks(sq, blockers) & valid_target_squares;
             for to in moves & their_pieces {
                 move_list.push(Move::new(sq, to));
             }
@@ -909,7 +921,7 @@ impl Board {
         // bishops and queens
         let our_diagonal_sliders = (bbs.pieces[Queen] | bbs.pieces[Bishop]) & our_pieces;
         for sq in our_diagonal_sliders {
-            let moves = bishop_attacks(sq, blockers) & valid_target_squares;
+            let moves = diag_attacks(sq, blockers) & valid_target_squares;
             for to in moves & !blockers {
                 move_list.push(Move::new(sq, to));
             }
@@ -918,7 +930,7 @@ impl Board {
         // rooks and queens
         let our_orthogonal_sliders = (bbs.pieces[Queen] | bbs.pieces[Rook]) & our_pieces;
         for sq in our_orthogonal_sliders {
-            let moves = rook_attacks(sq, blockers) & valid_target_squares;
+            let moves = orth_attacks(sq, blockers) & valid_target_squares;
             for to in moves & !blockers {
                 move_list.push(Move::new(sq, to));
             }
@@ -935,7 +947,7 @@ impl Board {
 pub fn synced_perft(pos: &mut Board, depth: usize) -> u64 {
     #![allow(clippy::to_string_in_format_args)]
     #[cfg(debug_assertions)]
-    pos.check_validity().unwrap();
+    pos.check_validity();
 
     if depth == 0 {
         return 1;
@@ -959,14 +971,14 @@ pub fn synced_perft(pos: &mut Board, depth: usize) -> u64 {
         {
             let mut mvs = Vec::new();
             for m in full_moves_vec {
-                mvs.push(pos.san(m.mov).unwrap());
+                mvs.push(pos.san(m.mov).unwrap().to_string());
             }
             mvs.join(", ")
         },
         {
             let mut mvs = Vec::new();
             for m in staged_moves_vec {
-                mvs.push(pos.san(m.mov).unwrap());
+                mvs.push(pos.san(m.mov).unwrap().to_string());
             }
             mvs.join(", ")
         }
@@ -992,7 +1004,7 @@ mod tests {
         bench,
         chess::{
             board::movegen::{king_attacks, knight_attacks},
-            magic::{bishop_attacks_on_the_fly, rook_attacks_on_the_fly},
+            magic::{diag_attacks_slow, orth_attacks_slow},
             piece::Piece,
             squareset::SquareSet,
             types::Square,
@@ -1001,14 +1013,12 @@ mod tests {
 
     #[test]
     fn staged_matches_full() {
-        let mut pos = Board::default();
-
         let positions = bench::BENCH_POSITIONS
             .into_iter()
             .chain(["r4rk1/2pb1ppQ/2pp1q2/p1n5/2P1B3/PP2P3/3N1PPP/R4RK1 b - - 0 17"]);
 
         for fen in positions {
-            pos.set_from_fen(fen).unwrap();
+            let mut pos = Board::from_fen(fen).unwrap();
             synced_perft(&mut pos, 2);
         }
     }
@@ -1065,11 +1075,11 @@ mod tests {
     #[test]
     fn rook_attacks_basic() {
         let sq = Square::E4;
-        let mask = ROOK_TABLE[sq].mask;
+        let mask = ORTH_TABLE[sq].mask;
         let mut subset = SquareSet::EMPTY;
         loop {
-            let attacks_naive = rook_attacks_on_the_fly(sq, subset);
-            let attacks_fast = rook_attacks(sq, subset);
+            let attacks_naive = orth_attacks_slow(sq, subset);
+            let attacks_fast = orth_attacks(sq, subset);
             assert_eq!(
                 attacks_naive, attacks_fast,
                 "naive:\n{attacks_naive}\nfast:\n{attacks_fast}\nblockers were\n{subset}"
@@ -1084,11 +1094,11 @@ mod tests {
     #[test]
     fn bishop_attacks_basic() {
         let sq = Square::E4;
-        let mask = BISHOP_TABLE[sq].mask;
+        let mask = DIAG_TABLE[sq].mask;
         let mut subset = SquareSet::EMPTY;
         loop {
-            let attacks_naive = bishop_attacks_on_the_fly(sq, subset);
-            let attacks_fast = bishop_attacks(sq, subset);
+            let attacks_naive = diag_attacks_slow(sq, subset);
+            let attacks_fast = diag_attacks(sq, subset);
             assert_eq!(
                 attacks_naive, attacks_fast,
                 "naive:\n{attacks_naive}\nfast:\n{attacks_fast}\nblockers were\n{subset}"

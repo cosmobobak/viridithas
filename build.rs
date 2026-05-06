@@ -1,9 +1,10 @@
-use std::env;
+use std::{env, error::Error};
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     prep_net();
     build_dependencies();
     generate_bindings();
+    Ok(())
 }
 
 fn prep_net() {
@@ -32,6 +33,8 @@ fn build_fathom() {
     cc.file("./deps/pyrrhic/tbprobe.c");
     cc.include("./deps/pyrrhic/");
     cc.define("_CRT_SECURE_NO_WARNINGS", None);
+    cc.cpp(false);
+    cc.std("c17");
 
     // MSVC doesn't support stdatomic.h, so use clang on Windows
     if env::consts::OS == "windows" {

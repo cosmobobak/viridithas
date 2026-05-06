@@ -26,7 +26,7 @@ pub const fn h2(key: u64) -> usize {
     ((key >> 16) & 0x1FFF) as usize
 }
 
-pub fn init() -> anyhow::Result<()> {
+pub fn init() -> Result<(), std::io::Error> {
     println!("Initialising cuckoo-hash tables.");
     // keep a tally of the table entries to sanity-check the initialisation process.
     let mut count = 0;
@@ -41,8 +41,8 @@ pub fn init() -> anyhow::Result<()> {
         for square0 in Square::all() {
             for square1 in Square::all().filter(|&s1| s1 > square0) {
                 // check if a piece of this type standing on square0 could attack square1
-                let attack_overlap = attacks_by_type(piece.piece_type(), square0, SquareSet::EMPTY)
-                    & square1.as_set();
+                let attack_overlap =
+                    attacks_by_type(piece, square0, SquareSet::EMPTY) & square1.as_set();
                 if attack_overlap == SquareSet::EMPTY {
                     continue;
                 }

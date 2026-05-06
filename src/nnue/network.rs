@@ -16,13 +16,16 @@ use memmap2::Mmap;
 
 use crate::{
     chess::{
-        board::Board,
+        board::{Board, movegen::attacks_by_type},
         piece::{Black, Col, Colour, Piece, PieceType, White},
         piecelayout::PieceLayout,
         types::Square,
     },
     image::{self, Image},
-    nnue,
+    nnue::{
+        self,
+        network::feature::{ThreatFeatureIndex, threat_index},
+    },
     util::{self, Align64, MAX_DEPTH},
 };
 
@@ -30,6 +33,7 @@ use super::accumulator::{self, Accumulator};
 
 pub mod feature;
 pub mod layers;
+pub mod threat_updates;
 
 /// The embedded neural network parameters.
 pub static EMBEDDED_NNUE: &[u8] = include_bytes_aligned!("../../viridithas.nnue.zst");
@@ -41,19 +45,23 @@ const _: () = assert!(!EMBEDDED_NNUE_VERBATIM || EMBEDDED_NNUE.len() == size_of:
 /// Whether to perform the king-plane merging optimisation.
 pub const MERGE_KING_PLANES: bool = true;
 /// Whether the unquantised network has a feature factoriser.
-pub const UNQUANTISED_HAS_FACTORISER: bool = false;
-/// The size of the input layer of the network.
-pub const INPUT: usize = (12 - MERGE_KING_PLANES as usize) * 64;
+pub const UNQUANTISED_HAS_FACTORISER: bool = true;
+/// The number of features present in PSQT part of the input.
+pub const PSQT_FEATURES: usize = (12 - MERGE_KING_PLANES as usize) * 64;
+/// The number of features present in the threat part of the input.
+pub const THREAT_FEATURES: usize = 60144;
 /// The amount to scale the output of the network by.
 /// This is to allow for the sigmoid activation to differentiate positions with
 /// a small difference in evaluation.
 pub const SCALE: i32 = 240;
 /// The size of one-half of the hidden layer of the network.
-pub const L1_SIZE: usize = 2560;
+pub const L1_SIZE: usize = 1024;
 /// The size of the second layer of the network.
-pub const L2_SIZE: usize = 16;
+pub const L2_SIZE: usize = 32;
 /// The size of the third layer of the network.
 pub const L3_SIZE: usize = 32;
+/// The number of output heads.
+pub const HEADS: usize = 1;
 /// The quantisation factor for the feature transformer weights.
 const QA: i16 = 255;
 /// The quantisation factor for the L1 weights.
@@ -113,33 +121,35 @@ pub fn nnue_checksum() -> u64 {
 #[rustfmt::skip]
 #[repr(C)]
 struct UnquantisedNetwork {
+    l0_threat:     [f32; THREAT_FEATURES * L1_SIZE],
     // extra bucket for the feature-factoriser.
     l0_weights:    [f32; 12 * 64 * L1_SIZE * (BUCKETS + UNQUANTISED_HAS_FACTORISER as usize)],
     l0_biases:     [f32; L1_SIZE],
     l1_weights:  [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:    [[f32; L2_SIZE]; OUTPUT_BUCKETS],
-    l2x_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
-    l2f_weights:  [[f32; L3_SIZE]; L2_SIZE],
-    l2x_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
-    l2f_biases:    [f32; L3_SIZE],
-    l3x_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
-    l3f_weights:   [f32; L3_SIZE],
-    l3x_biases:    [f32; OUTPUT_BUCKETS],
-    l3f_biases:    [f32; 1],
+    l2x_weights: [[[f32; L3_SIZE * 2]; OUTPUT_BUCKETS]; L2_SIZE],
+    l2f_weights:  [[f32; L3_SIZE * 2]; L2_SIZE],
+    l2x_biases:   [[f32; L3_SIZE * 2]; OUTPUT_BUCKETS],
+    l2f_biases:    [f32; L3_SIZE * 2],
+    l3x_weights: [[[f32;   HEADS]; OUTPUT_BUCKETS]; L3_SIZE],
+    l3f_weights:  [[f32;   HEADS]; L3_SIZE],
+    l3x_biases:   [[f32;   HEADS]; OUTPUT_BUCKETS],
+    l3f_biases:    [f32;   HEADS],
 }
 
 /// The floating-point parameters of the network, after de-factorisation.
 #[rustfmt::skip]
 #[repr(C)]
 struct MergedNetwork {
+    l0_threat:    [f32; THREAT_FEATURES * L1_SIZE],
     l0_weights:   [f32; 12 * 64 * L1_SIZE * BUCKETS],
     l0_biases:    [f32; L1_SIZE],
     l1_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
-    l2_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
-    l2_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
-    l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
-    l3_biases:    [f32; OUTPUT_BUCKETS],
+    l2_weights: [[[f32; L3_SIZE * 2]; OUTPUT_BUCKETS]; L2_SIZE],
+    l2_biases:   [[f32; L3_SIZE * 2]; OUTPUT_BUCKETS],
+    l3_weights: [[[f32;   HEADS]; OUTPUT_BUCKETS]; L3_SIZE],
+    l3_biases:   [[f32;   HEADS]; OUTPUT_BUCKETS],
 }
 
 /// A quantised network file, for compressed embedding.
@@ -147,14 +157,15 @@ struct MergedNetwork {
 #[repr(C)]
 #[derive(PartialEq, Debug)]
 struct QuantisedNetwork {
-    l0_weights:   [i16; INPUT * L1_SIZE * BUCKETS],
+    l0_threat:    [ i8; THREAT_FEATURES * L1_SIZE],
+    l0_weights:   [i16; PSQT_FEATURES * L1_SIZE * BUCKETS],
     l0_biases:    [i16; L1_SIZE],
     l1_weights: [[[ i8; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
-    l2_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
-    l2_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
-    l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
-    l3_biases:    [f32; OUTPUT_BUCKETS],
+    l2_weights: [[[f32; L3_SIZE * 2]; OUTPUT_BUCKETS]; L2_SIZE],
+    l2_biases:   [[f32; L3_SIZE * 2]; OUTPUT_BUCKETS],
+    l3_weights: [[[f32;   HEADS]; OUTPUT_BUCKETS]; L3_SIZE],
+    l3_biases:   [[f32;   HEADS]; OUTPUT_BUCKETS],
 }
 
 /// The parameters of viri's neural network, quantised and permuted
@@ -162,14 +173,15 @@ struct QuantisedNetwork {
 #[rustfmt::skip]
 #[repr(C)]
 pub struct NNUEParams {
-    pub l0_weights:  Align64<[i16; INPUT * L1_SIZE * BUCKETS]>,
-    pub l0_biases:   Align64<[i16; L1_SIZE]>,
-    pub l1_weights: [Align64<[ i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
-    pub l1_bias:    [Align64<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
-    pub l2_weights: [Align64<[f32; L2_SIZE * L3_SIZE]>; OUTPUT_BUCKETS],
-    pub l2_bias:    [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
-    pub l3_weights: [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
-    pub l3_bias:    [f32; OUTPUT_BUCKETS],
+    pub l0_threat:    Align64<[ i8; THREAT_FEATURES * L1_SIZE]>,
+    pub l0_weights:   Align64<[i16; PSQT_FEATURES * L1_SIZE * BUCKETS]>,
+    pub l0_biases:    Align64<[i16; L1_SIZE]>,
+    pub l1_weights:  [Align64<[ i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
+    pub l1_bias:     [Align64<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
+    pub l2_weights:  [Align64<[f32; L2_SIZE * L3_SIZE * 2]>; OUTPUT_BUCKETS],
+    pub l2_bias:     [Align64<[f32; L3_SIZE * 2]>; OUTPUT_BUCKETS],
+    pub l3_weights: [[Align64<[f32; L3_SIZE]>; HEADS]; OUTPUT_BUCKETS],
+    pub l3_bias:             [[f32; HEADS]; OUTPUT_BUCKETS],
 }
 
 // const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = {
@@ -183,82 +195,41 @@ pub struct NNUEParams {
 // };
 
 const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = [
-    482, 386, 259, 130, 77, 182, 191, 451, 61, 739, 1005, 70, 326, 749, 959, 355, 333, 829, 3, 541,
-    950, 848, 831, 681, 142, 316, 111, 434, 908, 0, 483, 707, 41, 339, 190, 556, 83, 297, 490, 93,
-    611, 446, 140, 572, 285, 256, 178, 472, 335, 363, 137, 280, 216, 618, 24, 38, 161, 589, 708,
-    240, 549, 442, 212, 150, 322, 146, 563, 329, 641, 666, 203, 424, 202, 989, 417, 392, 725, 874,
-    330, 648, 113, 251, 391, 170, 267, 585, 502, 205, 198, 86, 486, 44, 128, 246, 480, 496, 263,
-    342, 519, 172, 135, 428, 262, 775, 103, 756, 762, 131, 225, 636, 66, 398, 591, 819, 712, 843,
-    105, 189, 902, 468, 1, 405, 402, 399, 452, 63, 293, 200, 165, 406, 456, 80, 845, 71, 367, 812,
-    542, 575, 964, 294, 536, 268, 933, 327, 672, 18, 34, 74, 856, 389, 435, 507, 833, 460, 463,
-    808, 416, 610, 382, 220, 234, 334, 719, 939, 304, 39, 583, 82, 241, 214, 595, 928, 624, 737,
-    713, 576, 645, 602, 526, 364, 616, 789, 366, 136, 230, 253, 673, 810, 733, 838, 139, 842, 347,
-    513, 282, 863, 492, 875, 308, 873, 474, 821, 273, 298, 852, 985, 891, 926, 887, 687, 849, 934,
-    604, 450, 781, 790, 827, 621, 169, 462, 847, 395, 141, 785, 924, 944, 449, 889, 688, 249, 620,
-    245, 343, 801, 176, 802, 918, 869, 965, 353, 814, 607, 504, 853, 29, 555, 540, 830, 248, 952,
-    976, 693, 732, 1219, 1117, 1112, 1076, 1276, 1093, 1272, 1126, 1266, 1215, 1102, 1136, 1089,
-    1075, 1128, 1058, 1222, 1091, 1271, 1201, 1046, 1150, 1057, 1185, 1232, 1199, 1162, 1273, 1180,
-    1118, 1065, 1182, 1279, 1051, 1084, 1227, 1230, 1248, 1146, 1071, 1256, 1242, 1278, 1238, 1083,
-    1241, 1175, 1069, 1088, 1060, 1131, 1229, 1186, 1092, 1160, 1078, 1255, 1087, 1216, 1189, 1032,
-    1178, 1036, 1052, 1184, 1237, 1259, 1176, 1145, 1053, 1165, 1187, 1217, 1192, 1173, 1119, 1127,
-    1147, 1040, 1055, 1194, 1029, 1081, 1244, 1275, 1218, 1233, 1253, 1106, 1246, 1177, 1114, 1221,
-    1196, 1103, 1095, 1039, 1137, 1220, 1122, 1225, 1138, 1191, 1209, 1044, 1163, 1190, 1124, 1079,
-    1161, 1141, 1130, 1203, 1134, 1159, 1224, 1247, 1245, 1202, 1250, 1205, 1213, 1240, 1090, 1274,
-    1258, 1042, 1074, 1123, 1206, 1143, 1120, 1172, 1056, 1024, 1204, 1198, 1105, 1096, 1062, 1167,
-    1035, 1158, 1041, 1270, 1027, 1125, 1094, 1261, 1070, 1226, 1086, 1166, 1207, 1109, 1133, 1265,
-    1043, 1098, 1140, 1047, 1082, 1234, 1277, 1193, 1129, 1115, 1262, 1059, 1212, 1208, 1063, 1067,
-    1239, 1183, 1080, 1026, 1249, 1073, 1030, 1048, 1108, 1037, 1236, 1097, 1164, 1171, 1223, 1077,
-    1214, 1034, 1257, 1061, 1107, 1144, 1101, 1064, 1153, 1054, 1174, 1251, 1170, 1104, 1268, 1111,
-    1231, 1195, 1139, 1269, 1155, 1169, 1031, 1243, 1210, 1179, 1152, 1252, 1228, 1156, 1154, 1264,
-    1110, 1149, 1168, 1181, 1211, 1135, 1148, 1049, 1085, 1099, 1068, 1197, 1072, 1038, 1267, 1028,
-    1260, 1151, 1025, 1066, 1116, 1033, 1254, 1235, 1100, 1157, 1142, 1045, 1188, 1113, 1263, 1132,
-    1050, 1121, 1200, 795, 797, 740, 2, 745, 635, 988, 659, 539, 657, 932, 760, 912, 388, 470, 90,
-    784, 23, 1010, 523, 954, 53, 287, 121, 239, 269, 778, 6, 617, 783, 937, 124, 670, 192, 538,
-    581, 721, 726, 820, 941, 397, 794, 356, 755, 35, 741, 1007, 31, 20, 658, 359, 788, 100, 680,
-    825, 32, 475, 211, 384, 525, 835, 67, 528, 394, 948, 309, 543, 700, 49, 865, 368, 204, 577,
-    148, 677, 213, 215, 396, 734, 531, 255, 28, 578, 840, 501, 644, 906, 872, 46, 238, 987, 731,
-    453, 649, 431, 332, 328, 163, 419, 813, 764, 855, 956, 930, 550, 336, 947, 753, 96, 114, 464,
-    870, 43, 929, 95, 828, 115, 155, 185, 651, 217, 562, 97, 112, 568, 321, 1003, 935, 26, 91, 236,
-    21, 966, 437, 5, 313, 1000, 254, 81, 199, 109, 283, 372, 940, 743, 232, 533, 772, 747, 807,
-    683, 78, 48, 119, 846, 478, 421, 378, 301, 341, 410, 73, 916, 385, 221, 723, 647, 69, 79, 632,
-    759, 157, 481, 445, 860, 509, 515, 711, 223, 861, 466, 51, 233, 798, 317, 337, 319, 207, 967,
-    413, 608, 503, 1008, 40, 92, 376, 765, 479, 722, 152, 307, 362, 147, 698, 65, 325, 344, 1018,
-    162, 660, 85, 117, 488, 76, 969, 183, 197, 890, 897, 773, 444, 593, 573, 257, 459, 393, 454,
-    400, 219, 75, 296, 907, 546, 361, 338, 516, 600, 736, 613, 27, 277, 324, 168, 752, 961, 978,
-    418, 250, 971, 164, 920, 625, 420, 524, 881, 665, 300, 403, 409, 193, 979, 992, 953, 306, 896,
-    671, 656, 951, 206, 999, 187, 804, 422, 315, 614, 323, 305, 826, 311, 1021, 432, 505, 411, 72,
-    390, 1014, 894, 37, 729, 512, 433, 883, 791, 639, 676, 754, 609, 588, 915, 818, 862, 567, 379,
-    530, 47, 529, 936, 909, 844, 895, 59, 993, 682, 668, 858, 586, 727, 345, 690, 487, 320, 684,
-    14, 448, 295, 521, 310, 160, 640, 637, 638, 106, 893, 1013, 715, 551, 704, 664, 782, 209, 867,
-    946, 674, 777, 54, 55, 535, 534, 13, 265, 823, 1016, 958, 678, 822, 957, 931, 278, 994, 495,
-    751, 877, 809, 885, 697, 685, 89, 605, 1011, 766, 527, 380, 522, 811, 1004, 314, 279, 116, 547,
-    145, 104, 284, 292, 919, 60, 134, 441, 922, 606, 465, 194, 436, 569, 532, 381, 427, 173, 520,
-    652, 461, 724, 655, 787, 584, 757, 888, 494, 299, 281, 580, 839, 642, 973, 414, 447, 102, 900,
-    331, 854, 467, 340, 120, 560, 968, 181, 744, 365, 1022, 439, 590, 407, 537, 179, 497, 387, 222,
-    408, 108, 196, 975, 440, 412, 834, 312, 679, 56, 57, 423, 156, 710, 260, 1001, 133, 33, 208,
-    769, 149, 288, 144, 143, 352, 8, 980, 990, 264, 792, 995, 663, 596, 669, 99, 158, 188, 247,
-    186, 25, 986, 730, 997, 544, 599, 229, 564, 824, 270, 634, 64, 884, 154, 592, 243, 235, 87,
-    720, 597, 348, 696, 850, 258, 628, 499, 653, 1002, 552, 17, 9, 859, 817, 565, 557, 913, 98,
-    876, 52, 84, 598, 180, 36, 962, 603, 763, 706, 960, 612, 878, 786, 771, 815, 561, 774, 868,
-    832, 799, 50, 738, 415, 218, 701, 10, 675, 770, 566, 1017, 244, 768, 184, 42, 377, 949, 159,
-    927, 633, 210, 510, 661, 977, 837, 914, 601, 796, 101, 545, 857, 271, 485, 984, 266, 110, 94,
-    686, 735, 938, 303, 118, 125, 780, 981, 972, 983, 1009, 901, 662, 594, 761, 970, 30, 231, 514,
-    511, 22, 1019, 484, 650, 816, 493, 374, 991, 506, 559, 866, 899, 703, 643, 702, 695, 518, 7,
-    195, 718, 871, 438, 201, 369, 261, 904, 153, 370, 587, 138, 882, 692, 354, 489, 716, 925, 793,
-    289, 430, 619, 717, 167, 903, 631, 963, 803, 276, 974, 955, 553, 841, 404, 371, 274, 383, 68,
-    508, 174, 886, 471, 851, 767, 62, 942, 630, 252, 127, 1023, 12, 864, 699, 443, 88, 689, 945,
-    425, 746, 107, 910, 290, 45, 375, 122, 11, 879, 742, 318, 272, 779, 998, 373, 16, 574, 691,
-    1020, 921, 517, 626, 349, 805, 457, 615, 151, 227, 132, 758, 776, 800, 357, 923, 646, 473, 351,
-    1012, 982, 806, 1015, 709, 291, 622, 629, 667, 728, 705, 917, 911, 880, 943, 570, 579, 548,
-    571, 166, 476, 401, 171, 429, 350, 58, 748, 554, 4, 123, 177, 126, 175, 129, 491, 15, 694, 654,
-    346, 582, 996, 627, 228, 286, 477, 360, 455, 1006, 237, 750, 358, 714, 224, 458, 623, 558, 469,
-    302, 836, 905, 19, 500, 275, 426, 892, 242, 898, 226, 498,
+    154, 419, 117, 373, 57, 12, 446, 40, 505, 300, 476, 331, 428, 240, 268, 369, 41, 325, 313, 222,
+    94, 6, 308, 125, 132, 388, 205, 186, 381, 442, 129, 430, 385, 200, 262, 291, 35, 199, 413, 157,
+    139, 336, 206, 49, 250, 119, 252, 82, 318, 62, 367, 111, 483, 364, 169, 425, 108, 227, 195, 79,
+    18, 146, 431, 488, 382, 481, 352, 141, 50, 239, 21, 201, 55, 326, 311, 70, 114, 370, 179, 66,
+    435, 324, 292, 355, 255, 254, 456, 510, 174, 91, 259, 3, 193, 409, 153, 89, 345, 461, 151, 277,
+    407, 116, 400, 107, 289, 33, 20, 467, 273, 176, 90, 104, 130, 228, 103, 109, 471, 135, 436,
+    219, 264, 8, 112, 283, 485, 229, 339, 281, 25, 83, 118, 31, 22, 334, 427, 258, 164, 37, 295,
+    242, 226, 63, 28, 166, 77, 349, 246, 74, 322, 67, 4, 177, 315, 178, 34, 185, 187, 95, 127, 113,
+    297, 383, 80, 302, 46, 511, 478, 350, 69, 275, 172, 496, 75, 249, 296, 220, 272, 417, 375, 444,
+    44, 338, 188, 19, 354, 98, 190, 508, 76, 140, 396, 68, 332, 341, 85, 347, 270, 14, 86, 450, 99,
+    1, 245, 457, 406, 499, 390, 210, 466, 138, 150, 243, 5, 233, 72, 149, 52, 152, 399, 96, 506,
+    225, 212, 232, 274, 58, 126, 92, 395, 489, 455, 134, 405, 194, 257, 192, 328, 468, 261, 42, 87,
+    459, 59, 509, 279, 429, 445, 115, 310, 408, 319, 372, 298, 238, 122, 378, 294, 38, 386, 365,
+    155, 215, 448, 368, 180, 15, 490, 303, 342, 64, 434, 290, 495, 441, 501, 216, 415, 7, 30, 286,
+    423, 161, 263, 159, 16, 472, 36, 271, 121, 320, 47, 234, 475, 253, 173, 189, 371, 54, 235, 65,
+    491, 321, 453, 282, 26, 217, 183, 473, 348, 439, 265, 477, 301, 361, 61, 389, 380, 307, 440,
+    487, 458, 379, 247, 503, 327, 241, 454, 56, 424, 362, 81, 136, 32, 24, 337, 23, 280, 203, 288,
+    392, 197, 17, 432, 346, 360, 312, 498, 168, 497, 437, 218, 363, 414, 43, 244, 421, 165, 102,
+    358, 224, 480, 73, 162, 71, 329, 418, 317, 175, 397, 402, 181, 398, 182, 330, 391, 204, 460,
+    299, 110, 493, 84, 45, 156, 393, 256, 128, 377, 462, 27, 167, 394, 492, 142, 470, 438, 276,
+    211, 314, 29, 500, 494, 309, 251, 160, 209, 465, 416, 507, 267, 266, 469, 452, 10, 404, 353,
+    148, 97, 196, 106, 11, 213, 120, 198, 145, 131, 479, 230, 486, 223, 144, 401, 474, 376, 359,
+    484, 433, 387, 260, 158, 447, 366, 133, 143, 105, 124, 184, 51, 231, 123, 202, 53, 482, 285,
+    284, 422, 93, 333, 502, 411, 0, 344, 88, 384, 214, 323, 237, 412, 137, 340, 207, 306, 463, 191,
+    343, 60, 170, 356, 449, 464, 504, 403, 304, 269, 13, 147, 48, 248, 208, 221, 236, 426, 305,
+    100, 316, 443, 9, 374, 351, 293, 420, 39, 2, 171, 287, 335, 451, 78, 278, 410, 163, 101, 357,
 ];
 
 impl UnquantisedNetwork {
     /// Convert a parameter file generated by bullet into a merged parameter set,
     /// for further processing or for resuming training in a more efficient format.
+    #[expect(clippy::too_many_lines)]
     fn merge(&self) -> Box<MergedNetwork> {
+        #![allow(clippy::similar_names)]
+
         let mut net = MergedNetwork::zeroed();
         let mut buckets = self.l0_weights.chunks_exact(12 * 64 * L1_SIZE);
         let factoriser;
@@ -274,10 +245,16 @@ impl UnquantisedNetwork {
         {
             for piece in Piece::all() {
                 for sq in Square::all() {
-                    let i =
-                        feature::index_full(Colour::White, Square::A1, FeatureUpdate { sq, piece });
-                    let j =
-                        feature::index_full(Colour::White, Square::A1, FeatureUpdate { sq, piece });
+                    let i = feature::psqt_index_full(
+                        Colour::White,
+                        Square::A1,
+                        PsqtFeatureUpdate { sq, piece },
+                    );
+                    let j = feature::psqt_index_full(
+                        Colour::White,
+                        Square::A1,
+                        PsqtFeatureUpdate { sq, piece },
+                    );
                     let src = &src_bucket[i * L1_SIZE..i * L1_SIZE + L1_SIZE];
                     let fac_src = &factoriser[i * L1_SIZE..i * L1_SIZE + L1_SIZE];
                     let tgt = &mut tgt_bucket[j * L1_SIZE..j * L1_SIZE + L1_SIZE];
@@ -286,6 +263,11 @@ impl UnquantisedNetwork {
                     }
                 }
             }
+        }
+
+        // copy the threat weights
+        for i in 0..THREAT_FEATURES * L1_SIZE {
+            net.l0_threat[i] = self.l0_threat[i];
         }
 
         // copy the biases
@@ -307,14 +289,14 @@ impl UnquantisedNetwork {
         // copy the L2 weights
         for i in 0..L2_SIZE {
             for bucket in 0..OUTPUT_BUCKETS {
-                for j in 0..L3_SIZE {
+                for j in 0..L3_SIZE * 2 {
                     net.l2_weights[i][bucket][j] =
                         self.l2x_weights[i][bucket][j] + self.l2f_weights[i][j];
                 }
             }
         }
         // copy the L2 biases
-        for i in 0..L3_SIZE {
+        for i in 0..L3_SIZE * 2 {
             for bucket in 0..OUTPUT_BUCKETS {
                 net.l2_biases[bucket][i] = self.l2x_biases[bucket][i] + self.l2f_biases[i];
             }
@@ -322,13 +304,52 @@ impl UnquantisedNetwork {
         // copy the L3 weights
         for i in 0..L3_SIZE {
             for bucket in 0..OUTPUT_BUCKETS {
-                net.l3_weights[i][bucket] = self.l3x_weights[i][bucket] + self.l3f_weights[i];
+                for head in 0..HEADS {
+                    net.l3_weights[i][bucket][head] =
+                        self.l3x_weights[i][bucket][head] + self.l3f_weights[i][head];
+                }
             }
         }
         // copy the L3 biases
-        for i in 0..OUTPUT_BUCKETS {
-            net.l3_biases[i] = self.l3x_biases[i] + self.l3f_biases[0];
+        for head in 0..HEADS {
+            for i in 0..OUTPUT_BUCKETS {
+                net.l3_biases[i][head] = self.l3x_biases[i][head] + self.l3f_biases[head];
+            }
         }
+
+        let range = |slice: &[f32]| {
+            let init = (f32::INFINITY, f32::NEG_INFINITY);
+            slice
+                .iter()
+                .copied()
+                .fold(init, |(min, max), v| (min.min(v), max.max(v)))
+        };
+
+        let (l0w_min, l0w_max) = range(&net.l0_weights);
+        let (l0b_min, l0b_max) = range(&net.l0_biases);
+        println!("L0 weight range: [{l0w_min}, {l0w_max}]");
+        println!("L0 bias range: [{l0b_min}, {l0b_max}]");
+
+        let l1_weights_flat = net.l1_weights.as_flattened().as_flattened();
+        let l1_biases_flat = net.l1_biases.as_flattened();
+        let (l1w_min, l1w_max) = range(l1_weights_flat);
+        let (l1b_min, l1b_max) = range(l1_biases_flat);
+        println!("L1 weight range: [{l1w_min}, {l1w_max}]");
+        println!("L1 bias range: [{l1b_min}, {l1b_max}]");
+
+        let l2_weights_flat = net.l2_weights.as_flattened().as_flattened();
+        let l2_biases_flat = net.l2_biases.as_flattened();
+        let (l2w_min, l2w_max) = range(l2_weights_flat);
+        let (l2b_min, l2b_max) = range(l2_biases_flat);
+        println!("L2 weight range: [{l2w_min}, {l2w_max}]");
+        println!("L2 bias range: [{l2b_min}, {l2b_max}]");
+
+        let l3_weights_flat = net.l3_weights.as_flattened().as_flattened();
+        let l3_biases_flat = net.l3_biases.as_flattened();
+        let (l3w_min, l3w_max) = range(l3_weights_flat);
+        let (l3b_min, l3b_max) = range(l3_biases_flat);
+        println!("L3 weight range: [{l3w_min}, {l3w_max}]");
+        println!("L3 bias range: [{l3b_min}, {l3b_max}]");
 
         net
     }
@@ -377,7 +398,8 @@ impl MergedNetwork {
             ($name:expr, $field:expr) => {
                 writeln!(writer, $name)?;
                 let len = size_of_val(&$field) / size_of::<f32>();
-                // SAFETY: lol
+                // SAFETY: the field is a contiguous array of f32, so casting
+                // to *const f32 is valid, and `len` is size_of_val / size_of::<f32>().
                 let slice = unsafe {
                     let ptr = $field.as_ptr().cast::<f32>();
                     std::slice::from_raw_parts(ptr, len)
@@ -411,7 +433,7 @@ impl MergedNetwork {
         let buckets = self.l0_weights.chunks_exact(12 * 64 * L1_SIZE);
 
         for (bucket_idx, (src_bucket, tgt_bucket)) in buckets
-            .zip(net.l0_weights.chunks_exact_mut(INPUT * L1_SIZE))
+            .zip(net.l0_weights.chunks_exact_mut(PSQT_FEATURES * L1_SIZE))
             .enumerate()
         {
             // for repermuting the weights.
@@ -427,10 +449,17 @@ impl MergedNetwork {
                     if MERGE_KING_PLANES && !in_bucket && piece == Piece::WK {
                         continue;
                     }
-                    let i =
-                        feature::index_full(Colour::White, Square::A1, FeatureUpdate { sq, piece });
-                    let j = feature::index(Colour::White, Square::A1, FeatureUpdate { sq, piece })
-                        .index();
+                    let i = feature::psqt_index_full(
+                        Colour::White,
+                        Square::A1,
+                        PsqtFeatureUpdate { sq, piece },
+                    );
+                    let j = feature::psqt_index(
+                        Colour::White,
+                        Square::A1,
+                        PsqtFeatureUpdate { sq, piece },
+                    )
+                    .index();
                     assert!(
                         MERGE_KING_PLANES || i == j,
                         "if not merging the king planes, indices should match"
@@ -445,7 +474,17 @@ impl MergedNetwork {
                     things_written += 1;
                 }
             }
-            assert_eq!(INPUT, things_written);
+            assert_eq!(PSQT_FEATURES, things_written);
+        }
+
+        // transfer the threat plane weights:
+        for (src, tgt) in self.l0_threat.iter().zip(net.l0_threat.iter_mut()) {
+            let scaled = *src * f32::from(QA);
+            if scaled.abs() > QA_BOUND {
+                eprintln!("threat plane weight {scaled} is too large (max = {QA_BOUND})");
+            }
+            // directly hard-quantised to i8.
+            *tgt = scaled.clamp(f32::from(i8::MIN), f32::from(i8::MAX)).round() as i8;
         }
 
         // quantise the FT biases
@@ -492,8 +531,8 @@ impl QuantisedNetwork {
     fn permute(&self, use_simd: bool) -> Box<NNUEParams> {
         let mut net = NNUEParams::zeroed();
         // permute the feature transformer weights
-        let src_buckets = self.l0_weights.chunks_exact(INPUT * L1_SIZE);
-        let tgt_buckets = net.l0_weights.chunks_exact_mut(INPUT * L1_SIZE);
+        let src_buckets = self.l0_weights.chunks_exact(PSQT_FEATURES * L1_SIZE);
+        let tgt_buckets = net.l0_weights.chunks_exact_mut(PSQT_FEATURES * L1_SIZE);
         for (src_bucket, tgt_bucket) in src_buckets.zip(tgt_buckets) {
             repermute_ft_bucket(tgt_bucket, src_bucket);
         }
@@ -501,21 +540,24 @@ impl QuantisedNetwork {
         // permute the feature transformer biases
         repermute_ft_bias(&mut net.l0_biases, &self.l0_biases);
 
+        // repermute the threat plane weights
+        repermute_threat_weights(&mut net.l0_threat, &self.l0_threat);
+
         // transpose FT weights and biases so that packus transposes it back to the intended order
         if use_simd {
-            type PermChunk = [i16; 8];
+            type PermChunk<I> = [I; 8];
             // reinterpret as data of size __m128i
-            let mut weights: Vec<&mut PermChunk> = net
+            let mut weights: Vec<&mut PermChunk<i16>> = net
                 .l0_weights
                 .chunks_exact_mut(8)
                 .map(|a| a.try_into().unwrap())
                 .collect();
-            let mut biases: Vec<&mut PermChunk> = net
+            let mut biases: Vec<&mut PermChunk<i16>> = net
                 .l0_biases
                 .chunks_exact_mut(8)
                 .map(|a| a.try_into().unwrap())
                 .collect();
-            let num_chunks = size_of::<PermChunk>() / size_of::<i16>();
+            let num_chunks = size_of::<PermChunk<i16>>() / size_of::<i16>();
 
             #[cfg(target_feature = "avx512f")]
             let num_regs = 8;
@@ -549,7 +591,7 @@ impl QuantisedNetwork {
             let mut regs = vec![[0i16; 8]; num_regs];
 
             // transpose weights
-            for i in (0..INPUT * L1_SIZE * BUCKETS / num_chunks).step_by(num_regs) {
+            for i in (0..PSQT_FEATURES * L1_SIZE * BUCKETS / num_chunks).step_by(num_regs) {
                 for j in 0..num_regs {
                     regs[j] = *weights[i + j];
                 }
@@ -567,6 +609,21 @@ impl QuantisedNetwork {
 
                 for j in 0..num_regs {
                     *biases[i + j] = regs[order[j]];
+                }
+            }
+
+            let mut i8_regs = vec![[0i8; 8]; num_regs];
+
+            // now the same for the threat plane weights
+            let mut threat_weights: Vec<&mut PermChunk<i8>> =
+                net.l0_threat.as_chunks_mut::<8>().0.iter_mut().collect();
+            for i in (0..THREAT_FEATURES * L1_SIZE / num_chunks).step_by(num_regs) {
+                for j in 0..num_regs {
+                    i8_regs[j] = *threat_weights[i + j];
+                }
+
+                for j in 0..num_regs {
+                    *threat_weights[i + j] = i8_regs[order[j]];
                 }
             }
         }
@@ -601,19 +658,21 @@ impl QuantisedNetwork {
 
             // transpose the L2 weights
             for i in 0..L2_SIZE {
-                for j in 0..L3_SIZE {
-                    net.l2_weights[bucket][i * L3_SIZE + j] = self.l2_weights[i][bucket][j];
+                for j in 0..L3_SIZE * 2 {
+                    net.l2_weights[bucket][i * L3_SIZE * 2 + j] = self.l2_weights[i][bucket][j];
                 }
             }
 
             // transfer the L2 biases
-            for i in 0..L3_SIZE {
+            for i in 0..L3_SIZE * 2 {
                 net.l2_bias[bucket][i] = self.l2_biases[bucket][i];
             }
 
             // transfer the L3 weights
             for i in 0..L3_SIZE {
-                net.l3_weights[bucket][i] = self.l3_weights[i][bucket];
+                for head in 0..HEADS {
+                    net.l3_weights[bucket][head][i] = self.l3_weights[i][bucket][head];
+                }
             }
 
             // transfer the L3 biases
@@ -667,7 +726,7 @@ fn repermute_ft_bias(feature_bias: &mut [i16; L1_SIZE], unsorted: &[i16]) {
 
 fn repermute_ft_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
     // for each input feature,
-    for i in 0..INPUT {
+    for i in 0..PSQT_FEATURES {
         // for each neuron in the layer,
         for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
             // get the neuron's corresponding weight in the unsorted bucket,
@@ -682,6 +741,24 @@ fn repermute_ft_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
             // and write it to the same feature (but the new position) in the target bucket.
             let feature = i * L1_SIZE;
             tgt_bucket[feature + tgt_index] = unsorted[feature + src_index];
+        }
+    }
+}
+
+fn repermute_threat_weights(
+    tgt: &mut Align64<[i8; THREAT_FEATURES * L1_SIZE]>,
+    unsorted: &[i8; THREAT_FEATURES * L1_SIZE],
+) {
+    for i in 0..THREAT_FEATURES {
+        for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
+            let feature = i * L1_SIZE;
+            tgt[feature + tgt_index] = unsorted[feature + src_index];
+        }
+        for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
+            let tgt_index = tgt_index + L1_SIZE / 2;
+            let src_index = src_index + L1_SIZE / 2;
+            let feature = i * L1_SIZE;
+            tgt[feature + tgt_index] = unsorted[feature + src_index];
         }
     }
 }
@@ -987,11 +1064,14 @@ impl NNUEParams {
         }
     }
 
-    pub fn select_feature_weights(&self, bucket: usize) -> &Align64<[i16; INPUT * L1_SIZE]> {
+    pub fn select_feature_weights(
+        &self,
+        bucket: usize,
+    ) -> &Align64<[i16; PSQT_FEATURES * L1_SIZE]> {
         // handle mirroring
         let bucket = bucket % BUCKETS;
-        let start = bucket * INPUT * L1_SIZE;
-        let end = start + INPUT * L1_SIZE;
+        let start = bucket * PSQT_FEATURES * L1_SIZE;
+        let end = start + PSQT_FEATURES * L1_SIZE;
         let slice = &self.l0_weights[start..end];
         // SAFETY: The resulting slice is indeed INPUT * LAYER_1_SIZE long,
         // and we check that the slice is aligned to 64 bytes.
@@ -1071,7 +1151,7 @@ pub fn dry_run() -> anyhow::Result<()> {
         println!("[#] Embedded NNUE is compressed, dry-run must operate on zeroed network.");
     }
     println!("[#] Constructing Board");
-    let start_pos = Board::default();
+    let start_pos = Board::startpos();
     println!("[#] Generating network parameters");
     let nnue_params = if EMBEDDED_NNUE_VERBATIM {
         Static(NNUEParams::decompress_and_alloc()?)
@@ -1092,43 +1172,99 @@ const ACC_STACK_SIZE: usize = MAX_DEPTH + 1;
 
 /// Struct representing some unmaterialised feature update made as part of a move.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct FeatureUpdate {
+pub struct PsqtFeatureUpdate {
     pub sq: Square,
     pub piece: Piece,
 }
 
-impl Display for FeatureUpdate {
+/// Struct representing some unmaterialised threat update made as part of a move.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(C)]
+pub struct ThreatFeatureUpdate {
+    pub attacker: Piece,
+    pub from: Square,
+    pub victim: Piece,
+    pub to: Square,
+}
+
+impl ThreatFeatureUpdate {
+    pub fn index(self, colour: Colour, king: Square) -> Option<ThreatFeatureIndex> {
+        feature::threat_index(colour, king, self.attacker, self.victim, self.from, self.to)
+    }
+}
+
+impl Display for PsqtFeatureUpdate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{piece} on {sq}", piece = self.piece, sq = self.sq)
     }
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, Default)]
-pub struct UpdateBuffer {
-    add: ArrayVec<FeatureUpdate, 2>,
-    sub: ArrayVec<FeatureUpdate, 2>,
+pub struct PsqtUpdateBuffer {
+    add: ArrayVec<PsqtFeatureUpdate, 2>,
+    sub: ArrayVec<PsqtFeatureUpdate, 2>,
 }
 
-impl UpdateBuffer {
+impl PsqtUpdateBuffer {
     pub fn move_piece(&mut self, from: Square, to: Square, piece: Piece) {
-        self.add.push(FeatureUpdate { sq: to, piece });
-        self.sub.push(FeatureUpdate { sq: from, piece });
+        self.add.push(PsqtFeatureUpdate { sq: to, piece });
+        self.sub.push(PsqtFeatureUpdate { sq: from, piece });
     }
 
     pub fn clear_piece(&mut self, sq: Square, piece: Piece) {
-        self.sub.push(FeatureUpdate { sq, piece });
+        self.sub.push(PsqtFeatureUpdate { sq, piece });
     }
 
     pub fn add_piece(&mut self, sq: Square, piece: Piece) {
-        self.add.push(FeatureUpdate { sq, piece });
+        self.add.push(PsqtFeatureUpdate { sq, piece });
     }
 
-    pub fn adds(&self) -> &[FeatureUpdate] {
+    pub fn adds(&self) -> &[PsqtFeatureUpdate] {
         &self.add[..]
     }
 
-    pub fn subs(&self) -> &[FeatureUpdate] {
+    pub fn subs(&self) -> &[PsqtFeatureUpdate] {
         &self.sub[..]
+    }
+
+    pub fn clear(&mut self) {
+        self.add.clear();
+        self.sub.clear();
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Debug, Default)]
+pub struct ThreatUpdateBuffer {
+    pub add: ArrayVec<ThreatFeatureUpdate, 128>,
+    pub sub: ArrayVec<ThreatFeatureUpdate, 128>,
+}
+
+impl ThreatUpdateBuffer {
+    pub fn adds(&self) -> &[ThreatFeatureUpdate] {
+        &self.add[..]
+    }
+
+    pub fn subs(&self) -> &[ThreatFeatureUpdate] {
+        &self.sub[..]
+    }
+
+    pub fn clear(&mut self) {
+        self.add.clear();
+        self.sub.clear();
+    }
+}
+
+/// Combined PSQT + threat update buffer, filled during move-making.
+#[derive(PartialEq, Eq, Clone, Debug, Default)]
+pub struct UpdateBuffer {
+    pub psqt: PsqtUpdateBuffer,
+    pub threat: ThreatUpdateBuffer,
+}
+
+impl UpdateBuffer {
+    pub fn clear(&mut self) {
+        self.psqt.clear();
+        self.threat.clear();
     }
 }
 
@@ -1138,7 +1274,7 @@ impl UpdateBuffer {
 pub struct BucketAccumulatorCache {
     // both of these are BUCKETS * 2, rather than just BUCKETS,
     // because we use a horizontally-mirrored architecture.
-    accs: [Accumulator; BUCKETS * 2],
+    accs: [[Align64<[i16; L1_SIZE]>; 2]; BUCKETS * 2],
     board_states: [[PieceLayout; BUCKETS * 2]; 2],
 }
 
@@ -1155,12 +1291,12 @@ impl BucketAccumulatorCache {
             .first()
             .unwrap();
         let bucket = BUCKET_MAP[king.relative_to(colour)];
-        let cache_acc = self.accs[bucket].select_mut(colour);
+        let cache_acc = &mut self.accs[bucket][colour];
 
         let mut adds = ArrayVec::<_, 32>::new();
         let mut subs = ArrayVec::<_, 32>::new();
         self.board_states[colour][bucket].update_iter(board_state, |sq, piece, is_add| {
-            let index = feature::index(colour, king, FeatureUpdate { sq, piece });
+            let index = feature::psqt_index(colour, king, PsqtFeatureUpdate { sq, piece });
             if is_add {
                 adds.push(index);
             } else {
@@ -1170,10 +1306,9 @@ impl BucketAccumulatorCache {
 
         let weights = nnue_params.select_feature_weights(bucket);
 
-        accumulator::vector_update_inplace(cache_acc, weights, &adds, &subs);
+        accumulator::vector_update_inplace_psqt(cache_acc, weights, &adds, &subs);
 
-        *acc.select_mut(colour) = cache_acc.clone();
-        acc.correct[colour] = true;
+        acc.halves[colour] = cache_acc.clone();
 
         self.board_states[colour][bucket] = board_state;
     }
@@ -1186,28 +1321,48 @@ pub struct MovedPiece {
     pub piece: Piece,
 }
 
+trait AccUpdateType {
+    const PSQT: bool;
+}
+
+struct PsqtUpdate;
+impl AccUpdateType for PsqtUpdate {
+    const PSQT: bool = true;
+}
+
+struct ThreatUpdate;
+impl AccUpdateType for ThreatUpdate {
+    const PSQT: bool = false;
+}
+
 /// State of the partial activations of the NNUE network.
 #[allow(clippy::upper_case_acronyms)]
 pub struct NNUEState {
-    /// Accumulators for the first layer.
-    pub accumulators: [Accumulator; ACC_STACK_SIZE],
+    /// Board-state accumulators for the first layer.
+    pub psqt_accumulators: [Accumulator; ACC_STACK_SIZE],
+    /// “dirty” flags for the PSQT accumulators.
+    pub psqt_correct: [[bool; 2]; ACC_STACK_SIZE],
+
+    /// Threat-state accumulators for the first layer.
+    pub threat_accumulators: [Accumulator; ACC_STACK_SIZE],
+    /// “dirty” flags for the threat accumulators.
+    pub threat_correct: [[bool; 2]; ACC_STACK_SIZE],
+
+    /// Diffs for the updates.
+    pub updates: [UpdateBuffer; ACC_STACK_SIZE],
+
+    /// Moves made for update computation.
+    pub moves: [MovedPiece; ACC_STACK_SIZE],
     /// Index of the current accumulator.
     pub current_acc: usize,
+
     /// Cache of last-seen accumulators for each bucket.
     pub bucket_cache: BucketAccumulatorCache,
 }
 
 impl NNUEState {
     /// Create a new `NNUEState`.
-    #[allow(clippy::unnecessary_box_returns)]
     pub fn new(board: &Board, nnue_params: &NNUEParams) -> Box<Self> {
-        #![allow(clippy::cast_ptr_alignment)]
-        // NNUEState is INPUT * 2 * 2 + LAYER_1_SIZE * ACC_STACK_SIZE * 2 * 2 + 8 bytes
-        // at time of writing, this adds up to 396,296 bytes.
-        // Putting this on the stack will almost certainly blow it, so we box it.
-        // Unfortunately, in debug mode `Box::new(Self::new())` will allocate on the stack
-        // and then memcpy it to the heap, so we have to do this manually.
-
         // SAFETY: NNUEState has four fields:
         // {white,black}_pov, which are just arrays of ints, for whom the all-zeroes bitpattern is valid.
         // current_acc, which is just an int, so the all-zeroes bitpattern is valid.
@@ -1223,20 +1378,20 @@ impl NNUEState {
             Box::from_raw(ptr.cast())
         };
 
-        net.reinit_from(board, nnue_params);
+        net.reïnit_from(board, nnue_params);
 
         net
     }
 
-    /// Reinitialise the state from a board.
-    pub fn reinit_from(&mut self, board: &Board, nnue_params: &NNUEParams) {
+    /// reïnitialise the state from a board.
+    pub fn reïnit_from(&mut self, board: &Board, nnue_params: &NNUEParams) {
         // set the current accumulator to the first one
         self.current_acc = 0;
 
         // initalise all the accumulators in the bucket cache to the bias
         for acc in &mut self.bucket_cache.accs {
-            acc.white = nnue_params.l0_biases.clone();
-            acc.black = nnue_params.l0_biases.clone();
+            acc[Colour::White] = nnue_params.l0_biases.clone();
+            acc[Colour::Black] = nnue_params.l0_biases.clone();
         }
         // initialise all the board states in the bucket cache to the empty board
         for board_state in self.bucket_cache.board_states.iter_mut().flatten() {
@@ -1245,49 +1400,119 @@ impl NNUEState {
 
         // refresh the first accumulator
         for colour in Colour::all() {
+            // PSQT half:
             self.bucket_cache.load_accumulator_for_position(
                 nnue_params,
                 board.state.bbs,
                 colour,
-                &mut self.accumulators[0],
+                &mut self.psqt_accumulators[0],
             );
+            self.psqt_correct[0][colour] = true;
+
+            // threat half:
+            Self::refresh_threats(nnue_params, board, colour, &mut self.threat_accumulators[0]);
+            self.threat_correct[0][colour] = true;
         }
     }
 
-    fn requires_refresh(piece: Piece, from: Square, to: Square) -> bool {
+    pub fn refresh_threats(
+        nnue_params: &NNUEParams,
+        board: &Board,
+        colour: Colour,
+        acc: &mut Accumulator,
+    ) {
+        let acc = &mut acc.halves[colour];
+
+        acc.fill(0); // clear the accumulator, we'll rebuild it from scratch
+
+        let bbs = &board.state.bbs;
+        let occ = bbs.occupied();
+        let king = board.state.bbs.king_sq(colour);
+        let bb = occ & !bbs.pieces[PieceType::King];
+
+        // todo: think about whether this would be better as
+        // a per-type loop — we might do better if we knew
+        // what sort of piece we were moving, or we could merge
+        // queen directions with ortho/diagonal moves, &c &c
+        for from in bb {
+            let attacker = board.state.mailbox[from].unwrap();
+            let threats = occ & attacks_by_type(attacker, from, occ) & !bbs.pieces[PieceType::King];
+            for to in threats {
+                let victim = board.state.mailbox[to].unwrap();
+                let Some(feature) = threat_index(colour, king, attacker, victim, from, to) else {
+                    continue;
+                };
+                let start = feature.index() * L1_SIZE;
+                let row = &nnue_params.l0_threat[start..start + L1_SIZE];
+                for i in 0..L1_SIZE {
+                    acc[i] += i16::from(row[i]);
+                }
+            }
+        }
+    }
+
+    fn requires_refresh<A: AccUpdateType>(piece: Piece, from: Square, to: Square) -> bool {
         if piece.piece_type() != PieceType::King {
             return false;
         }
 
-        BUCKET_MAP[from] != BUCKET_MAP[to]
+        // Threat features are not king-bucketed:
+        if A::PSQT {
+            BUCKET_MAP[from] != BUCKET_MAP[to]
+        } else {
+            // do we cross the mid-line?
+            // [0,1,2,3,4,5,6,7] ⇒ [0,0,0,0,1,1,1,1]
+            from.file() as u8 / 4 != to.file() as u8 / 4
+        }
     }
 
-    fn can_efficiently_update(&self, colour: Colour) -> bool {
+    fn can_efficiently_update<A: AccUpdateType>(&self, colour: Colour) -> bool {
+        let correct_table = if A::PSQT {
+            &self.psqt_correct
+        } else {
+            &self.threat_correct
+        };
         let mut curr_idx = self.current_acc;
         loop {
             curr_idx -= 1;
-            let curr = &self.accumulators[curr_idx];
 
-            let mv = curr.mv;
+            let mv = self.moves[curr_idx];
             let from = mv.from.relative_to(colour);
             let to = mv.to.relative_to(colour);
             let piece = mv.piece;
 
-            if piece.colour() == colour && Self::requires_refresh(piece, from, to) {
+            if piece.colour() == colour && Self::requires_refresh::<A>(piece, from, to) {
                 return false;
             }
-            if curr.correct[colour] {
+            if correct_table[curr_idx][colour] {
                 return true;
             }
         }
     }
 
-    fn apply_lazy_updates(&mut self, nnue_params: &NNUEParams, board: &Board, colour: Colour) {
+    fn apply_lazy_updates<A: AccUpdateType>(
+        &mut self,
+        nnue_params: &NNUEParams,
+        board: &Board,
+        colour: Colour,
+    ) {
+        let stack = if A::PSQT {
+            &mut self.psqt_accumulators
+        } else {
+            &mut self.threat_accumulators
+        };
+
+        let correct = if A::PSQT {
+            &mut self.psqt_correct
+        } else {
+            &mut self.threat_correct
+        };
+
         let mut curr_index = self.current_acc;
         loop {
             curr_index -= 1;
 
-            if self.accumulators[curr_index].correct[colour] {
+            if correct[curr_index][colour] {
                 break;
             }
         }
@@ -1295,9 +1520,31 @@ impl NNUEState {
         let king = board.state.bbs.king_sq(colour);
 
         loop {
-            self.materialise_new_acc_from(king, colour, curr_index + 1, nnue_params);
+            let (front, back) = stack.split_at_mut(curr_index + 1);
+            let src_acc = front.last().unwrap();
+            let tgt_acc = back.first_mut().unwrap();
 
-            self.accumulators[curr_index + 1].correct[colour] = true;
+            if A::PSQT {
+                Self::materialise_new_psqt_acc_from(
+                    src_acc,
+                    tgt_acc,
+                    &self.updates[curr_index].psqt,
+                    king,
+                    colour,
+                    nnue_params,
+                );
+            } else {
+                Self::materialise_new_threat_acc_from(
+                    src_acc,
+                    tgt_acc,
+                    &self.updates[curr_index].threat,
+                    king,
+                    colour,
+                    nnue_params,
+                );
+            }
+
+            correct[curr_index + 1][colour] = true;
 
             curr_index += 1;
             if curr_index == self.current_acc {
@@ -1307,18 +1554,37 @@ impl NNUEState {
     }
 
     /// Apply all in-flight updates, generating all the accumulators up to the current one.
+    ///
+    /// When we do this, we update the piece-square and threat features separately,
+    /// as threat features are almost-always updatable efficiently, as they are not
+    /// bucketed (though they do mirror when the king crosses the center-line).
     pub fn force(&mut self, board: &Board, nnue_params: &NNUEParams) {
         for colour in Colour::all() {
-            if !self.accumulators[self.current_acc].correct[colour] {
-                if self.can_efficiently_update(colour) {
-                    self.apply_lazy_updates(nnue_params, board, colour);
+            if !self.psqt_correct[self.current_acc][colour] {
+                if self.can_efficiently_update::<PsqtUpdate>(colour) {
+                    self.apply_lazy_updates::<PsqtUpdate>(nnue_params, board, colour);
                 } else {
                     self.bucket_cache.load_accumulator_for_position(
                         nnue_params,
                         board.state.bbs,
                         colour,
-                        &mut self.accumulators[self.current_acc],
+                        &mut self.psqt_accumulators[self.current_acc],
                     );
+                    self.psqt_correct[self.current_acc][colour] = true;
+                }
+            }
+
+            if !self.threat_correct[self.current_acc][colour] {
+                if self.can_efficiently_update::<ThreatUpdate>(colour) {
+                    self.apply_lazy_updates::<ThreatUpdate>(nnue_params, board, colour);
+                } else {
+                    Self::refresh_threats(
+                        nnue_params,
+                        board,
+                        colour,
+                        &mut self.threat_accumulators[self.current_acc],
+                    );
+                    self.threat_correct[self.current_acc][colour] = true;
                 }
             }
         }
@@ -1334,14 +1600,14 @@ impl NNUEState {
         pos: &Board,
         nnue_params: &NNUEParams,
     ) {
-        if self.accumulators[self.current_acc].correct[C::COLOUR] {
+        if self.psqt_correct[self.current_acc][C::COLOUR] {
             return;
         }
 
         let oldest = self.try_find_computed_accumulator::<C>(pos);
 
         if let Some(source) = oldest {
-            assert!(self.accumulators[source].correct[C::COLOUR]);
+            assert!(self.psqt_correct[source][C::COLOUR]);
             // directly construct the top accumulator from the last-known-good one
             let mut curr_index = source;
             let king = pos.state.bbs.king_sq(C::COLOUR);
@@ -1351,11 +1617,11 @@ impl NNUEState {
             let mut subs = ArrayVec::<_, 32>::new();
 
             loop {
-                for &add in self.accumulators[curr_index].update_buffer.adds() {
-                    adds.push(feature::index(C::COLOUR, king, add));
+                for &add in self.updates[curr_index].psqt.adds() {
+                    adds.push(feature::psqt_index(C::COLOUR, king, add));
                 }
-                for &sub in self.accumulators[curr_index].update_buffer.subs() {
-                    subs.push(feature::index(C::COLOUR, king, sub));
+                for &sub in self.updates[curr_index].psqt.subs() {
+                    subs.push(feature::psqt_index(C::COLOUR, king, sub));
                 }
 
                 curr_index += 1;
@@ -1365,23 +1631,24 @@ impl NNUEState {
                 }
             }
 
-            *self.accumulators[self.current_acc].select_mut(C::COLOUR) =
-                self.accumulators[source].select_mut(C::COLOUR).clone();
-            accumulator::vector_update_inplace(
-                self.accumulators[self.current_acc].select_mut(C::COLOUR),
+            self.psqt_accumulators[self.current_acc].halves[C::COLOUR] =
+                self.psqt_accumulators[source].halves[C::COLOUR].clone();
+            accumulator::vector_update_inplace_psqt(
+                &mut self.psqt_accumulators[self.current_acc].halves[C::COLOUR],
                 weights,
                 &adds,
                 &subs,
             );
-            self.accumulators[self.current_acc].correct[C::COLOUR] = true;
         } else {
             self.bucket_cache.load_accumulator_for_position(
                 nnue_params,
                 pos.state.bbs,
                 C::COLOUR,
-                &mut self.accumulators[self.current_acc],
+                &mut self.psqt_accumulators[self.current_acc],
             );
         }
+
+        self.psqt_correct[self.current_acc][C::COLOUR] = true;
     }
 
     /// Find the index of the first materialised accumulator, or nothing
@@ -1394,99 +1661,148 @@ impl NNUEState {
     fn try_find_computed_accumulator<C: Col>(&self, pos: &Board) -> Option<usize> {
         let mut idx = self.current_acc;
         let mut budget = pos.state.bbs.occupied().count() as i32;
-        while idx > 0 && !self.accumulators[idx].correct[C::COLOUR] {
-            let curr = &self.accumulators[idx - 1];
-            if curr.mv.piece.colour() == C::COLOUR
-                && Self::requires_refresh(
-                    curr.mv.piece,
-                    curr.mv.from.relative_to(C::COLOUR),
-                    curr.mv.to.relative_to(C::COLOUR),
+        while idx > 0 && !self.psqt_correct[idx][C::COLOUR] {
+            let mv = self.moves[idx - 1];
+            let psqt_updates = &self.updates[idx - 1].psqt;
+            if mv.piece.colour() == C::COLOUR
+                // wrote PsqtUpdate to fix lint, as-yet unsure of correctness
+                && Self::requires_refresh::<PsqtUpdate>(
+                    mv.piece,
+                    mv.from.relative_to(C::COLOUR),
+                    mv.to.relative_to(C::COLOUR),
                 )
             {
                 break;
             }
-            let adds = curr.update_buffer.adds().len() as i32;
-            let subs = curr.update_buffer.subs().len() as i32;
+            let adds = psqt_updates.adds().len() as i32;
+            let subs = psqt_updates.subs().len() as i32;
             budget -= adds + subs + 1;
             if budget < 0 {
                 break;
             }
             idx -= 1;
         }
-        if self.accumulators[idx].correct[C::COLOUR] {
+        if self.psqt_correct[idx][C::COLOUR] {
             Some(idx)
         } else {
             None
         }
     }
 
-    pub fn materialise_new_acc_from(
-        &mut self,
+    pub fn materialise_new_psqt_acc_from(
+        src_acc: &Accumulator,
+        tgt_acc: &mut Accumulator,
+        updates: &PsqtUpdateBuffer,
         king: Square,
         colour: Colour,
-        create_at_idx: usize,
         nnue_params: &NNUEParams,
     ) {
-        let (front, back) = self.accumulators.split_at_mut(create_at_idx);
-        let src_acc = front.last().unwrap();
-        let tgt_acc = back.first_mut().unwrap();
-
         let bucket = BUCKET_MAP[king.relative_to(colour)];
 
         let bucket = nnue_params.select_feature_weights(bucket);
 
-        let src = src_acc.select(colour);
-        let tgt = tgt_acc.select_mut(colour);
+        let src = &src_acc.halves[colour];
+        let tgt = &mut tgt_acc.halves[colour];
 
-        match (src_acc.update_buffer.adds(), src_acc.update_buffer.subs()) {
+        match (updates.adds(), updates.subs()) {
             // quiet or promotion
             (&[add], &[sub]) => {
-                let add = feature::index(colour, king, add);
-                let sub = feature::index(colour, king, sub);
-                accumulator::vector_add_sub(src, tgt, bucket, add, sub);
+                let add = feature::psqt_index(colour, king, add);
+                let sub = feature::psqt_index(colour, king, sub);
+                accumulator::vector_add_sub_psqt(src, tgt, bucket, add, sub);
             }
             // capture
             (&[add], &[sub1, sub2]) => {
-                let add = feature::index(colour, king, add);
-                let sub1 = feature::index(colour, king, sub1);
-                let sub2 = feature::index(colour, king, sub2);
-                accumulator::vector_add_sub2(src, tgt, bucket, add, sub1, sub2);
+                let add = feature::psqt_index(colour, king, add);
+                let sub1 = feature::psqt_index(colour, king, sub1);
+                let sub2 = feature::psqt_index(colour, king, sub2);
+                accumulator::vector_add_sub2_psqt(src, tgt, bucket, add, sub1, sub2);
             }
             // castling
             (&[add1, add2], &[sub1, sub2]) => {
-                let add1 = feature::index(colour, king, add1);
-                let add2 = feature::index(colour, king, add2);
-                let sub1 = feature::index(colour, king, sub1);
-                let sub2 = feature::index(colour, king, sub2);
-                accumulator::vector_add2_sub2(src, tgt, bucket, add1, add2, sub1, sub2);
+                let add1 = feature::psqt_index(colour, king, add1);
+                let add2 = feature::psqt_index(colour, king, add2);
+                let sub1 = feature::psqt_index(colour, king, sub1);
+                let sub2 = feature::psqt_index(colour, king, sub2);
+                accumulator::vector_add2_sub2_psqt(src, tgt, bucket, add1, add2, sub1, sub2);
             }
-            (_, _) => panic!("invalid update buffer: {:?}", src_acc.update_buffer),
+            (_, _) => panic!("invalid update buffer: {updates:?}"),
         }
+    }
+
+    pub fn materialise_new_threat_acc_from(
+        src_acc: &Accumulator,
+        tgt_acc: &mut Accumulator,
+        updates: &ThreatUpdateBuffer,
+        king: Square,
+        colour: Colour,
+        nnue_params: &NNUEParams,
+    ) {
+        let src = &src_acc.halves[colour];
+        let tgt = &mut tgt_acc.halves[colour];
+
+        // todo: don’t double-buffer.
+        let mut adds = ArrayVec::<ThreatFeatureIndex, 128>::new();
+        let mut subs = ArrayVec::<ThreatFeatureIndex, 128>::new();
+
+        for &add in updates.adds() {
+            if let Some(index) = add.index(colour, king) {
+                adds.push(index);
+            }
+        }
+        for &sub in updates.subs() {
+            if let Some(index) = sub.index(colour, king) {
+                subs.push(index);
+            }
+        }
+
+        accumulator::vector_update_threats(src, tgt, &nnue_params.l0_threat, &adds, &subs);
     }
 
     /// Evaluate the final layer on the partial activations.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     pub fn evaluate(&self, nn: &NNUEParams, board: &Board) -> i32 {
+        const K: f32 = SCALE as f32;
+
+        debug_assert!(
+            self.psqt_correct[self.current_acc][0] && self.psqt_correct[self.current_acc][1]
+        );
+
+        debug_assert!(
+            self.threat_correct[self.current_acc][0] && self.threat_correct[self.current_acc][1]
+        );
+
         let stm = board.turn();
         let out = output_bucket(board);
 
-        let acc = &self.accumulators[self.current_acc];
+        let psqt_acc = &self.psqt_accumulators[self.current_acc];
+        let thrt_acc = &self.threat_accumulators[self.current_acc];
 
-        debug_assert!(acc.correct[0] && acc.correct[1]);
-
-        let (us, them) = if stm == Colour::White {
-            (&acc.white, &acc.black)
+        let [stm_psqt, ntm_psqt] = if stm == Colour::White {
+            psqt_acc.halves.each_ref()
         } else {
-            (&acc.black, &acc.white)
+            [
+                &psqt_acc.halves[Colour::Black],
+                &psqt_acc.halves[Colour::White],
+            ]
+        };
+        let [stm_thrt, ntm_thrt] = if stm == Colour::White {
+            thrt_acc.halves.each_ref()
+        } else {
+            [
+                &thrt_acc.halves[Colour::Black],
+                &thrt_acc.halves[Colour::White],
+            ]
         };
 
         let mut l1_outputs = Align64([0.0; L2_SIZE]);
         let mut l2_outputs = Align64([0.0; L3_SIZE]);
-        let mut l3_output = 0.0;
 
         layers::activate_ft_and_propagate_l1(
-            us,
-            them,
+            stm_psqt,
+            ntm_psqt,
+            stm_thrt,
+            ntm_thrt,
             &nn.l1_weights[out],
             &nn.l1_bias[out],
             &mut l1_outputs,
@@ -1497,14 +1813,52 @@ impl NNUEState {
             &nn.l2_bias[out],
             &mut l2_outputs,
         );
-        layers::propagate_l3(
-            &l2_outputs,
-            &nn.l3_weights[out],
-            nn.l3_bias[out],
-            &mut l3_output,
-        );
 
-        (l3_output * SCALE as f32) as i32
+        if HEADS == 1 {
+            let mut l3_output = 0.0;
+
+            layers::propagate_l3(
+                &l2_outputs,
+                &nn.l3_weights[out][0],
+                nn.l3_bias[out][0],
+                &mut l3_output,
+            );
+
+            (l3_output * SCALE as f32) as i32
+        } else if HEADS == 3 {
+            let mut l3_output_logits = [0.0; 3];
+
+            for ((w, b), o) in nn.l3_weights[out]
+                .iter()
+                .zip(nn.l3_bias[out])
+                .zip(&mut l3_output_logits)
+            {
+                layers::propagate_l3(&l2_outputs, w, b, o);
+            }
+
+            // softmax
+            let mut win = l3_output_logits[2];
+            let mut draw = l3_output_logits[1];
+            let mut loss = l3_output_logits[0];
+
+            let max = win.max(draw).max(loss);
+
+            win = (win - max).exp();
+            draw = (draw - max).exp();
+            loss = (loss - max).exp();
+
+            let sum = win + draw + loss;
+
+            win /= sum;
+            draw /= sum;
+            // loss /= sum;
+
+            let score = draw.mul_add(0.5, win).clamp(0.0, 1.0);
+
+            (-K * (1.0 / score - 1.0).ln()) as i32
+        } else {
+            panic!("Unsupported number of heads: {HEADS}");
+        }
     }
 }
 
@@ -1512,7 +1866,7 @@ impl NNUEState {
 /// (everything after the feature extraction)
 pub fn inference_benchmark(state: &NNUEState, nnue_params: &NNUEParams) {
     let start = std::time::Instant::now();
-    let board = Board::default();
+    let board = Board::startpos();
     for _ in 0..1_000_000 {
         std::hint::black_box(std::hint::black_box(state).evaluate(
             std::hint::black_box(nnue_params),
@@ -1534,13 +1888,22 @@ pub fn visualise_nnue() -> anyhow::Result<()> {
     for neuron in 0..crate::nnue::network::L1_SIZE {
         nnue_params.visualise_neuron(neuron, &path);
     }
+    nnue_params.composite_neurons(&path);
     let (min, max) = nnue_params.min_max_feature_weight();
     println!("Min / Max FT values: {min} / {max}");
     Ok(())
 }
 
+const IMAGE_SPACING: usize = 0;
+
 impl NNUEParams {
     pub fn visualise_neuron(&self, neuron: usize, path: &std::path::Path) {
+        let image = self.neuron_image(neuron);
+        let path = path.join(format!("neuron_{neuron}.tga"));
+        image.save_as_tga(path);
+    }
+
+    fn neuron_image(&self, neuron: usize) -> Image {
         #![allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         // remap pieces to keep opposite colours together
         static PIECE_REMAPPING: [usize; 12] = [0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11];
@@ -1550,41 +1913,38 @@ impl NNUEParams {
         for colour in Colour::all() {
             for piece_type in PieceType::all() {
                 for square in Square::all() {
-                    let feature_indices = {
-                        let white_king = Square::H1;
-                        let black_king = Square::H8;
-                        let f = FeatureUpdate {
-                            sq: square,
-                            piece: Piece::new(colour, piece_type),
-                        };
-                        [
-                            feature::index(Colour::White, white_king, f),
-                            feature::index(Colour::Black, black_king, f),
-                        ]
+                    let white_king = Square::H1;
+                    let f = PsqtFeatureUpdate {
+                        sq: square,
+                        piece: Piece::new(colour, piece_type),
                     };
-                    let index = feature_indices[Colour::White].index() * L1_SIZE + starting_idx;
+                    let feature_index = feature::psqt_index(Colour::White, white_king, f);
+                    let index = feature_index.index() * L1_SIZE + starting_idx;
                     slice.push(self.l0_weights[index]);
                 }
             }
         }
 
-        let mut image = Image::zeroed(8 * 6 + 5, 8 * 2 + 1); // + for inter-piece spacing
+        let max_abs = slice.iter().copied().map(i16::unsigned_abs).max().unwrap();
+        let weight_to_colour = |weight: i16| -> u32 {
+            if max_abs == 0 {
+                return image::inferno_colour_map(0);
+            }
+            let magnitude = f32::from(weight.unsigned_abs()) / f32::from(max_abs);
+            let idx = (magnitude * 255.0).round() as u8;
+            if weight >= 0 {
+                image::inferno_colour_map(idx)
+            } else {
+                image::cool_inferno_colour_map(idx)
+            }
+        };
+
+        let mut image = Image::zeroed(8 * 6 + IMAGE_SPACING * 5, 8 * 2 + IMAGE_SPACING);
 
         for (piece, chunk) in slice.chunks(64).enumerate() {
             let piece = PIECE_REMAPPING[piece];
             let piece_colour = piece % 2;
             let piece_type = piece / 2;
-            let (max, min) = if piece_type == 0 {
-                let chunk = &chunk[8..56]; // first and last rank are always 0 for pawns
-                (*chunk.iter().max().unwrap(), *chunk.iter().min().unwrap())
-            } else {
-                (*chunk.iter().max().unwrap(), *chunk.iter().min().unwrap())
-            };
-            let weight_to_colour = |weight: i16| -> u32 {
-                let intensity = f32::from(weight - min) / f32::from(max - min);
-                let idx = (intensity * 255.0).round() as u8;
-                image::inferno_colour_map(idx)
-            };
             for (square, &weight) in chunk.iter().enumerate() {
                 let row = square / 8;
                 let col = square % 8;
@@ -1594,15 +1954,61 @@ impl NNUEParams {
                     weight_to_colour(weight)
                 };
                 image.set(
-                    col + piece_type * 8 + piece_type,
-                    row + piece_colour * 9,
+                    col + piece_type * (8 + IMAGE_SPACING),
+                    row + piece_colour * (8 + IMAGE_SPACING),
                     colour,
                 );
             }
         }
 
-        let path = path.join(format!("neuron_{neuron}.tga"));
-        image.save_as_tga(path);
+        image
+    }
+
+    pub fn composite_neurons(&self, path: &Path) {
+        const TILE_W: usize = 8 * 6 + IMAGE_SPACING * 5;
+        const TILE_H: usize = 8 * 2 + IMAGE_SPACING;
+
+        // aiming for a 16:9 aspect ratio
+        let cols = (1..=L1_SIZE)
+            .min_by_key(|&c| {
+                let rows = L1_SIZE.div_ceil(c);
+                let w = c * (TILE_W + IMAGE_SPACING);
+                let h = rows * (TILE_H + IMAGE_SPACING);
+                // minimise |w/h - 16/9|, i.e. |9w - 16h|
+                (9 * w).abs_diff(16 * h)
+            })
+            .unwrap();
+        let rows = L1_SIZE.div_ceil(cols);
+        let img_w = cols * TILE_W + (cols - 1) * IMAGE_SPACING;
+        let img_h = rows * TILE_H + (rows - 1) * IMAGE_SPACING;
+
+        #[expect(clippy::cast_possible_truncation)]
+        let neuron_order = (0..L1_SIZE as u16).collect::<ArrayVec<u16, L1_SIZE>>();
+        // the sorting is nice, but doesn’t look quite so pretty.
+        // neuron_order.sort_by_key(|&n| {
+        //     let start = n;
+        //     let mean_abs: u64 = (0..INPUT)
+        //         .map(|i| u64::from(self.l0_weights[i * L1_SIZE + start as usize].unsigned_abs()))
+        //         .sum();
+        //     mean_abs
+        // });
+        let mut composite = Image::zeroed(img_w, img_h);
+        for (loc, &neuron) in neuron_order.iter().enumerate() {
+            let col = loc % cols;
+            let row = loc / cols;
+            let ox = col * (TILE_W + IMAGE_SPACING);
+            let oy = row * (TILE_H + IMAGE_SPACING);
+            let tile = self.neuron_image(neuron as usize);
+            for ty in 0..TILE_H {
+                for tx in 0..TILE_W {
+                    composite.set(ox + tx, oy + ty, tile.pixel(tx, ty));
+                }
+            }
+        }
+
+        let path = path.join("composite.tga");
+
+        composite.save_as_tga(path);
     }
 
     pub fn min_max_feature_weight(&self) -> (i16, i16) {

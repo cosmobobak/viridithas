@@ -13,6 +13,7 @@ use crate::{
     chess::{
         board::Board,
         chessmove::Move,
+        fen::Fen,
         piece::{Colour, PieceType},
         squareset::SquareSet,
     },
@@ -64,12 +65,12 @@ pub const fn is_decisive(score: i32) -> bool {
     score.abs() >= MINIMUM_TB_WIN_SCORE
 }
 
-pub const SEE_PAWN_VALUE: i32 = 254;
-pub const SEE_KNIGHT_VALUE: i32 = 453;
-pub const SEE_BISHOP_VALUE: i32 = 458;
-pub const SEE_ROOK_VALUE: i32 = 712;
-pub const SEE_QUEEN_VALUE: i32 = 1278;
-pub const MATERIAL_SCALE_BASE: i32 = 825;
+pub const SEE_PAWN_VALUE: i32 = 233;
+pub const SEE_KNIGHT_VALUE: i32 = 446;
+pub const SEE_BISHOP_VALUE: i32 = 446;
+pub const SEE_ROOK_VALUE: i32 = 716;
+pub const SEE_QUEEN_VALUE: i32 = 1253;
+pub const MATERIAL_SCALE_BASE: i32 = 856;
 
 impl Board {
     pub fn material(&self, info: &SearchInfo) -> i32 {
@@ -146,12 +147,16 @@ pub const fn see_value(piece_type: PieceType, conf: &Config) -> i32 {
     }
 }
 
-pub fn eval_stats(input: &Path, histogram_output: Option<&Path>) -> anyhow::Result<()> {
+pub fn eval_stats(
+    input: &Path,
+    histogram_output: Option<&Path>,
+    bucket_index: Option<usize>,
+) -> anyhow::Result<()> {
     // Histogram data: bin evaluations into 10 cp buckets
     const BIN_SIZE: i32 = 10;
 
     let f = File::open(input).with_context(|| format!("Failed to open {}", input.display()))?;
-    let mut board = Board::default();
+    let mut board = Board::startpos();
     let nnue_params = NNUEParams::decompress_and_alloc()?;
     let mut nnue = NNUEState::new(&board, nnue_params);
 
@@ -172,21 +177,21 @@ pub fn eval_stats(input: &Path, histogram_output: Option<&Path>) -> anyhow::Resu
     let file_len = lines.len();
 
     for (i, line) in lines.into_iter().enumerate() {
-        // extract the first 6 fields as FEN
-        let end_idx = line
-            .match_indices(' ')
-            .nth(5)
-            .map(|(idx, _)| idx)
+        let parsed = Fen::parse_relaxed(&line)
             .with_context(|| format!("Failed to parse FEN from line {}: {}", i + 1, line))?;
-        let fen = &line[..end_idx];
-
-        board.set_from_fen(fen)?;
+        board.set_from_fen(&parsed);
 
         if board.in_check() {
             continue;
         }
 
-        nnue.reinit_from(&board, nnue_params);
+        if let Some(bucket_index) = bucket_index
+            && bucket_index != network::output_bucket(&board)
+        {
+            continue;
+        }
+
+        nnue.reïnit_from(&board, nnue_params);
         let eval = nnue.evaluate(nnue_params, &board);
 
         count += 1;
@@ -259,6 +264,13 @@ pub fn eval_stats(input: &Path, histogram_output: Option<&Path>) -> anyhow::Resu
 
         println!("\nHISTOGRAM RECORDED TO {}", output_path.display());
     }
+
+    #[cfg(feature = "ft-record")]
+    crate::nnue::network::layers::FT_OUTPUT_FILE
+        .lock()
+        .unwrap()
+        .flush()
+        .unwrap();
 
     Ok(())
 }

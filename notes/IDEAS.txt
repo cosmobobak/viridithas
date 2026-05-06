@@ -28,6 +28,20 @@ ANNUEP:
 - training run length
 - optimiser
 
+- raise l1 output size to 32
+- QAT
+- bucket mixing (multiple at once, etc)
+- faux-attention
+- lr sweeping
+- data filtering
+- distillation
+- threat inputs
+- KLdiv loss
+- MPE loss
+- learned routing
+- weight sharing
+- half-n-half l0 inputs
+
 How do to adversarial datagen?
 Run 5k nodes for your side AND their side, recording your evaluations
 but then make the move that the opponent produced.
