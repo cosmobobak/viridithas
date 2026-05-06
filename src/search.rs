@@ -344,7 +344,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
         let mut alpha = -INFINITY;
         let mut beta = INFINITY;
 
-        let mut delta = 12;
+        let mut delta = t.info.conf.delta_initial;
         let mut reduction = 0;
 
         if t.root_depth > 1 {
