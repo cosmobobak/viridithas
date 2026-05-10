@@ -1,6 +1,7 @@
+use std::ops::{BitAnd, Not};
+
 #[cfg(target_feature = "avx512vbmi")]
 mod vbmi;
-use std::ops::{BitAnd, Not};
 
 #[cfg(target_feature = "avx512vbmi")]
 pub use vbmi::*;
