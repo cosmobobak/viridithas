@@ -5,9 +5,9 @@
 )]
 
 use std::arch::x86_64::{
-    __m128i, __m512i, _mm_loadu_si128, _mm512_broadcast_i32x4, _mm512_loadu_si512,
-    _mm512_mask_blend_epi8, _mm512_maskz_shuffle_epi8, _mm512_permutexvar_epi8, _mm512_set1_epi8,
-    _mm512_shuffle_i64x2, _mm512_test_epi8_mask, _mm512_testn_epi8_mask,
+    __m128i, __m512i, _mm512_broadcast_i32x4, _mm512_loadu_si512, _mm512_mask_blend_epi8,
+    _mm512_maskz_shuffle_epi8, _mm512_permutexvar_epi8, _mm512_set1_epi8, _mm512_shuffle_i64x2,
+    _mm512_test_epi8_mask, _mm512_testn_epi8_mask, _mm_loadu_si128,
 };
 
 use crate::{
@@ -88,24 +88,29 @@ pub fn closest_occupied(bits: Vector) -> BitRays {
     unsafe {
         let occupied = _mm512_test_epi8_mask(bits.raw, bits.raw);
         let o = occupied | 0x8181_8181_8181_8181;
-        (o ^ o.wrapping_sub(0x0303_0303_0303_0303)) & occupied
+        BitRays((o ^ o.wrapping_sub(0x0303_0303_0303_0303)) & occupied)
     }
 }
 
 pub fn incoming_attackers(bits: Vector, closest: BitRays) -> BitRays {
     unsafe {
         let mask = _mm512_loadu_si512(INCOMING_THREATS_MASK.as_ptr().cast());
-        _mm512_test_epi8_mask(bits.raw, mask) & closest
+        BitRays(_mm512_test_epi8_mask(bits.raw, mask)) & closest
     }
 }
 
 pub fn incoming_sliders(bits: Vector, closest: BitRays) -> BitRays {
     unsafe {
         let mask = _mm512_loadu_si512(INCOMING_SLIDERS_MASK.as_ptr().cast());
-        _mm512_test_epi8_mask(bits.raw, mask) & closest & 0xFEFE_FEFE_FEFE_FEFE
+        BitRays(_mm512_test_epi8_mask(bits.raw, mask)) & closest & BitRays::NON_KNIGHT
     }
 }
 
 pub fn test_bit(bits: Vector, bit: Bit) -> BitRays {
-    unsafe { _mm512_test_epi8_mask(bits.raw, _mm512_set1_epi8(bit.0 as i8)) }
+    unsafe {
+        BitRays(_mm512_test_epi8_mask(
+            bits.raw,
+            _mm512_set1_epi8(bit.0 as i8),
+        ))
+    }
 }

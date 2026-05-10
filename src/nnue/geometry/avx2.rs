@@ -1,10 +1,10 @@
 #![expect(clippy::cast_sign_loss, clippy::undocumented_unsafe_blocks)]
 
 use std::arch::x86_64::{
-    __m128i, __m256i, _mm_loadu_si128, _mm256_and_si256, _mm256_andnot_si256, _mm256_blendv_epi8,
+    __m128i, __m256i, _mm256_and_si256, _mm256_andnot_si256, _mm256_blendv_epi8,
     _mm256_broadcastsi128_si256, _mm256_cmpeq_epi8, _mm256_loadu_si256, _mm256_movemask_epi8,
     _mm256_permute2x128_si256, _mm256_set1_epi8, _mm256_setzero_si256, _mm256_shuffle_epi8,
-    _mm256_slli_epi64,
+    _mm256_slli_epi64, _mm_loadu_si128,
 };
 
 use crate::{
@@ -33,7 +33,7 @@ impl Vector {
         unsafe {
             let a = u64::from(_mm256_movemask_epi8(self.raw[0]) as u32);
             let b = u64::from(_mm256_movemask_epi8(self.raw[1]) as u32);
-            a | (b << 32)
+            BitRays(a | (b << 32))
         }
     }
 
@@ -175,8 +175,8 @@ pub fn closest_occupied(bits: Vector) -> BitRays {
             ],
         };
         let occupied = !unoccupied.mask();
-        let o = occupied | 0x8181_8181_8181_8181;
-        (o ^ o.wrapping_sub(0x0303_0303_0303_0303)) & occupied
+        let o = occupied.0 | 0x8181_8181_8181_8181;
+        BitRays(o ^ o.wrapping_sub(0x0303_0303_0303_0303)) & occupied
     }
 }
 
@@ -214,7 +214,7 @@ pub fn incoming_sliders(bits: Vector, closest: BitRays) -> BitRays {
                 ),
             ],
         };
-        !v.mask() & closest & 0xFEFE_FEFE_FEFE_FEFE
+        !v.mask() & closest & BitRays::NON_KNIGHT
     }
 }
 
