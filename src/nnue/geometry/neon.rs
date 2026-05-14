@@ -167,7 +167,7 @@ pub fn closest_occupied(bits: Vector) -> BitRays {
         };
         let occupied = occupied_vec.to_mask();
         let o = occupied | 0x8181_8181_8181_8181;
-        (o ^ o.wrapping_sub(0x0303_0303_0303_0303)) & occupied
+        BitRays((o ^ o.wrapping_sub(0x0303_0303_0303_0303)) & occupied)
     }
 }
 
@@ -182,7 +182,7 @@ pub fn incoming_attackers(bits: Vector, closest: BitRays) -> BitRays {
                 vtstq_u8(bits.raw[3], mask.raw[3]),
             ],
         };
-        v.to_mask() & closest
+        BitRays(v.to_mask()) & closest
     }
 }
 
@@ -197,7 +197,7 @@ pub fn incoming_sliders(bits: Vector, closest: BitRays) -> BitRays {
                 vtstq_u8(bits.raw[3], mask.raw[3]),
             ],
         };
-        v.to_mask() & closest & 0xFEFE_FEFE_FEFE_FEFE
+        BitRays(v.to_mask()) & closest & BitRays::NON_KNIGHT
     }
 }
 
@@ -212,6 +212,6 @@ pub fn test_bit(bits: Vector, bit: Bit) -> BitRays {
                 vtstq_u8(bits.raw[3], king_mask),
             ],
         };
-        v.to_mask()
+        BitRays(v.to_mask())
     }
 }

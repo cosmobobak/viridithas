@@ -7,7 +7,7 @@ use crate::{
         types::Square,
     },
     nnue::{
-        geometry,
+        geometry::{self, BitRays},
         network::{ThreatFeatureUpdate, ThreatUpdateBuffer},
     },
 };
@@ -51,9 +51,9 @@ impl Direction for Incoming {
 #[cfg(target_feature = "avx512vbmi")]
 mod vbmi {
     use std::arch::x86_64::{
-        __m128i, _mm_storeu_si128, _mm_unpackhi_epi16, _mm_unpacklo_epi8, _mm_unpacklo_epi16,
-        _mm512_castsi512_si128, _mm512_mask_mov_epi8, _mm512_maskz_compress_epi8,
-        _mm512_permutex2var_epi8, _mm512_set_epi8, _mm512_set1_epi16, _mm512_storeu_si512,
+        __m128i, _mm512_castsi512_si128, _mm512_mask_mov_epi8, _mm512_maskz_compress_epi8,
+        _mm512_permutex2var_epi8, _mm512_set1_epi16, _mm512_set_epi8, _mm512_storeu_si512,
+        _mm_storeu_si128, _mm_unpackhi_epi16, _mm_unpacklo_epi16, _mm_unpacklo_epi8,
     };
 
     use crate::{
@@ -61,8 +61,8 @@ mod vbmi {
         nnue::{
             geometry,
             network::{
-                ThreatUpdateBuffer,
                 threat_updates::{AddSub, Direction},
+                ThreatUpdateBuffer,
             },
         },
     };
@@ -94,8 +94,8 @@ mod vbmi {
             let pair1 = _mm512_set1_epi16(piece as i16 | ((sq as i16) << 8));
 
             // non-focus:
-            let pair2_sq = _mm512_maskz_compress_epi8(br, indices.raw);
-            let pair2_piece = _mm512_maskz_compress_epi8(br, rays.raw);
+            let pair2_sq = _mm512_maskz_compress_epi8(br.inner(), indices.raw);
+            let pair2_piece = _mm512_maskz_compress_epi8(br.inner(), rays.raw);
             let pair2 = _mm512_permutex2var_epi8(pair2_piece, pair2_shuffle, pair2_sq);
 
             let mask = if Dir::OUTGOING {
@@ -134,12 +134,12 @@ mod vbmi {
 
             debug_assert_eq!(count, sliders.count_ones());
 
-            let p1 = _mm512_castsi512_si128(_mm512_maskz_compress_epi8(sliders, rays.raw));
-            let sq1 = _mm512_castsi512_si128(_mm512_maskz_compress_epi8(sliders, idxs.raw));
+            let p1 = _mm512_castsi512_si128(_mm512_maskz_compress_epi8(sliders.inner(), rays.raw));
+            let sq1 = _mm512_castsi512_si128(_mm512_maskz_compress_epi8(sliders.inner(), idxs.raw));
             let rays = rays.flip();
             let idxs = idxs.flip();
-            let p2 = _mm512_castsi512_si128(_mm512_maskz_compress_epi8(victims, rays.raw));
-            let sq2 = _mm512_castsi512_si128(_mm512_maskz_compress_epi8(victims, idxs.raw));
+            let p2 = _mm512_castsi512_si128(_mm512_maskz_compress_epi8(victims.inner(), rays.raw));
+            let sq2 = _mm512_castsi512_si128(_mm512_maskz_compress_epi8(victims.inner(), idxs.raw));
 
             let pair1 = _mm_unpacklo_epi8(p1, sq1);
             let pair2 = _mm_unpacklo_epi8(p2, sq2);
@@ -169,12 +169,12 @@ mod vbmi {
 #[cfg(not(target_feature = "avx512vbmi"))]
 mod generic {
     use crate::{
-        chess::{piece::Piece, squareset::SquareSet, types::Square},
+        chess::{piece::Piece, types::Square},
         nnue::{
             geometry,
             network::{
-                ThreatFeatureUpdate, ThreatUpdateBuffer,
                 threat_updates::{AddSub, Direction},
+                ThreatFeatureUpdate, ThreatUpdateBuffer,
             },
         },
     };
@@ -193,7 +193,7 @@ mod generic {
             let others = std::mem::transmute::<geometry::Vector, [Piece; 64]>(rays);
             let other_sqs = std::mem::transmute::<geometry::Vector, [Square; 64]>(indices);
 
-            for i in SquareSet::from_inner(br) {
+            for i in br {
                 let other = others[i];
                 let other_sq = other_sqs[i];
 
@@ -244,14 +244,11 @@ mod generic {
             let pieces = std::mem::transmute::<geometry::Vector, [Piece; 64]>(rays);
             let squares = std::mem::transmute::<geometry::Vector, [Square; 64]>(idxs);
 
-            let sliders = SquareSet::from_inner(sliders);
-            let victims = SquareSet::from_inner(victims);
-
             for (slider_idx, victim_idx) in sliders.into_iter().zip(victims) {
                 let attacker = pieces[slider_idx];
                 let from = squares[slider_idx];
-                let victim = pieces[victim_idx.wrapping_add(32)];
-                let to = squares[victim_idx.wrapping_add(32)];
+                let victim = pieces[(victim_idx + 32) % 64];
+                let to = squares[(victim_idx + 32) % 64];
 
                 let feature = ThreatFeatureUpdate {
                     attacker,
@@ -307,9 +304,16 @@ pub fn on_change<Op: AddSub>(
     }
 
     // find discovered threats, from sliders looking through the focus square.
-    // this is somewhat arcane, but one has it on good authority that it finds
-    // all valid discovered threats ^^
-    let victim_mask = (closest & non_king & 0xFEFE_FEFE_FEFE_FEFE).rotate_right(32);
+    //
+    // ray_fill detects if there is a piece anywhere within the 8 bits that make up a ray.
+    // Rotation of the bitrays by 32 causes a 180 degree rotation of the rays, so the south ray
+    // becomes the north ray, the south east ray becomes the north west ray, etc.
+    //
+    // A discovered threat exists if a victim exists on a ray opposite a slider, for example,
+    // if we have a pawn on the North ray and a rook on the South ray, then a discovered
+    // threat exists from the rook to the pawn.
+    let victim_mask = (closest & non_king & BitRays::NON_KNIGHT).flip();
+    // answer the question: do the sliders have a victim on the opposite ray?
     let valid = geometry::ray_fill(victim_mask) & geometry::ray_fill(incoming_sliders);
 
     push_discovered::<Op>(
@@ -398,8 +402,8 @@ pub fn on_move(
         push_focus::<Add, Incoming>(updates, dst_idxs, dst_rays, dst_incoming, new_piece, dst);
     }
 
-    let src_victim_mask = (src_closest & src_non_king & 0xFEFE_FEFE_FEFE_FEFE).rotate_right(32);
-    let dst_victim_mask = (dst_closest & dst_non_king & 0xFEFE_FEFE_FEFE_FEFE).rotate_right(32);
+    let src_victim_mask = (src_closest & src_non_king & BitRays::NON_KNIGHT).flip();
+    let dst_victim_mask = (dst_closest & dst_non_king & BitRays::NON_KNIGHT).flip();
     let src_valid = geometry::ray_fill(src_victim_mask) & geometry::ray_fill(src_sliders);
     let dst_valid = geometry::ray_fill(dst_victim_mask) & geometry::ray_fill(dst_sliders);
 
@@ -427,10 +431,10 @@ mod tests {
 
     use crate::{
         chess::{
-            board::{Board, movegen::attacks_by_type},
+            board::{movegen::attacks_by_type, Board},
             piece::PieceType,
         },
-        nnue::network::{UpdateBuffer, feature::ThreatFeatureIndex},
+        nnue::network::{feature::ThreatFeatureIndex, UpdateBuffer},
     };
 
     use super::*;
@@ -641,7 +645,7 @@ mod tests {
 
     use crate::{
         chess::piece::Colour,
-        nnue::network::{L1_SIZE, NNUEParams, NNUEState, feature::threat_index},
+        nnue::network::{feature::threat_index, NNUEParams, NNUEState, L1_SIZE},
         util::Align64,
     };
 
