@@ -17,6 +17,7 @@ import math
 from pathlib import Path
 
 import matplotlib.pyplot as plt  # type: ignore
+import matplotlib.ticker as mtick  # type: ignore
 
 palette = {
     "red": "#FF5000",
@@ -34,30 +35,42 @@ plt.rcParams["axes.titlecolor"] = palette["text"]
 plt.rcParams["font.family"] = "Iosevka Signalis"
 
 
-def format_int(v: int) -> str:
-    """Format an integer for display."""
+def format_int(v: int, sig_figs: int = 3) -> str:
+    """Format an integer for display with the given number of significant figures."""
     if v == 0:
         return "0"
-    abs_v = abs(v)
     sign = "-" if v < 0 else ""
-    if abs_v >= 1_000_000:
-        return f"{sign}{abs_v // 1_000_000}M"
-    elif abs_v >= 1_000:
-        return f"{sign}{abs_v // 1_000}K"
-    else:
+    abs_v = abs(v)
+
+    suffixes = ["", "K", "M", "G", "T", "P", "E"]
+    magnitude = min(int(math.log10(abs_v)) // 3, len(suffixes) - 1)
+
+    if magnitude == 0:
         return f"{sign}{abs_v}"
 
+    scaled = abs_v / 1000**magnitude
+    decimal_places = max(0, sig_figs - int(math.log10(scaled)) - 1)
+    formatted = f"{scaled:.{decimal_places}f}"
 
-def bucket_to_label(bucket: dict) -> str:
+    # Rounding may bump us into the next magnitude (e.g. 999_500 -> "1000K" -> "1.00M")
+    if float(formatted) >= 1000 and magnitude < len(suffixes) - 1:
+        magnitude += 1
+        scaled /= 1000
+        formatted = f"{scaled:.{sig_figs - 1}f}"
+
+    return f"{sign}{formatted}{suffixes[magnitude]}"
+
+
+def bucket_to_x_index(bucket: dict) -> int:
     if bucket["start"] == 0:
         assert bucket["end"] == 0
-        return format_int(0)
+        return 0
     # average in log-space:
     s = math.log2(abs(bucket["start"]))
     e = math.log2(abs(bucket["end"]))
     m = (s + e) / 2
     x = int(round(math.copysign(math.exp2(m), bucket["start"])))
-    return format_int(x)
+    return x
 
 
 def alternate():
@@ -90,10 +103,13 @@ def plot_tracked_value(ax, data: dict, index: int) -> None:
 
     # normalise by bucket size
     values = [b["count"] / (abs(b["start"] - b["end"]) + 1) for b in buckets]
+    # normalise by sum
+    s = sum(values)
+    values = [v / s for v in values]
 
     # Create bar chart
     color = next(alt_map)
-    x = [bucket_to_label(buckets[i]) for i in range(len(buckets))]
+    x = [bucket_to_x_index(b) for b in buckets]
     ax.plot(
         x,
         values,
@@ -104,18 +120,32 @@ def plot_tracked_value(ax, data: dict, index: int) -> None:
     ax.fill_between(x, values, color=color, alpha=0.55, linewidth=0, hatch="--")
 
     # X-axis labels (show subset to avoid crowding)
-    if len(buckets) <= 16:
-        tick_indices = list(range(len(buckets)))
+    if len(range(x[0], x[-1] + 1)) <= 16:
+        tick_indices = list(range(x[0], x[-1] + 1))
     else:
-        step = max(1, len(buckets) // 8)
-        tick_indices = list(range(0, len(buckets), step))
+        if x[0] < 0:
+            lo = min(x[0], -x[-1])
+            hi = max(-x[0], x[-1])
+        else:
+            lo = x[0]
+            hi = x[-1]
+        step = max(1, len(range(lo, hi + 1)) // 8)
+        tick_indices = list(range(lo, hi + 1, step))
+        pad = 0.03
+        r = hi - lo + 1
+        lo = lo - r * pad
+        hi = hi + r * pad
+        ax.set_xlim(lo, hi)
 
     ax.set_xticks(tick_indices)
-    ax.set_xticklabels([bucket_to_label(buckets[i]) for i in tick_indices], fontsize=8)
+    ax.set_xticklabels([format_int(i) for i in tick_indices], fontsize=8)
 
     # Y-axis: use log scale if range is large
+    log = False
     # if max(values) > 100 * min(v for v in values if v > 0):
+    #     log = True
     #     ax.set_yscale("log")
+    # ax.set_xscale("log")
 
     # title with stats
     # name format is `file:line expr`, extract the expr part
@@ -141,6 +171,13 @@ def plot_tracked_value(ax, data: dict, index: int) -> None:
     ax.spines["bottom"].set_linewidth(1.5)
 
     ax.tick_params(colors=palette["text"])
+    # ax.yaxis.set_major_formatter(mtick.PercentFormatter(1.0))
+    ax.get_yaxis().set_ticks([])
+    if log:
+        ax.set_ylabel("LOG-DENSITY", fontsize=16)
+    else:
+        ax.set_ylabel("DENSITY", fontsize=16)
+
     ax.grid(False)
 
 
@@ -245,7 +282,10 @@ def main():
     rows = math.ceil(n / cols)
 
     fig, axes = plt.subplots(
-        rows, cols, figsize=(4 * cols, 3 * rows), facecolor=palette["bg-b"]
+        rows,
+        cols,
+        figsize=(4 * cols, 3 * rows),
+        facecolor=palette["bg-b"],
     )
     if n == 1:
         axes = [axes]
