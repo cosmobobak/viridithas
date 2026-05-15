@@ -18,6 +18,20 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt  # type: ignore
 
+palette = {
+    "red": "#FF5000",
+    "blue": "#50C0FF",
+    "cyan": "#00A0E0",
+    "grey": "#808080",
+    "bg-a": "#101010",
+    "bg-b": "#121212",
+    "text": "#F0F0F0",
+}
+
+plt.rcParams["text.color"] = palette["text"]
+plt.rcParams["axes.labelcolor"] = palette["text"]
+plt.rcParams["axes.titlecolor"] = palette["text"]
+
 
 def bucket_to_int_range(bucket: int) -> tuple[int, int] | None:
     """
@@ -74,7 +88,7 @@ def bucket_to_label(bucket: int) -> str:
 
 def plot_tracked_value(ax, data: dict, index: int) -> None:
     """Plot a single tracked value's histogram on the given axes."""
-    name: int = data["name"]
+    name: str = data["name"]
     count: int = data["count"]
     avg: int = data["avg"]
     avg_abs: int = data["avg_abs"]
@@ -83,11 +97,14 @@ def plot_tracked_value(ax, data: dict, index: int) -> None:
     max_val: int = data["max"]
     histogram: list[int] = data["histogram"]
 
+    if [0, 1] == [min_val, max_val]:
+        return plot_tracked_boolean(ax, data, index)
+
     # find non-zero range
     nonzero_indices = [i for i, v in enumerate(histogram) if v > 0]
     if not nonzero_indices:
         ax.text(0.5, 0.5, "no data", ha="center", va="center", transform=ax.transAxes)
-        ax.set_title(name, fontsize=8)
+        ax.set_title(name, fontsize=12)
         return
 
     lo, hi = min(nonzero_indices), max(nonzero_indices)
@@ -109,16 +126,16 @@ def plot_tracked_value(ax, data: dict, index: int) -> None:
             va="center",
             transform=ax.transAxes,
         )
-        ax.set_title(name, fontsize=8)
+        ax.set_title(name, fontsize=12)
         return
 
     # Create bar chart
     ax.bar(
         range(len(valid_buckets)),
         values,
-        color="steelblue",
-        edgecolor="navy",
-        alpha=0.7,
+        color=palette["blue"],
+        # edgecolor=palette["text"],
+        # alpha=0.7,
     )
 
     # X-axis labels (show subset to avoid crowding)
@@ -130,7 +147,7 @@ def plot_tracked_value(ax, data: dict, index: int) -> None:
 
     ax.set_xticks(tick_indices)
     ax.set_xticklabels(
-        [bucket_to_label(valid_buckets[i]) for i in tick_indices], fontsize=6
+        [bucket_to_label(valid_buckets[i]) for i in tick_indices], fontsize=8
     )
 
     # Y-axis: use log scale if range is large
@@ -143,23 +160,67 @@ def plot_tracked_value(ax, data: dict, index: int) -> None:
         # split on first space to separate "file:line" from "expr"
         _, expr = name.split(" ", 1)
         # truncate long expressions
-        short_name = expr if len(expr) <= 40 else expr[:37] + "..."
+        short_name = expr if len(expr) <= 40 else expr[:37] + "…"
     else:
         short_name = name
-    title = f"{short_name}\nn={count:,} avg={avg:.1f} |avg|={avg_abs:.1f} std={stddev:.1f}\nmin={min_val} max={max_val}"
-    ax.set_title(title, fontsize=7)
-    ax.tick_params(axis="both", labelsize=6)
+    title = f"{short_name}\nn={count:,} μ={avg:.1f} |μ|={avg_abs:.1f}\nσ={stddev:.1f} min={min_val} max={max_val}"
+    ax.set_title(title, fontsize=16)
+    ax.tick_params(axis="both", labelsize=8)
 
-    ax.set_facecolor("white")
+    ax.set_facecolor(palette["bg-b"])
 
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    ax.spines["left"].set_color("black")
+    ax.spines["left"].set_color(palette["text"])
     ax.spines["left"].set_linewidth(1.5)
-    ax.spines["bottom"].set_color("black")
+    ax.spines["bottom"].set_color(palette["text"])
     ax.spines["bottom"].set_linewidth(1.5)
 
-    ax.tick_params(colors="black")
+    ax.tick_params(colors=palette["text"])
+    ax.grid(False)
+
+
+def plot_tracked_boolean(ax, data: dict, index: int) -> None:
+    """Plot a single tracked boolean's ratio on the given axes."""
+
+    name: str = data["name"]
+    count: int = data["count"]
+    avg: int = data["avg"]
+
+    # create pie chart
+    labels = "true", "false"
+    sizes = [avg * count, count - avg * count]
+    ax.pie(
+        sizes,
+        labels=labels,
+        colors=[palette["blue"], palette["red"]],
+        radius=1,
+        wedgeprops=dict(width=0.5, edgecolor="w"),
+    )
+
+    # title with stats
+    # name format is `file:line expr`, extract the expr part
+    if " " in name:
+        # split on first space to separate "file:line" from "expr"
+        _, expr = name.split(" ", 1)
+        # truncate long expressions
+        short_name = expr if len(expr) <= 40 else expr[:37] + "…"
+    else:
+        short_name = name
+    title = f"{short_name}\nn={count:,} μ={avg:.1f}"
+    ax.set_title(title, fontsize=16)
+    ax.tick_params(axis="both", labelsize=8)
+
+    ax.set_facecolor(palette["bg-b"])
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_color(palette["text"])
+    ax.spines["left"].set_linewidth(1.5)
+    ax.spines["bottom"].set_color(palette["text"])
+    ax.spines["bottom"].set_linewidth(1.5)
+
+    ax.tick_params(colors=palette["text"])
     ax.grid(False)
 
 
@@ -187,7 +248,9 @@ def main():
     cols = math.ceil(math.sqrt(n))
     rows = math.ceil(n / cols)
 
-    fig, axes = plt.subplots(rows, cols, figsize=(4 * cols, 3 * rows))
+    fig, axes = plt.subplots(
+        rows, cols, figsize=(4 * cols, 3 * rows), facecolor=palette["bg-b"]
+    )
     if n == 1:
         axes = [axes]
     else:
@@ -203,7 +266,7 @@ def main():
     plt.tight_layout()
 
     # save to file
-    output_path = Path("stats_plot.png")
+    output_path = Path("stats_plot.svg")
     plt.savefig(output_path, dpi=150)
     print(f"Saved plot to {output_path}", file=sys.stderr)
 
