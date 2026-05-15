@@ -284,7 +284,7 @@ def main():
     fig, axes = plt.subplots(
         rows,
         cols,
-        figsize=(4 * cols, 3 * rows),
+        figsize=(16 / 3 * cols, 9 / 3 * rows),
         facecolor=palette["bg-b"],
     )
     if n == 1:
