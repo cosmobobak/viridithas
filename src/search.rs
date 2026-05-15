@@ -1060,7 +1060,7 @@ pub fn alpha_beta<NT: NodeType>(
         // if the static eval is too low, check if qsearch can beat alpha.
         // if it can't, we can prune the node.
         if alpha < 2000
-            && static_eval
+            && track!(static_eval)
                 < alpha - t.info.conf.razoring_coeff_0 - t.info.conf.razoring_coeff_1 * depth
         {
             let v = quiescence::<OffPV>(pv, t, alpha, beta);

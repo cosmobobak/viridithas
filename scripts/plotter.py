@@ -31,6 +31,7 @@ palette = {
 plt.rcParams["text.color"] = palette["text"]
 plt.rcParams["axes.labelcolor"] = palette["text"]
 plt.rcParams["axes.titlecolor"] = palette["text"]
+plt.rcParams["font.family"] = "Iosevka Signalis"
 
 
 def bucket_to_int_range(bucket: int) -> tuple[int, int] | None:
@@ -86,6 +87,15 @@ def bucket_to_label(bucket: int) -> str:
         return format_int(lo)  # i could do something smart but whatever
 
 
+def alternate():
+    while True:
+        yield palette["blue"]
+        yield palette["red"]
+
+
+alt_map = alternate()
+
+
 def plot_tracked_value(ax, data: dict, index: int) -> None:
     """Plot a single tracked value's histogram on the given axes."""
     name: str = data["name"]
@@ -130,10 +140,11 @@ def plot_tracked_value(ax, data: dict, index: int) -> None:
         return
 
     # Create bar chart
+    color = next(alt_map)
     ax.bar(
         range(len(valid_buckets)),
         values,
-        color=palette["blue"],
+        color=color,
         # edgecolor=palette["text"],
         # alpha=0.7,
     )
@@ -188,15 +199,47 @@ def plot_tracked_boolean(ax, data: dict, index: int) -> None:
     avg: int = data["avg"]
 
     # create pie chart
-    labels = "true", "false"
+    labels = ("TRUE", "FALSE")
     sizes = [avg * count, count - avg * count]
-    ax.pie(
+    wedges, _ = ax.pie(
         sizes,
-        labels=labels,
         colors=[palette["blue"], palette["red"]],
         radius=1,
+        startangle=120,
         wedgeprops=dict(width=0.5, edgecolor="w"),
     )
+
+    # annotate each wedge with an arrow pointing outward, following the
+    # matplotlib pie-and-donut-labels recipe:
+    # https://matplotlib.org/stable/gallery/pie_and_polar_charts/pie_and_donut_labels.html
+    bbox_props = dict(
+        boxstyle="square,pad=0.3",
+        fc=palette["text"],
+        ec=palette["text"],
+        lw=1.2,
+    )
+    kw = dict(
+        arrowprops=dict(arrowstyle="-", color=palette["text"], lw=1.5),
+        bbox=bbox_props,
+        zorder=0,
+        va="center_baseline",
+        color=palette["bg-a"],
+    )
+    for i, p in enumerate(wedges):
+        ang = (p.theta2 - p.theta1) / 2.0 + p.theta1
+        x = math.cos(math.radians(ang))
+        y = math.sin(math.radians(ang))
+        sign_x = 1 if x >= 0 else -1
+        horizontalalignment = "left" if sign_x > 0 else "right"
+        connectionstyle = f"angle,angleA=0,angleB={ang}"
+        kw["arrowprops"]["connectionstyle"] = connectionstyle  # type: ignore
+        ax.annotate(
+            labels[i],
+            xy=(x, y),
+            xytext=(1.35 * sign_x, 1.4 * y),
+            horizontalalignment=horizontalalignment,
+            **kw,
+        )
 
     # title with stats
     # name format is `file:line expr`, extract the expr part
