@@ -34,33 +34,6 @@ plt.rcParams["axes.titlecolor"] = palette["text"]
 plt.rcParams["font.family"] = "Iosevka Signalis"
 
 
-def bucket_to_int_range(bucket: int) -> tuple[int, int] | None:
-    """
-    Convert bucket index to the integer range [lo, hi] that maps to it.
-    Returns None if no integers map to this bucket.
-
-    Bucket index is computed as: 65 + floor(log2(v^2)) for v > 0
-    So for bucket b, we need integers v where floor(log2(v^2)) = b - 65.
-    That means: 2^((b-65)/2) <= v < 2^((b-64)/2)
-    """
-    if bucket == 64:
-        return (0, 0)
-    elif bucket > 64:
-        fine_log = bucket - 65
-        lo = math.ceil(2 ** (fine_log / 2))
-        hi = math.ceil(2 ** ((fine_log + 1) / 2)) - 1
-        if lo > hi:
-            return None
-        return (lo, hi)
-    else:
-        fine_log = 63 - bucket
-        lo = math.ceil(2 ** (fine_log / 2))
-        hi = math.ceil(2 ** ((fine_log + 1) / 2)) - 1
-        if lo > hi:
-            return None
-        return (-hi, -lo)
-
-
 def format_int(v: int) -> str:
     """Format an integer for display."""
     if v == 0:
@@ -75,16 +48,9 @@ def format_int(v: int) -> str:
         return f"{sign}{abs_v}"
 
 
-def bucket_to_label(bucket: int) -> str:
-    """Convert bucket index to a human-readable label showing integer range."""
-    int_range = bucket_to_int_range(bucket)
-    if int_range is None:
-        return ""  # empty bucket
-    lo, hi = int_range
-    if lo == hi:
-        return format_int(lo)
-    else:
-        return format_int(lo)  # i could do something smart but whatever
+def bucket_to_label(bucket: dict) -> str:
+    """Format a bucket's lower bound as a human-readable label."""
+    return format_int(bucket["start"])
 
 
 def alternate():
@@ -105,44 +71,22 @@ def plot_tracked_value(ax, data: dict, index: int) -> None:
     stddev: int = data["stddev"]
     min_val: int = data["min"]
     max_val: int = data["max"]
-    histogram: list[int] = data["histogram"]
+    buckets: list[dict] = data["buckets"]
 
     if [0, 1] == [min_val, max_val]:
         return plot_tracked_boolean(ax, data, index)
 
-    # find non-zero range
-    nonzero_indices = [i for i, v in enumerate(histogram) if v > 0]
-    if not nonzero_indices:
+    if not buckets:
         ax.text(0.5, 0.5, "no data", ha="center", va="center", transform=ax.transAxes)
         ax.set_title(name, fontsize=12)
         return
 
-    lo, hi = min(nonzero_indices), max(nonzero_indices)
-    # add some padding
-    lo = max(0, lo - 1)
-    hi = min(127, hi + 1)
-
-    # filter to only buckets that can contain integer values
-    all_buckets = list(range(lo, hi + 1))
-    valid_buckets = [b for b in all_buckets if bucket_to_int_range(b) is not None]
-    values = [histogram[b] for b in valid_buckets]
-
-    if not values:
-        ax.text(
-            0.5,
-            0.5,
-            "No valid buckets",
-            ha="center",
-            va="center",
-            transform=ax.transAxes,
-        )
-        ax.set_title(name, fontsize=12)
-        return
+    values = [b["count"] for b in buckets]
 
     # Create bar chart
     color = next(alt_map)
     ax.bar(
-        range(len(valid_buckets)),
+        range(len(buckets)),
         values,
         color=color,
         # edgecolor=palette["text"],
@@ -150,15 +94,15 @@ def plot_tracked_value(ax, data: dict, index: int) -> None:
     )
 
     # X-axis labels (show subset to avoid crowding)
-    if len(valid_buckets) <= 16:
-        tick_indices = list(range(len(valid_buckets)))
+    if len(buckets) <= 16:
+        tick_indices = list(range(len(buckets)))
     else:
-        step = max(1, len(valid_buckets) // 8)
-        tick_indices = list(range(0, len(valid_buckets), step))
+        step = max(1, len(buckets) // 8)
+        tick_indices = list(range(0, len(buckets), step))
 
     ax.set_xticks(tick_indices)
     ax.set_xticklabels(
-        [bucket_to_label(valid_buckets[i]) for i in tick_indices], fontsize=8
+        [bucket_to_label(buckets[i]) for i in tick_indices], fontsize=8
     )
 
     # Y-axis: use log scale if range is large
