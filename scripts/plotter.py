@@ -49,8 +49,15 @@ def format_int(v: int) -> str:
 
 
 def bucket_to_label(bucket: dict) -> str:
-    """Format a bucket's lower bound as a human-readable label."""
-    return format_int(bucket["start"])
+    if bucket["start"] == 0:
+        assert bucket["end"] == 0
+        return format_int(0)
+    # average in log-space:
+    s = math.log2(abs(bucket["start"]))
+    e = math.log2(abs(bucket["end"]))
+    m = (s + e) / 2
+    x = int(round(math.copysign(math.exp2(m), bucket["start"])))
+    return format_int(x)
 
 
 def alternate():
@@ -81,17 +88,20 @@ def plot_tracked_value(ax, data: dict, index: int) -> None:
         ax.set_title(name, fontsize=12)
         return
 
-    values = [b["count"] for b in buckets]
+    # normalise by bucket size
+    values = [b["count"] / (abs(b["start"] - b["end"]) + 1) for b in buckets]
 
     # Create bar chart
     color = next(alt_map)
-    ax.bar(
-        range(len(buckets)),
+    x = [bucket_to_label(buckets[i]) for i in range(len(buckets))]
+    ax.plot(
+        x,
         values,
         color=color,
         # edgecolor=palette["text"],
         # alpha=0.7,
     )
+    ax.fill_between(x, values, color=color, alpha=0.55, linewidth=0, hatch="--")
 
     # X-axis labels (show subset to avoid crowding)
     if len(buckets) <= 16:
@@ -101,13 +111,11 @@ def plot_tracked_value(ax, data: dict, index: int) -> None:
         tick_indices = list(range(0, len(buckets), step))
 
     ax.set_xticks(tick_indices)
-    ax.set_xticklabels(
-        [bucket_to_label(buckets[i]) for i in tick_indices], fontsize=8
-    )
+    ax.set_xticklabels([bucket_to_label(buckets[i]) for i in tick_indices], fontsize=8)
 
     # Y-axis: use log scale if range is large
-    if max(values) > 100 * min(v for v in values if v > 0):
-        ax.set_yscale("log")
+    # if max(values) > 100 * min(v for v in values if v > 0):
+    #     ax.set_yscale("log")
 
     # title with stats
     # name format is `file:line expr`, extract the expr part
@@ -116,11 +124,12 @@ def plot_tracked_value(ax, data: dict, index: int) -> None:
         _, expr = name.split(" ", 1)
         # truncate long expressions
         short_name = expr if len(expr) <= 40 else expr[:37] + "…"
+        short_name = short_name.replace("_", " ").upper()
     else:
         short_name = name
-    title = f"{short_name}\nn={count:,} μ={avg:.1f} |μ|={avg_abs:.1f}\nσ={stddev:.1f} min={min_val} max={max_val}"
+    title = f"{short_name}\nN={count:,} μ={avg:.1f} |μ|={avg_abs:.1f}\nσ={stddev:.1f} LO={min_val} HI={max_val}"
     ax.set_title(title, fontsize=16)
-    ax.tick_params(axis="both", labelsize=8)
+    ax.tick_params(axis="both", labelsize=12)
 
     ax.set_facecolor(palette["bg-b"])
 
@@ -194,9 +203,9 @@ def plot_tracked_boolean(ax, data: dict, index: int) -> None:
         short_name = expr if len(expr) <= 40 else expr[:37] + "…"
     else:
         short_name = name
-    title = f"{short_name}\nn={count:,} μ={avg:.1f}"
+    title = f"{short_name}\nN={count:,} μ={avg:.1f}"
     ax.set_title(title, fontsize=16)
-    ax.tick_params(axis="both", labelsize=8)
+    ax.tick_params(axis="both", labelsize=12)
 
     ax.set_facecolor(palette["bg-b"])
 
