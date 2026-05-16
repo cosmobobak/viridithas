@@ -1060,7 +1060,7 @@ pub fn alpha_beta<NT: NodeType>(
         // if the static eval is too low, check if qsearch can beat alpha.
         // if it can't, we can prune the node.
         if alpha < 2000
-            && track!(static_eval)
+            && static_eval
                 < alpha - t.info.conf.razoring_coeff_0 - t.info.conf.razoring_coeff_1 * depth
         {
             let v = quiescence::<OffPV>(pv, t, alpha, beta);
@@ -1078,7 +1078,7 @@ pub fn alpha_beta<NT: NodeType>(
             !t.ss[height].ttpv
                 && track!(depth) < 9
                 && beta > -MINIMUM_TB_WIN_SCORE
-                && eval < MINIMUM_TB_WIN_SCORE
+                && track!(eval) < MINIMUM_TB_WIN_SCORE
                 && eval >= beta
                 && (tt_move.is_none() || tt_capture.is_some())
                 && eval - rfp_margin(&t.board, &t.info, depth, improving, correction) >= beta

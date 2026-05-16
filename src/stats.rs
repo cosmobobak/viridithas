@@ -221,7 +221,7 @@ pub fn dump_and_plot() {
     // run the plotter
     let plotter_path = concat!(env!("CARGO_MANIFEST_DIR"), "/scripts/plotter.py");
     let result = Command::new("uv")
-        .args(["run", plotter_path])
+        .args(["run", plotter_path, "--min-bucket-fraction", "0.01"])
         .stdin(Stdio::piped())
         .spawn();
 

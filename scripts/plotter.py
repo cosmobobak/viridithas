@@ -11,6 +11,7 @@ Reads JSON from stdin containing tracked value statistics and histograms,
 then generates matplotlib visualisations.
 """
 
+import argparse
 import json
 import sys
 import math
@@ -82,7 +83,7 @@ def alternate():
 alt_map = alternate()
 
 
-def plot_tracked_value(ax, data: dict, index: int) -> None:
+def plot_tracked_value(ax, data: dict, index: int, min_bucket_fraction: float = 0.0) -> None:
     """Plot a single tracked value's histogram on the given axes."""
     name: str = data["name"]
     count: int = data["count"]
@@ -95,6 +96,10 @@ def plot_tracked_value(ax, data: dict, index: int) -> None:
 
     if [0, 1] == [min_val, max_val]:
         return plot_tracked_boolean(ax, data, index)
+
+    if min_bucket_fraction > 0 and count > 0:
+        threshold = min_bucket_fraction * count
+        buckets = [b for b in buckets if b["count"] >= threshold]
 
     if not buckets:
         ax.text(0.5, 0.5, "no data", ha="center", va="center", transform=ax.transAxes)
@@ -258,6 +263,22 @@ def plot_tracked_boolean(ax, data: dict, index: int) -> None:
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--min-bucket-fraction",
+        type=float,
+        default=0.0,
+        help=(
+            "Drop buckets whose count is less than this fraction of the tracked "
+            "value's total samples (e.g. 0.01 drops anything under 1%%). Default: 0."
+        ),
+    )
+    args = parser.parse_args()
+
+    if not 0.0 <= args.min_bucket_fraction < 1.0:
+        print("--min-bucket-fraction must be in [0, 1)", file=sys.stderr)
+        sys.exit(2)
+
     # read JSON from stdin
     try:
         data = json.load(sys.stdin)
@@ -293,7 +314,7 @@ def main():
         axes = axes.flatten() if hasattr(axes, "flatten") else [axes]
 
     for i, d in enumerate(data):
-        plot_tracked_value(axes[i], d, i)
+        plot_tracked_value(axes[i], d, i, min_bucket_fraction=args.min_bucket_fraction)
 
     # hide unused subplots
     for i in range(n, len(axes)):
