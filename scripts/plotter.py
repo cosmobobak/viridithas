@@ -162,7 +162,8 @@ def plot_tracked_value(ax, data: dict, index: int, min_bucket_fraction: float = 
         short_name = short_name.replace("_", " ").upper()
     else:
         short_name = name
-    title = f"{short_name}\nN={count:,} μ={avg:.1f} |μ|={avg_abs:.1f}\nσ={stddev:.1f} LO={min_val} HI={max_val}"
+    print_count = f"{count:,}".replace(",", " ")
+    title = f"{short_name}\nN = {print_count}   μ = {avg:.1f}   |μ| = {avg_abs:.1f}\nσ = {stddev:.1f}   LO = {min_val}   HI = {max_val}".replace("-", "\u2212")
     ax.set_title(title, fontsize=16)
     ax.tick_params(axis="both", labelsize=12)
 
@@ -245,7 +246,8 @@ def plot_tracked_boolean(ax, data: dict, index: int) -> None:
         short_name = expr if len(expr) <= 40 else expr[:37] + "…"
     else:
         short_name = name
-    title = f"{short_name}\nN={count:,} μ={avg:.1f}"
+    print_count = f"{count:,}".replace(",", " ")
+    title = f"{short_name}\nN = {print_count}   μ = {avg:.1f}".replace("-", "\u2212")
     ax.set_title(title, fontsize=16)
     ax.tick_params(axis="both", labelsize=12)
 
