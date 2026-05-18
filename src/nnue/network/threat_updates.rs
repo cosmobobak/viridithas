@@ -51,9 +51,9 @@ impl Direction for Incoming {
 #[cfg(target_feature = "avx512vbmi")]
 mod vbmi {
     use std::arch::x86_64::{
-        __m128i, _mm512_castsi512_si128, _mm512_mask_mov_epi8, _mm512_maskz_compress_epi8,
-        _mm512_permutex2var_epi8, _mm512_set1_epi16, _mm512_set_epi8, _mm512_storeu_si512,
-        _mm_storeu_si128, _mm_unpackhi_epi16, _mm_unpacklo_epi16, _mm_unpacklo_epi8,
+        __m128i, _mm_storeu_si128, _mm_unpackhi_epi16, _mm_unpacklo_epi8, _mm_unpacklo_epi16,
+        _mm512_castsi512_si128, _mm512_mask_mov_epi8, _mm512_maskz_compress_epi8,
+        _mm512_permutex2var_epi8, _mm512_set_epi8, _mm512_set1_epi16, _mm512_storeu_si512,
     };
 
     use crate::{
@@ -61,8 +61,8 @@ mod vbmi {
         nnue::{
             geometry,
             network::{
-                threat_updates::{AddSub, Direction},
                 ThreatUpdateBuffer,
+                threat_updates::{AddSub, Direction},
             },
         },
     };
@@ -173,8 +173,8 @@ mod generic {
         nnue::{
             geometry,
             network::{
-                threat_updates::{AddSub, Direction},
                 ThreatFeatureUpdate, ThreatUpdateBuffer,
+                threat_updates::{AddSub, Direction},
             },
         },
     };
@@ -431,10 +431,10 @@ mod tests {
 
     use crate::{
         chess::{
-            board::{movegen::attacks_by_type, Board},
+            board::{Board, movegen::attacks_by_type},
             piece::PieceType,
         },
-        nnue::network::{feature::ThreatFeatureIndex, UpdateBuffer},
+        nnue::network::{UpdateBuffer, feature::ThreatFeatureIndex},
     };
 
     use super::*;
@@ -645,7 +645,7 @@ mod tests {
 
     use crate::{
         chess::piece::Colour,
-        nnue::network::{feature::threat_index, NNUEParams, NNUEState, L1_SIZE},
+        nnue::network::{L1_SIZE, NNUEParams, NNUEState, feature::threat_index},
         util::Align64,
     };
 

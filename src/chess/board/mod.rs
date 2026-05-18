@@ -717,23 +717,20 @@ impl Board {
         self.state.mailbox[sq] = Some(piece);
     }
 
-    /// Gets the piece that will be captured by the given move.
-    pub fn captured_piece(&self, m: Move) -> Option<Piece> {
-        if m.is_castle() {
-            return None;
-        }
-        let idx = m.to();
-        self.state.mailbox[idx]
-    }
-
     /// Determines whether this move would be a capture in the current position.
     pub fn is_capture(&self, m: Move) -> bool {
-        self.captured_piece(m).is_some()
+        if m.is_castle() {
+            return false;
+        }
+        if m.is_ep() {
+            return true;
+        }
+        self.state.mailbox[m.to()].is_some()
     }
 
     /// Determines whether this move would be tactical in the current position.
     pub fn is_tactical(&self, m: Move) -> bool {
-        m.is_promo() || m.is_ep() || self.is_capture(m)
+        m.is_promo() || self.is_capture(m)
     }
 
     pub fn make_move_simple(&mut self, m: Move) {
