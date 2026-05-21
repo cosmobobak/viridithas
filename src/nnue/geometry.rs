@@ -39,7 +39,7 @@ impl Bit {
 pub struct BitRays(u64);
 
 impl BitRays {
-    pub const NON_KNIGHT: BitRays = BitRays(0xFEFE_FEFE_FEFE_FEFE);
+    pub const NON_KNIGHT: Self = Self(0xFEFE_FEFE_FEFE_FEFE);
 
     #[allow(dead_code)]
     pub fn inner(self) -> u64 {
@@ -59,7 +59,7 @@ impl BitAnd for BitRays {
     type Output = Self;
 
     fn bitand(self, rhs: Self) -> Self::Output {
-        BitRays(self.0 & rhs.0)
+        Self(self.0 & rhs.0)
     }
 }
 
@@ -67,7 +67,7 @@ impl Not for BitRays {
     type Output = Self;
 
     fn not(self) -> Self::Output {
-        BitRays(!self.0)
+        Self(!self.0)
     }
 }
 

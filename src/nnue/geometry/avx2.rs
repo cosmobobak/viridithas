@@ -1,10 +1,10 @@
 #![expect(clippy::cast_sign_loss, clippy::undocumented_unsafe_blocks)]
 
 use std::arch::x86_64::{
-    __m128i, __m256i, _mm256_and_si256, _mm256_andnot_si256, _mm256_blendv_epi8,
+    __m128i, __m256i, _mm_loadu_si128, _mm256_and_si256, _mm256_andnot_si256, _mm256_blendv_epi8,
     _mm256_broadcastsi128_si256, _mm256_cmpeq_epi8, _mm256_loadu_si256, _mm256_movemask_epi8,
     _mm256_permute2x128_si256, _mm256_set1_epi8, _mm256_setzero_si256, _mm256_shuffle_epi8,
-    _mm256_slli_epi64, _mm_loadu_si128,
+    _mm256_slli_epi64,
 };
 
 use crate::{

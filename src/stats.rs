@@ -1,21 +1,41 @@
 //! Statistics tracking for search value distributions.
 //!
 //! This module provides infrastructure for tracking the distribution of values
-//! during search, such as pruning margins, reductions, and other dynamic parameters.
+//! during search.
+//!
 //! Enabled only with the `stats` feature.
 
 use std::{
     fmt::Write,
     process::{Command, Stdio},
-    sync::atomic::{AtomicI64, AtomicU64, Ordering},
+    sync::{
+        OnceLock,
+        atomic::{AtomicI64, AtomicU64, Ordering},
+    },
 };
 
+use histogram::AtomicHistogram;
 use linkme::distributed_slice;
 
-/// Number of histogram buckets (64 negative + 64 non-negative).
-pub const NUM_BUCKETS: usize = 128;
+// Bucket configuration for the per-`TrackedValue` histograms.
+//
+/// `grouping_power = 1` gives 2 sub-buckets per power of two.
+const HIST_GROUPING_POWER: u8 = 1;
+/// `max_value_power = 32` covers absolute values up to 2³².
+const HIST_MAX_VALUE_POWER: u8 = 32;
+
+/// Construct a fresh `AtomicHistogram` with the configuration above. Used by
+/// the `OnceLock`s inside `TrackedValue` to lazily initialise on first record.
+fn new_histogram() -> AtomicHistogram {
+    AtomicHistogram::new(HIST_GROUPING_POWER, HIST_MAX_VALUE_POWER)
+        .expect("valid histogram configuration")
+}
 
 /// A tracked value with statistics collected via atomic operations.
+///
+/// Bucketing is delegated to the `histogram` crate's `AtomicHistogram`. Because
+/// that type only handles `u64`, we keep two histograms per tracked value: one
+/// for non-negative samples and one for the absolute value of negative samples.
 pub struct TrackedValue {
     /// Name of the tracked value (`file:line expr`).
     pub name: &'static str,
@@ -31,15 +51,16 @@ pub struct TrackedValue {
     pub min: AtomicI64,
     /// Maximum value seen.
     pub max: AtomicI64,
-    /// Histogram buckets (√2-scale, buckets 0-63 negative, 64-127 non-negative).
-    pub histogram: [AtomicU64; NUM_BUCKETS],
+    /// Histogram of non-negative samples.
+    pub pos_hist: OnceLock<AtomicHistogram>,
+    /// Histogram of `|v|` for negative samples.
+    pub neg_hist: OnceLock<AtomicHistogram>,
 }
 
 impl TrackedValue {
     /// Create a new tracked value.
     #[must_use]
     pub const fn new(name: &'static str) -> Self {
-        // can't use array::from_fn in const context :(
         Self {
             name,
             count: AtomicU64::new(0),
@@ -48,7 +69,8 @@ impl TrackedValue {
             total_sq: AtomicU64::new(0),
             min: AtomicI64::new(i64::MAX),
             max: AtomicI64::new(i64::MIN),
-            histogram: [const { AtomicU64::new(0) }; NUM_BUCKETS],
+            pos_hist: OnceLock::new(),
+            neg_hist: OnceLock::new(),
         }
     }
 
@@ -57,7 +79,6 @@ impl TrackedValue {
     pub fn record(&self, v: i64) {
         self.count.fetch_add(1, Ordering::Relaxed);
         self.total.fetch_add(v, Ordering::Relaxed);
-        #[allow(clippy::cast_sign_loss)]
         self.total_abs
             .fetch_add(v.unsigned_abs(), Ordering::Relaxed);
         #[allow(clippy::cast_sign_loss)]
@@ -66,37 +87,13 @@ impl TrackedValue {
         self.min.fetch_min(v, Ordering::Relaxed);
         self.max.fetch_max(v, Ordering::Relaxed);
 
-        let bucket = Self::bucket_index(v);
-        self.histogram[bucket].fetch_add(1, Ordering::Relaxed);
-    }
-
-    /// Compute the bucket index for a value.
-    /// Buckets 0-63: negative values (0 = most negative, 63 = -1)
-    /// Bucket 64: zero
-    /// Buckets 65-127: positive values (65 = 1, 127 = largest positive)
-    #[inline]
-    fn bucket_index(v: i64) -> usize {
-        if v == 0 {
-            return 64;
-        }
-
-        let v_abs = v.unsigned_abs();
-
-        // compute floor(2 * log2(v_abs)) = floor(log2(v_abs²))
-        // for v_abs up to 2^32, v_abs² fits in u64
-        #[allow(clippy::cast_possible_truncation)]
-        let fine_log = if v_abs <= (1u64 << 32) {
-            let sq = v_abs * v_abs;
-            (63 - sq.leading_zeros()) as usize
+        // values outside [0, 2^HIST_MAX_VALUE_POWER) overflow the bucket range.
+        let hist = if v >= 0 {
+            self.pos_hist.get_or_init(new_histogram)
         } else {
-            2 * (63 - v_abs.leading_zeros()) as usize
+            self.neg_hist.get_or_init(new_histogram)
         };
-
-        if v > 0 {
-            (65 + fine_log).min(127)
-        } else {
-            63_usize.saturating_sub(fine_log)
-        }
+        let _ = hist.increment(v.unsigned_abs());
     }
 }
 
@@ -104,6 +101,45 @@ impl TrackedValue {
 /// `linkme` is so goddamn cool.
 #[distributed_slice]
 pub static TRACKED_VALUES: [TrackedValue];
+
+/// A populated histogram bucket, with both bounds carried as signed integers so
+/// that negative buckets can be emitted directly.
+struct BucketEntry {
+    start: i64,
+    end: i64,
+    count: u64,
+}
+
+/// Snapshot the positive and negative histograms of `tv` into a single ordered
+/// list of non-empty buckets covering negative samples first, then non-negative.
+fn collect_buckets(tv: &TrackedValue) -> Vec<BucketEntry> {
+    #![allow(clippy::cast_possible_wrap)]
+
+    let mut buckets = Vec::new();
+
+    let nh = tv.neg_hist.get().map(AtomicHistogram::load);
+    for b in nh.iter().flatten().filter(|x| x.count() != 0) {
+        buckets.push(BucketEntry {
+            start: -(b.end() as i64),
+            end: -(b.start() as i64),
+            count: b.count(),
+        });
+    }
+    // ideally we’d just place a `.rev()` on the flatten, but
+    // histogram hasn’t implemented DoubleEndedIterator :(
+    buckets.reverse();
+
+    let ph = tv.pos_hist.get().map(AtomicHistogram::load);
+    for b in ph.iter().flatten().filter(|x| x.count() != 0) {
+        buckets.push(BucketEntry {
+            start: b.start() as i64,
+            end: b.end() as i64,
+            count: b.count(),
+        });
+    }
+
+    buckets
+}
 
 /// Dump all tracked statistics and invoke the plotter script.
 pub fn dump_and_plot() {
@@ -133,12 +169,7 @@ pub fn dump_and_plot() {
         let variance = avg.mul_add(-avg, total_sq as f64 / count as f64);
         let stddev = variance.max(0.0).sqrt();
 
-        // collect histogram
-        let histogram = tv
-            .histogram
-            .iter()
-            .map(|b| b.load(Ordering::Relaxed))
-            .collect::<Vec<_>>();
+        let buckets = collect_buckets(tv);
 
         if i > 0 {
             json.push_str(",\n");
@@ -154,18 +185,29 @@ pub fn dump_and_plot() {
     "stddev": {stddev},
     "min": {min},
     "max": {max},
-    "histogram": {histogram:?}
-  }}"#,
+    "buckets": ["#,
             tv.name
         )
         .unwrap();
+        for (j, b) in buckets.iter().enumerate() {
+            if j > 0 {
+                json.push(',');
+            }
+            write!(
+                json,
+                r#"{{"start":{},"end":{},"count":{}}}"#,
+                b.start, b.end, b.count
+            )
+            .unwrap();
+        }
+        json.push_str("]\n  }");
     }
     json.push_str("\n]\n");
 
     // run the plotter
     let plotter_path = concat!(env!("CARGO_MANIFEST_DIR"), "/scripts/plotter.py");
     let result = Command::new("uv")
-        .args(["run", plotter_path])
+        .args(["run", plotter_path, "--min-bucket-fraction", "0.01"])
         .stdin(Stdio::piped())
         .spawn();
 

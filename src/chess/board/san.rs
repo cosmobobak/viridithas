@@ -37,9 +37,7 @@ impl Display for SanThunk<'_> {
         }
         let to_sq = m.to();
         let moved_piece = board.state.mailbox[m.from()].unwrap();
-        let is_capture = board.is_capture(m)
-            || (moved_piece.piece_type() == PieceType::Pawn
-                && Some(to_sq) == board.state.ep_square);
+        let is_capture = board.is_capture(m);
         let piece_prefix = match moved_piece.piece_type() {
             PieceType::Pawn if !is_capture => "",
             PieceType::Pawn => &"abcdefgh"[m.from().file() as usize..=m.from().file() as usize],

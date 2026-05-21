@@ -5,9 +5,9 @@
 )]
 
 use std::arch::x86_64::{
-    __m128i, __m512i, _mm512_broadcast_i32x4, _mm512_loadu_si512, _mm512_mask_blend_epi8,
-    _mm512_maskz_shuffle_epi8, _mm512_permutexvar_epi8, _mm512_set1_epi8, _mm512_shuffle_i64x2,
-    _mm512_test_epi8_mask, _mm512_testn_epi8_mask, _mm_loadu_si128,
+    __m128i, __m512i, _mm_loadu_si128, _mm512_broadcast_i32x4, _mm512_loadu_si512,
+    _mm512_mask_blend_epi8, _mm512_maskz_shuffle_epi8, _mm512_permutexvar_epi8, _mm512_set1_epi8,
+    _mm512_shuffle_i64x2, _mm512_test_epi8_mask, _mm512_testn_epi8_mask,
 };
 
 use crate::{
