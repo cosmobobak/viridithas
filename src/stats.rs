@@ -1,7 +1,8 @@
 //! Statistics tracking for search value distributions.
 //!
 //! This module provides infrastructure for tracking the distribution of values
-//! during search, such as pruning margins, reductions, and other dynamic parameters.
+//! during search.
+//!
 //! Enabled only with the `stats` feature.
 
 use std::{
