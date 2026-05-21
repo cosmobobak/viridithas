@@ -50,9 +50,9 @@ pub struct TrackedValue {
     pub min: AtomicI64,
     /// Maximum value seen.
     pub max: AtomicI64,
-    /// Histogram of non-negative samples. Lazily allocated on first record.
+    /// Histogram of non-negative samples.
     pub pos_hist: OnceLock<AtomicHistogram>,
-    /// Histogram of `|v|` for negative samples. Lazily allocated on first record.
+    /// Histogram of `|v|` for negative samples.
     pub neg_hist: OnceLock<AtomicHistogram>,
 }
 
@@ -112,44 +112,29 @@ struct BucketEntry {
 /// Snapshot the positive and negative histograms of `tv` into a single ordered
 /// list of non-empty buckets covering negative samples first, then non-negative.
 fn collect_buckets(tv: &TrackedValue) -> Vec<BucketEntry> {
+    #![allow(clippy::cast_possible_wrap)]
+
     let mut buckets = Vec::new();
 
-    if let Some(snap) = tv.neg_hist.get().map(AtomicHistogram::load) {
-        let mut negatives: Vec<BucketEntry> = snap
-            .into_iter()
-            .filter(|b| b.count() != 0)
-            .map(|b| {
-                #[allow(clippy::cast_possible_wrap)]
-                let start = -(b.end() as i64);
-                #[allow(clippy::cast_possible_wrap)]
-                let end = -(b.start() as i64);
-                BucketEntry {
-                    start,
-                    end,
-                    count: b.count(),
-                }
-            })
-            .collect();
-        // histogram crate iterates in ascending |v|; flip so negatives are ascending.
-        negatives.reverse();
-        buckets.append(&mut negatives);
+    let nh = tv.neg_hist.get().map(AtomicHistogram::load);
+    for b in nh.iter().flatten().filter(|x| x.count() != 0) {
+        buckets.push(BucketEntry {
+            start: -(b.end() as i64),
+            end: -(b.start() as i64),
+            count: b.count(),
+        });
     }
+    // ideally we’d just place a `.rev()` on the flatten, but
+    // histogram hasn’t implemented DoubleEndedIterator :(
+    buckets.reverse();
 
-    if let Some(snap) = tv.pos_hist.get().map(AtomicHistogram::load) {
-        for b in &snap {
-            if b.count() == 0 {
-                continue;
-            }
-            #[allow(clippy::cast_possible_wrap)]
-            let start = b.start() as i64;
-            #[allow(clippy::cast_possible_wrap)]
-            let end = b.end() as i64;
-            buckets.push(BucketEntry {
-                start,
-                end,
-                count: b.count(),
-            });
-        }
+    let ph = tv.pos_hist.get().map(AtomicHistogram::load);
+    for b in ph.iter().flatten().filter(|x| x.count() != 0) {
+        buckets.push(BucketEntry {
+            start: b.start() as i64,
+            end: b.end() as i64,
+            count: b.count(),
+        });
     }
 
     buckets
