@@ -464,6 +464,55 @@ mod simd {
             *output = simd::reduce_add_f32s(&sum_vecs) + bias;
         }
     }
+
+    // Perform the forward pass of a residual FFN block.
+    // The inputs and outputs are in f32, while the weights are in i8.
+    // An FFN block does an up-projection (D → D×4), then activates
+    // this projected vector, then performs a down-projection (D×4 → D)
+    // to produce a difference to be added to the residual.
+    // The choice of activation function is a little difficult to pin down.
+    // Clipped ReLU would likely work well.
+    //
+    // Questions:
+    // · We abstract madd_u8_to_i32 across architectures in our SIMD backends
+    //   – how should we use it, if at all?
+    //   A: We can basically use it as-is for the down-proj à la the existing
+    //      L1 forward pass. For the up-proj, we can’t rely on the inputs being
+    //      nonnegative, so we need to go look at the standard tricks for using
+    //      dpbusd in such a setting (as i understand it we can shift the values
+    //      up by 128 before multiplying, or something similar).
+    // · How do we accumulate into each element of the intermediate vector?
+    //   if the sum can be at most 127, does that mean each intermediate op
+    //   can produce only 127/D at maximum?
+    //   A: the preactivations can be stored in i32 and reduced down only when
+    //      storing to the activation buffer.
+    // · What is the value of unity best set to?
+    //   A: We can use whatever. If our activation is CReLU, 64 for weights and
+    //      127 for activations seems fine.
+    // · How should we permute these weights for good performance?
+    //   A: same was as the L1 weights.
+    const D: usize = 32;
+    pub fn ffn(
+        stream: &mut Align64<[f32; D]>,
+        up: &Align64<[[i8; D]; D * 4]>,
+        down: &Align64<[[i8; D * 4]; D]>,
+    ) {
+        unsafe {
+            let mut activation_buffer: Align64<[MaybeUninit<i8>; D * 4]> =
+                MaybeUninit::uninit().assume_init();
+
+            // 1. Convert inputs to [i8; D]. This will probably be best
+            //    done in combination with LayerNorm.
+
+            // 2. Matmul, accumulating into i32. Fused with this, reduce
+            //    results down to i8 and write to `activation_buffer`.
+
+            // 3. Do a very L1-like (though dense) matmul accumulating
+            //    into [i32; D]
+
+            // 4. Add to `stream`.
+        }
+    }
 }
 
 pub use simd::*;
