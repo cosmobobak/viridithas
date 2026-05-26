@@ -180,7 +180,7 @@ mod tests {
         chess::{CHESS960, chessmove::Move, piece::PieceType, types::Square},
         nnue::network::NNUEParams,
         threadpool,
-        transpositiontable::TT,
+        transpositiontable::Cache,
         util::MEGABYTE,
     };
 
@@ -226,8 +226,8 @@ mod tests {
         use super::*;
 
         let pool = threadpool::make_worker_threads(1);
-        let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16, &pool);
+        let mut cache = Cache::new();
+        cache.resize(MEGABYTE * 16, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
@@ -235,7 +235,7 @@ mod tests {
         let mut t = ThreadData::new(
             0,
             Board::startpos(),
-            tt.view(),
+            cache.view(),
             nnue_params,
             &stopped,
             &nodes,
@@ -260,13 +260,13 @@ mod tests {
 
         let pos = Board::startpos();
         let pool = threadpool::make_worker_threads(1);
-        let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16, &pool);
+        let mut cache = Cache::new();
+        cache.resize(MEGABYTE * 16, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
-        let mut t = ThreadData::new(0, pos, tt.view(), nnue_params, &stopped, &nodes, &tbhits);
+        let mut t = ThreadData::new(0, pos, cache.view(), nnue_params, &stopped, &nodes, &tbhits);
         assert_eq!(movepicker_perft(&mut t, 1), 20, "got {}", {
             t.board
                 .legal_moves()
@@ -288,13 +288,13 @@ mod tests {
 
         let pos = Board::from_fen(TEST_FEN).unwrap();
         let pool = threadpool::make_worker_threads(1);
-        let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16, &pool);
+        let mut cache = Cache::new();
+        cache.resize(MEGABYTE * 16, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
-        let mut t = ThreadData::new(0, pos, tt.view(), nnue_params, &stopped, &nodes, &tbhits);
+        let mut t = ThreadData::new(0, pos, cache.view(), nnue_params, &stopped, &nodes, &tbhits);
         assert_eq!(movepicker_perft(&mut t, 1), 48, "got {}", {
             t.board
                 .legal_moves()
@@ -315,13 +315,13 @@ mod tests {
 
         let pos = Board::from_fen(TEST_FEN).unwrap();
         let pool = threadpool::make_worker_threads(1);
-        let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16, &pool);
+        let mut cache = Cache::new();
+        cache.resize(MEGABYTE * 16, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
-        let mut t = ThreadData::new(0, pos, tt.view(), nnue_params, &stopped, &nodes, &tbhits);
+        let mut t = ThreadData::new(0, pos, cache.view(), nnue_params, &stopped, &nodes, &tbhits);
         assert_eq!(movepicker_perft(&mut t, 1), 4, "got {}", {
             t.board
                 .legal_moves()
@@ -341,13 +341,13 @@ mod tests {
 
         let pos = Board::from_fen(TEST_FEN).unwrap();
         let pool = threadpool::make_worker_threads(1);
-        let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16, &pool);
+        let mut cache = Cache::new();
+        cache.resize(MEGABYTE * 16, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
-        let mut t = ThreadData::new(0, pos, tt.view(), nnue_params, &stopped, &nodes, &tbhits);
+        let mut t = ThreadData::new(0, pos, cache.view(), nnue_params, &stopped, &nodes, &tbhits);
         assert_eq!(movepicker_perft(&mut t, 1), 8, "got {}", {
             t.board
                 .legal_moves()

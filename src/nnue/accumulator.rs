@@ -1,16 +1,16 @@
 use crate::{
     nnue::network::{L1_SIZE, PSQT_FEATURES, feature::PsqtFeatureIndex},
-    util::Align64,
+    util::Align,
 };
 
 /// Pre-activations of l0’s output.
 pub struct Accumulator {
-    pub halves: [Align64<[i16; L1_SIZE]>; 2],
+    pub halves: [Align<[i16; L1_SIZE]>; 2],
 }
 
 #[allow(clippy::inline_always)]
 #[inline(always)]
-unsafe fn slice_to_aligned<T>(slice: &[T]) -> &Align64<[T; L1_SIZE]> {
+unsafe fn slice_to_aligned<T>(slice: &[T]) -> &Align<[T; L1_SIZE]> {
     debug_assert_eq!(slice.len(), L1_SIZE);
     // don't immediately cast to Align64, as we want to check the alignment first.
     let ptr = slice.as_ptr();
@@ -25,7 +25,7 @@ unsafe fn slice_to_aligned<T>(slice: &[T]) -> &Align64<[T; L1_SIZE]> {
 mod simd {
     use arrayvec::ArrayVec;
 
-    use super::{Align64, L1_SIZE, PSQT_FEATURES, PsqtFeatureIndex, slice_to_aligned};
+    use super::{Align, L1_SIZE, PSQT_FEATURES, PsqtFeatureIndex, slice_to_aligned};
     use crate::nnue::{
         network::{THREAT_FEATURES, feature::ThreatFeatureIndex},
         simd::{self, I16_CHUNK},
@@ -33,8 +33,8 @@ mod simd {
 
     /// Apply add/subtract PSQT updates in place.
     pub fn vector_update_inplace_psqt(
-        input: &mut Align64<[i16; L1_SIZE]>,
-        bucket: &Align64<[i16; PSQT_FEATURES * L1_SIZE]>,
+        input: &mut Align<[i16; L1_SIZE]>,
+        bucket: &Align<[i16; PSQT_FEATURES * L1_SIZE]>,
         adds: &[PsqtFeatureIndex],
         subs: &[PsqtFeatureIndex],
     ) {
@@ -86,9 +86,9 @@ mod simd {
 
     /// Apply add/subtract updates in place.
     pub fn vector_update_threats(
-        src_acc: &Align64<[i16; L1_SIZE]>,
-        dst_acc: &mut Align64<[i16; L1_SIZE]>,
-        bucket: &Align64<[i8; THREAT_FEATURES * L1_SIZE]>,
+        src_acc: &Align<[i16; L1_SIZE]>,
+        dst_acc: &mut Align<[i16; L1_SIZE]>,
+        bucket: &Align<[i8; THREAT_FEATURES * L1_SIZE]>,
         adds: &[ThreatFeatureIndex],
         subs: &[ThreatFeatureIndex],
     ) {
@@ -112,14 +112,14 @@ mod simd {
                 let add_index = add_index.index() * L1_SIZE;
                 let slice = slice_to_aligned(bucket.get_unchecked(add_index..add_index + L1_SIZE));
                 #[cfg(target_arch = "x86_64")]
-                _mm_prefetch(crate::util::from_ref(slice).cast::<i8>(), _MM_HINT_T0);
+                _mm_prefetch(std::ptr::from_ref(slice).cast::<i8>(), _MM_HINT_T0);
                 add_blocks.push(slice);
             }
             for &sub_index in subs {
                 let sub_index = sub_index.index() * L1_SIZE;
                 let slice = slice_to_aligned(bucket.get_unchecked(sub_index..sub_index + L1_SIZE));
                 #[cfg(target_arch = "x86_64")]
-                _mm_prefetch(crate::util::from_ref(slice).cast::<i8>(), _MM_HINT_T0);
+                _mm_prefetch(std::ptr::from_ref(slice).cast::<i8>(), _MM_HINT_T0);
                 sub_blocks.push(slice);
             }
             let mut registers = [simd::zero_i16(); REGISTERS];
@@ -153,9 +153,9 @@ mod simd {
 
     /// Move a PSQT feature from one square to another.
     pub fn vector_add_sub_psqt(
-        input: &Align64<[i16; L1_SIZE]>,
-        output: &mut Align64<[i16; L1_SIZE]>,
-        bucket: &Align64<[i16; PSQT_FEATURES * L1_SIZE]>,
+        input: &Align<[i16; L1_SIZE]>,
+        output: &mut Align<[i16; L1_SIZE]>,
+        bucket: &Align<[i16; PSQT_FEATURES * L1_SIZE]>,
         add: PsqtFeatureIndex,
         sub: PsqtFeatureIndex,
     ) {
@@ -185,9 +185,9 @@ mod simd {
 
     /// Subtract two PSQT features and add one PSQT feature all at once.
     pub fn vector_add_sub2_psqt(
-        input: &Align64<[i16; L1_SIZE]>,
-        output: &mut Align64<[i16; L1_SIZE]>,
-        bucket: &Align64<[i16; PSQT_FEATURES * L1_SIZE]>,
+        input: &Align<[i16; L1_SIZE]>,
+        output: &mut Align<[i16; L1_SIZE]>,
+        bucket: &Align<[i16; PSQT_FEATURES * L1_SIZE]>,
         add: PsqtFeatureIndex,
         sub1: PsqtFeatureIndex,
         sub2: PsqtFeatureIndex,
@@ -223,9 +223,9 @@ mod simd {
 
     /// Add two PSQT features and subtract two PSQT features all at once.
     pub fn vector_add2_sub2_psqt(
-        input: &Align64<[i16; L1_SIZE]>,
-        output: &mut Align64<[i16; L1_SIZE]>,
-        bucket: &Align64<[i16; PSQT_FEATURES * L1_SIZE]>,
+        input: &Align<[i16; L1_SIZE]>,
+        output: &mut Align<[i16; L1_SIZE]>,
+        bucket: &Align<[i16; PSQT_FEATURES * L1_SIZE]>,
         add1: PsqtFeatureIndex,
         add2: PsqtFeatureIndex,
         sub1: PsqtFeatureIndex,

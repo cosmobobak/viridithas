@@ -42,7 +42,7 @@ use crate::{
     threadlocal::{ThreadData, make_thread_data},
     threadpool,
     timemgmt::SearchLimit,
-    transpositiontable::TT,
+    transpositiontable::Cache,
     util::{MAX_DEPTH, MEGABYTE},
 };
 
@@ -75,8 +75,8 @@ pub fn main_loop() -> Result<(), UciError> {
 
     let mut worker_threads = threadpool::make_worker_threads(1);
 
-    let mut tt = TT::new();
-    tt.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE, &worker_threads); // default hash size
+    let mut cache = Cache::new();
+    cache.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE, &worker_threads); // default hash size
 
     let nnue_params =
         NNUEParams::decompress_and_alloc().map_err(|e| UciError::NnueInit(e.to_string()))?;
@@ -88,7 +88,7 @@ pub fn main_loop() -> Result<(), UciError> {
     let tbhits = AtomicU64::new(0);
     let mut thread_data = make_thread_data(
         &Board::startpos(),
-        tt.view(),
+        cache.view(),
         nnue_params,
         &stopped,
         &nodes,
@@ -126,7 +126,7 @@ pub fn main_loop() -> Result<(), UciError> {
             }
             arg @ ("ucidump" | "ucidumpfull") => {
                 // dump the values of the current UCI options
-                println!("Hash: {}", tt.size() / MEGABYTE);
+                println!("Hash: {}", cache.size() / MEGABYTE);
                 println!("Threads: {}", thread_data.len());
                 println!("PrettyPrint: {}", PRETTY_PRINT.load(Ordering::SeqCst));
                 println!(
@@ -153,7 +153,7 @@ pub fn main_loop() -> Result<(), UciError> {
                 QUIT.store(true, Ordering::SeqCst);
                 break;
             }
-            "ucinewgame" => do_newgame(&tt, &mut thread_data, &worker_threads),
+            "ucinewgame" => do_newgame(&cache, &mut thread_data, &worker_threads),
             "eval" => {
                 let t = thread_data.first_mut();
                 let eval = if t.board.in_check() {
@@ -198,7 +198,7 @@ pub fn main_loop() -> Result<(), UciError> {
             input if is_cmd(input, "setoption") => {
                 let pre_config = SetOptions {
                     search_config: thread_data[0].info.conf.clone(),
-                    hash_mb: tt.size() / MEGABYTE,
+                    hash_mb: cache.size() / MEGABYTE,
                     threads: thread_data.len(),
                 };
                 let threads_before = thread_data.len();
@@ -218,11 +218,11 @@ pub fn main_loop() -> Result<(), UciError> {
                         let pos = thread_data[0].board.clone();
                         // drop all the thread_data, as they are borrowing the old tt
                         std::mem::drop(thread_data);
-                        tt.resize(new_size, &worker_threads);
+                        cache.resize(new_size, &worker_threads);
                         // recreate the thread_data with the new tt
                         thread_data = make_thread_data(
                             &pos,
-                            tt.view(),
+                            cache.view(),
                             nnue_params,
                             &stopped,
                             &nodes,
@@ -267,7 +267,7 @@ pub fn main_loop() -> Result<(), UciError> {
                 match parse_go(input, thread_data[0].board.turn()) {
                     Ok(search_limit) => {
                         thread_data[0].info.clock.set_limit(search_limit);
-                        tt.increase_age();
+                        cache.increase_age();
                         search_position(&worker_threads, &mut thread_data);
                         Ok(())
                     }
@@ -830,11 +830,11 @@ pub fn bench(
     let nodes = AtomicU64::new(0);
     let tbhits = AtomicU64::new(0);
     let pool = threadpool::make_worker_threads(threads.unwrap_or(BENCH_THREADS));
-    let mut tt = TT::new();
-    tt.resize(16 * MEGABYTE, &pool);
+    let mut cache = Cache::new();
+    cache.resize(16 * MEGABYTE, &pool);
     let mut thread_data = make_thread_data(
         &Board::startpos(),
-        tt.view(),
+        cache.view(),
         nnue_params,
         &stopped,
         &nodes,
@@ -849,7 +849,7 @@ pub fn bench(
     // BENCH_POSITIONS is nonempty, so unwrap is safe
     let max_fen_len = BENCH_POSITIONS.iter().map(|s| s.len()).max().unwrap_or(0);
     for fen in BENCH_POSITIONS {
-        let res = do_newgame(&tt, &mut thread_data, &pool);
+        let res = do_newgame(&cache, &mut thread_data, &pool);
         if let Err(e) = res {
             thread_data[0].info.print_to_stdout = true;
             return Err(e);
@@ -871,7 +871,7 @@ pub fn bench(
                 return Err(e.into());
             }
         }
-        tt.increase_age();
+        cache.increase_age();
         search_position(&pool, &mut thread_data);
         node_sum += thread_data[0].info.nodes.get_global();
         if matches!(benchcmd, "benchfull" | "openbench") {
@@ -935,11 +935,11 @@ pub fn go_benchmark(nnue_params: &'static NNUEParams) -> Result<(), UciError> {
     let nodes = AtomicU64::new(0);
     let tbhits = AtomicU64::new(0);
     let pool = threadpool::make_worker_threads(THREADS);
-    let mut tt = TT::new();
-    tt.resize(16 * MEGABYTE, &pool);
+    let mut cache = Cache::new();
+    cache.resize(16 * MEGABYTE, &pool);
     let mut thread_data = make_thread_data(
         &Board::startpos(),
-        tt.view(),
+        cache.view(),
         nnue_params,
         &stopped,
         &nodes,
@@ -956,7 +956,7 @@ pub fn go_benchmark(nnue_params: &'static NNUEParams) -> Result<(), UciError> {
             thread_data[0].board.turn(),
         )?;
         thread_data[0].info.clock.set_limit(limit);
-        tt.increase_age();
+        cache.increase_age();
         std::hint::black_box(search_position(&pool, &mut thread_data));
     }
     let elapsed = start.elapsed();
@@ -1005,11 +1005,11 @@ fn divide_perft(depth: usize, pos: &mut Board) {
 }
 
 fn do_newgame(
-    tt: &TT,
+    cache: &Cache,
     thread_data: &mut [Box<ThreadData>],
     pool: &[threadpool::WorkerThread],
 ) -> Result<(), UciError> {
-    tt.clear(pool);
+    cache.clear(pool);
     for t in thread_data {
         parse_position("position startpos\n", &mut t.board)?;
         t.clear_tables();

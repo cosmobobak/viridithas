@@ -208,7 +208,7 @@ mod tests {
         threadlocal::ThreadData,
         threadpool,
         timemgmt::{SearchLimit, TimeManager},
-        transpositiontable::TT,
+        transpositiontable::Cache,
         util::MEGABYTE,
     };
 
@@ -225,13 +225,13 @@ mod tests {
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
         let pool = threadpool::make_worker_threads(1);
-        let mut tt = TT::new();
-        tt.resize(MEGABYTE, &pool);
+        let mut cache = Cache::new();
+        cache.resize(MEGABYTE, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = Box::new(ThreadData::new(
             0,
             position,
-            tt.view(),
+            cache.view(),
             nnue_params,
             &stopped,
             &nodes,
@@ -263,13 +263,13 @@ mod tests {
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
         let pool = threadpool::make_worker_threads(1);
-        let mut tt = TT::new();
-        tt.resize(MEGABYTE, &pool);
+        let mut cache = Cache::new();
+        cache.resize(MEGABYTE, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = Box::new(ThreadData::new(
             0,
             position,
-            tt.view(),
+            cache.view(),
             nnue_params,
             &stopped,
             &nodes,
@@ -301,13 +301,13 @@ mod tests {
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
         let pool = threadpool::make_worker_threads(1);
-        let mut tt = TT::new();
-        tt.resize(MEGABYTE, &pool);
+        let mut cache = Cache::new();
+        cache.resize(MEGABYTE, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = Box::new(ThreadData::new(
             0,
             position,
-            tt.view(),
+            cache.view(),
             nnue_params,
             &stopped,
             &nodes,
@@ -339,13 +339,13 @@ mod tests {
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
         let pool = threadpool::make_worker_threads(1);
-        let mut tt = TT::new();
-        tt.resize(MEGABYTE, &pool);
+        let mut cache = Cache::new();
+        cache.resize(MEGABYTE, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = Box::new(ThreadData::new(
             0,
             position,
-            tt.view(),
+            cache.view(),
             nnue_params,
             &stopped,
             &nodes,

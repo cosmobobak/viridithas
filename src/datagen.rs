@@ -418,10 +418,10 @@ fn generate_on_thread<'a>(
         .unwrap();
 
     // We allocate four megabytes of cache for each worker,
-    // because search budgets are so small and smaller TTs
+    // because search budgets are so small and smaller caches
     // increase speed. We split all state by colour, so that
     // the two players of each game can't "see into each
-    // other's minds" via the TT / histories. Additionally,
+    // other's minds" via the cache / histories. Additionally,
     // search is tuned around each move in the game being
     // two ply forward from the previous move, so this is
     // prudent just from a robustness perspective.

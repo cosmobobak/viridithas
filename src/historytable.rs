@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use crate::{chess::piece::Colour, search::parameters::HistoryConfig, util::BOARD_N_SQUARES};
+use crate::{chess::piece::Colour, search::parameters::HistoryConfig};
 
 #[inline]
 pub fn history_bonus(conf: &HistoryConfig, depth: i32) -> i32 {
@@ -47,11 +47,11 @@ fn gravity_update_with_modulator<const MAX: i32>(val: &mut i16, modulator: i32, 
 
 #[repr(transparent)]
 pub struct PieceToTable {
-    table: [[i16; BOARD_N_SQUARES]; 12],
+    table: [[i16; 64]; 12],
 }
 
 impl Deref for PieceToTable {
-    type Target = [[i16; BOARD_N_SQUARES]; 12];
+    type Target = [[i16; 64]; 12];
 
     fn deref(&self) -> &Self::Target {
         &self.table
@@ -66,11 +66,11 @@ impl DerefMut for PieceToTable {
 
 #[repr(transparent)]
 pub struct FromToTable {
-    table: [[i16; BOARD_N_SQUARES]; BOARD_N_SQUARES],
+    table: [[i16; 64]; 64],
 }
 
 impl Deref for FromToTable {
-    type Target = [[i16; BOARD_N_SQUARES]; BOARD_N_SQUARES];
+    type Target = [[i16; 64]; 64];
 
     fn deref(&self) -> &Self::Target {
         &self.table
@@ -92,7 +92,7 @@ impl<T> ThreatsHistoryTable<T> {
     pub fn boxed() -> Box<Self> {
         #![allow(clippy::cast_ptr_alignment)]
         // SAFETY: we're allocating a zeroed block of memory, and then casting it to a Box<Self>
-        // this is fine! because [[HistoryTable; BOARD_N_SQUARES]; 12] is just a bunch of i16s
+        // this is fine! because [[HistoryTable; 64]; 12] is just a bunch of i16s
         // at base, which are fine to zero-out.
         unsafe {
             let layout = std::alloc::Layout::new::<Self>();
@@ -153,7 +153,7 @@ impl CaptureHistoryTable {
     pub fn boxed() -> Box<Self> {
         #![allow(clippy::cast_ptr_alignment)]
         // SAFETY: we're allocating a zeroed block of memory, and then casting it to a Box<Self>
-        // this is fine! because [[HistoryTable; BOARD_N_SQUARES]; 12] is just a bunch of i16s
+        // this is fine! because [[HistoryTable; 64]; 12] is just a bunch of i16s
         // at base, which are fine to zero-out.
         unsafe {
             let layout = std::alloc::Layout::new::<Self>();
@@ -191,14 +191,14 @@ impl DerefMut for CaptureHistoryTable {
 
 #[repr(transparent)]
 pub struct DoubleHistoryTable {
-    table: [[PieceToTable; BOARD_N_SQUARES]; 12],
+    table: [[PieceToTable; 64]; 12],
 }
 
 impl DoubleHistoryTable {
     pub fn boxed() -> Box<Self> {
         #![allow(clippy::cast_ptr_alignment)]
         // SAFETY: we're allocating a zeroed block of memory, and then casting it to a Box<Self>
-        // this is fine! because [[HistoryTable; BOARD_N_SQUARES]; 12] is just a bunch of i16s
+        // this is fine! because [[HistoryTable; 64]; 12] is just a bunch of i16s
         // at base, which are fine to zero-out.
         unsafe {
             let layout = std::alloc::Layout::new::<Self>();
@@ -221,7 +221,7 @@ impl DoubleHistoryTable {
 }
 
 impl Deref for DoubleHistoryTable {
-    type Target = [[PieceToTable; BOARD_N_SQUARES]; 12];
+    type Target = [[PieceToTable; 64]; 12];
 
     fn deref(&self) -> &Self::Target {
         &self.table
@@ -287,7 +287,7 @@ impl CorrectionHistoryTable {
     pub fn boxed() -> Box<Self> {
         #![allow(clippy::cast_ptr_alignment)]
         // SAFETY: we're allocating a zeroed block of memory, and then casting it to a Box<Self>
-        // this is fine! because [[HistoryTable; BOARD_N_SQUARES]; 12] is just a bunch of i16s
+        // this is fine! because [[HistoryTable; 64]; 12] is just a bunch of i16s
         // at base, which are fine to zero-out.
         unsafe {
             let layout = std::alloc::Layout::new::<Self>();

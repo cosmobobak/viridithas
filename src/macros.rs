@@ -69,7 +69,7 @@ macro_rules! track {
 macro_rules! include_bytes_aligned {
     ($path:literal) => {{
         // this assignment is made possible by CoerceUnsized
-        static ALIGNED: &$crate::util::Align64<[u8]> = &Align64(*include_bytes!($path));
+        static ALIGNED: &$crate::util::Align<[u8]> = &Align(*include_bytes!($path));
 
         &ALIGNED.0
     }};

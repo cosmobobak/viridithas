@@ -18,7 +18,7 @@ use crate::{
     searchinfo::SearchInfo,
     stack::StackEntry,
     threadpool::{self, ScopeExt},
-    transpositiontable::TTView,
+    transpositiontable::CacheView,
     util::MAX_DEPTH,
 };
 
@@ -56,7 +56,7 @@ pub struct ThreadData<'a> {
     pub stm_at_root: Colour,
     pub optimism: [i32; 2],
 
-    pub tt: TTView<'a>,
+    pub cache: CacheView<'a>,
 
     pub board: Board,
     pub info: SearchInfo<'a>,
@@ -69,7 +69,7 @@ impl<'a> ThreadData<'a> {
     pub fn new(
         thread_id: usize,
         board: Board,
-        tt: TTView<'a>,
+        cache: CacheView<'a>,
         nnue_params: &'static NNUEParams,
         stopped: &'a AtomicBool,
         nodes: &'a AtomicU64,
@@ -107,7 +107,7 @@ impl<'a> ThreadData<'a> {
             root_depth: 0,
             stm_at_root: board.turn(),
             optimism: [0; 2],
-            tt,
+            cache,
             board,
             info: SearchInfo::new(stopped, nodes, tbhits),
         };
@@ -190,7 +190,7 @@ impl<'a> ThreadData<'a> {
 
 pub fn make_thread_data<'a>(
     pos: &Board,
-    tt: TTView<'a>,
+    cache: CacheView<'a>,
     nnue_params: &'static NNUEParams,
     stopped: &'a AtomicBool,
     nodes: &'a AtomicU64,
@@ -209,7 +209,7 @@ pub fn make_thread_data<'a>(
                         tx.send(Box::new(ThreadData::new(
                             thread_id,
                             pos.clone(),
-                            tt,
+                            cache,
                             nnue_params,
                             stopped,
                             nodes,
