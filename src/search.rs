@@ -10,7 +10,6 @@ use arrayvec::ArrayVec;
 use crate::{
     cfor,
     chess::{
-        CHESS960,
         board::{
             Board,
             movegen::{self, MAX_POSITION_MOVES, RAY_FULL},
@@ -228,7 +227,7 @@ pub fn search_position(
         if thread_headers[0].info.print_to_stdout {
             println!(
                 "bestmove {}",
-                best_move.display(CHESS960.load(Ordering::Relaxed))
+                best_move.display(thread_headers[0].board.chess960())
             );
         }
         return (score, Some(best_move));
@@ -287,12 +286,12 @@ pub fn search_position(
         let maybe_ponder = pv.moves().get(1).map_or_else(String::new, |ponder_move| {
             format!(
                 " ponder {}",
-                ponder_move.display(CHESS960.load(Ordering::Relaxed))
+                ponder_move.display(thread_headers[0].board.chess960())
             )
         });
         println!(
             "bestmove {}{maybe_ponder}",
-            best_move.display(CHESS960.load(Ordering::Relaxed))
+            best_move.display(thread_headers[0].board.chess960())
         );
         #[cfg(feature = "stats")]
         {
@@ -864,7 +863,7 @@ pub fn alpha_beta<NT: NodeType>(
     if !NT::ROOT
         && excluded.is_none()
         && n_men <= cardinality
-        && tablebases::probe::SYZYGY_ENABLED.load(Ordering::Relaxed)
+        && t.info.control.syzygy_enabled.load(Ordering::Relaxed)
         && (depth >= t.info.control.syzygy_probe_depth.load(Ordering::Relaxed)
             || n_men < cardinality)
         && let Some(wdl) = tablebases::probe::get_wdl(&t.board)
@@ -2075,6 +2074,7 @@ fn readout_info(
             hashfull = tt.hashfull(),
             tbhits = t.info.tbhits.get_global(),
             wdl = uci::fmt::format_wdl(pv.score, board.ply()),
+            pv = pv.display(board.chess960()),
         );
     } else {
         let value = uci::fmt::pretty_format_score(pv.score, board.turn());

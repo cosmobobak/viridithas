@@ -2,17 +2,13 @@ pub mod movegen;
 mod san;
 pub mod validation;
 
-use std::{
-    fmt::{self, Debug, Display, Formatter, Write},
-    sync::atomic::Ordering,
-};
+use std::fmt::{self, Debug, Display, Formatter, Write};
 
 use arrayvec::ArrayVec;
 use movegen::{MAX_POSITION_MOVES, RAY_BETWEEN, RAY_FULL};
 
 use crate::{
     chess::{
-        CHESS960,
         board::movegen::{MoveList, diag_attacks, orth_attacks, pawn_attacks, pawn_attacks_by},
         chessmove::{Move, MoveFlags},
         fen::Fen,
@@ -39,8 +35,11 @@ pub struct Board {
     side: Colour,
     /// The number of half moves made since the start of the game.
     ply: usize,
-
+    /// How many ply are we from the root of the search tree?
     height: usize,
+    /// Is this a Chess960 game?
+    chess960: bool,
+    /// Stack of previous board states.
     history: Vec<State>,
 }
 
@@ -52,6 +51,7 @@ impl Debug for Board {
             .field("ep_sq", &self.state.ep_square)
             .field("fifty_move_counter", &self.state.fifty_move_counter)
             .field("height", &self.height)
+            .field("chess960", &self.chess960)
             .field("ply", &self.ply)
             .field("key", &self.state.keys.zobrist)
             .field("threats", &self.state.threats)
@@ -72,6 +72,7 @@ impl Board {
             side: Colour::White,
             height: 0,
             ply: 0,
+            chess960: false,
             history: Vec::new(),
         };
         out.reset();
@@ -129,6 +130,14 @@ impl Board {
         self.height
     }
 
+    pub const fn chess960(&self) -> bool {
+        self.chess960
+    }
+
+    pub fn set_chess960(&mut self, chess960: bool) {
+        self.chess960 = chess960;
+    }
+
     pub const fn turn(&self) -> Colour {
         self.side
     }
@@ -153,10 +162,12 @@ impl Board {
     }
 
     pub fn reset(&mut self) {
+        let chess960 = self.chess960;
         self.state = State::default();
         self.side = Colour::White;
         self.height = 0;
         self.ply = 0;
+        self.chess960 = chess960;
         self.history.clear();
     }
 
@@ -164,6 +175,7 @@ impl Board {
         #![allow(clippy::cast_possible_truncation)]
         assert!(scharnagl < 960, "scharnagl index out of range");
         let backrank = Self::get_scharnagl_backrank(scharnagl);
+        self.chess960 = true;
         self.reset();
         for (&piece_type, file) in backrank.iter().zip(File::all()) {
             let sq = Square::from_rank_file(Rank::One, file);
@@ -211,6 +223,7 @@ impl Board {
         assert!(scharnagl < 960 * 960, "double scharnagl index out of range");
         let white_backrank = Self::get_scharnagl_backrank(scharnagl % 960);
         let black_backrank = Self::get_scharnagl_backrank(scharnagl / 960);
+        self.chess960 = true;
         self.reset();
         for (&piece_type, file) in white_backrank.iter().zip(File::all()) {
             let sq = Square::from_rank_file(Rank::One, file);
@@ -385,7 +398,7 @@ impl Board {
     }
 
     pub fn set_startpos(&mut self) {
-        let starting_fen = if CHESS960.load(Ordering::SeqCst) {
+        let starting_fen = if self.chess960 {
             Self::STARTING_FEN_960
         } else {
             Self::STARTING_FEN
@@ -639,8 +652,7 @@ impl Board {
             let king_to = m.history_to_square();
             // TODO: determine necessity of first conditional component
             return !(self.state.threats.all.contains_square(king_to)
-                || CHESS960.load(Ordering::Relaxed)
-                    && self.state.pinned[turn].contains_square(to));
+                || self.chess960 && self.state.pinned[turn].contains_square(to));
         } else if m.is_ep() {
             let rank = to.rank();
             let file = to.file();
@@ -1150,12 +1162,10 @@ impl Board {
             File::from_index(san_bytes[2] - b'a').ok_or(Unknown)?,
         );
 
-        let frc_cleanup = !CHESS960.load(Ordering::Relaxed);
-
         self.legal_moves()
             .into_iter()
             .find(|&m| {
-                let m_to = if frc_cleanup && m.is_castle() {
+                let m_to = if !self.chess960 && m.is_castle() {
                     // if we're in normal UCI mode, we'll rework our castling moves into the
                     // standard format.
                     match m.to() {
@@ -1192,6 +1202,7 @@ impl Board {
             side: *side,
             ply: *ply,
             height: *height,
+            chess960: self.chess960,
             history: Vec::new(),
         };
         playout.make_move_simple(m);
@@ -1553,7 +1564,6 @@ impl std::fmt::UpperHex for Board {
 #[cfg(test)]
 mod tests {
     use crate::chess::{
-        CHESS960,
         board::Board,
         chessmove::{Move, MoveFlags},
         types::Square,
@@ -1811,9 +1821,9 @@ mod tests {
 
     #[test]
     fn can_make_swap_castle() {
-        CHESS960.store(true, std::sync::atomic::Ordering::Relaxed);
         let mut board =
             Board::from_fen("b1q1rrkb/pppppppp/3nn3/8/P7/1PPP4/4PPPP/BQNNRKRB w GE - 1 9").unwrap();
+        board.set_chess960(true);
         let castle_move = Move::new_with_flags(Square::F1, Square::G1, MoveFlags::Castle);
 
         assert!(board.is_pseudo_legal(castle_move));

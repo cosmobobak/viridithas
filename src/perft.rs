@@ -3,13 +3,11 @@
 use std::{
     fs::File,
     io::{BufRead, BufReader},
-    sync::atomic::Ordering,
 };
 
 use anyhow::{Context, bail};
 
 use crate::chess::{
-    CHESS960,
     board::{Board, movegen::MoveList},
     fen::Fen,
 };
@@ -142,9 +140,9 @@ pub fn gamut() -> anyhow::Result<()> {
     }
     // open frcperftsuite.epd
     println!("running perft on frcperftsuite.epd");
-    CHESS960.store(true, Ordering::SeqCst);
     let f = File::open("assets/epds/frcperftsuite.epd").unwrap();
     let mut pos = Board::empty();
+    pos.set_chess960(true);
     for line in BufReader::new(f).lines() {
         let line = line.unwrap();
         let mut parts = line.split(';');
@@ -168,7 +166,6 @@ pub fn gamut() -> anyhow::Result<()> {
             }
         }
     }
-    CHESS960.store(false, Ordering::SeqCst);
     Ok(())
 }
 
@@ -177,7 +174,7 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicU64};
 
     use crate::{
-        chess::{CHESS960, chessmove::Move, piece::PieceType, types::Square},
+        chess::{chessmove::Move, piece::PieceType, types::Square},
         nnue::network::NNUEParams,
         searchinfo::Control,
         threadpool,
@@ -195,7 +192,7 @@ mod tests {
         assert_eq!(perft(&mut pos, 1), 48, "got {}", {
             pos.legal_moves()
                 .into_iter()
-                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                .map(|m| m.display(pos.chess960()).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -213,7 +210,7 @@ mod tests {
         assert_eq!(perft(&mut pos, 1), 20, "got {}", {
             pos.legal_moves()
                 .into_iter()
-                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                .map(|m| m.display(pos.chess960()).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -248,7 +245,7 @@ mod tests {
             t.board
                 .legal_moves()
                 .into_iter()
-                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                .map(|m| m.display(t.board.chess960()).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -284,7 +281,7 @@ mod tests {
             t.board
                 .legal_moves()
                 .into_iter()
-                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                .map(|m| m.display(t.board.chess960()).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -322,7 +319,7 @@ mod tests {
             t.board
                 .legal_moves()
                 .into_iter()
-                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                .map(|m| m.display(t.board.chess960()).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -359,7 +356,7 @@ mod tests {
             t.board
                 .legal_moves()
                 .into_iter()
-                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                .map(|m| m.display(t.board.chess960()).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -395,7 +392,7 @@ mod tests {
             t.board
                 .legal_moves()
                 .into_iter()
-                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                .map(|m| m.display(t.board.chess960()).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -411,7 +408,7 @@ mod tests {
         assert_eq!(perft(&mut pos, 1), 3, "got {}", {
             pos.legal_moves()
                 .into_iter()
-                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                .map(|m| m.display(pos.chess960()).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });

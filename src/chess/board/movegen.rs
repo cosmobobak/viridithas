@@ -3,13 +3,11 @@ use arrayvec::ArrayVec;
 use std::{
     fmt::{Display, Formatter},
     ops::{Deref, DerefMut},
-    sync::atomic::Ordering,
 };
 
 use crate::{
     cfor,
     chess::{
-        CHESS960,
         board::Board,
         chessmove::{Move, MoveFlags},
         magic::{
@@ -713,7 +711,7 @@ impl Board {
     fn generate_castling_moves_for<C: Col>(&self, move_list: &mut MoveList) {
         let occupied = self.state.bbs.occupied();
 
-        if CHESS960.load(Ordering::Relaxed) {
+        if self.chess960 {
             let king_sq = self.state.bbs.king_sq(C::COLOUR);
             if self.sq_attacked(king_sq, C::Opposite::COLOUR) {
                 return;

@@ -1,9 +1,6 @@
 use std::fmt::Display;
-use std::sync::atomic::Ordering;
 
 use arrayvec::ArrayVec;
-
-use crate::chess::CHESS960;
 
 use crate::chess::chessmove::Move;
 use crate::util::MAX_DEPTH;
@@ -37,17 +34,31 @@ impl PVariation {
             .try_extend_from_slice(&rest.moves)
             .expect("attempted to construct a PV longer than MAX_PLY.");
     }
+
+    pub const fn display(&self, chess960: bool) -> PVariationDisplay<'_> {
+        PVariationDisplay { pv: self, chess960 }
+    }
+}
+
+pub struct PVariationDisplay<'a> {
+    pv: &'a PVariation,
+    chess960: bool,
+}
+
+impl Display for PVariationDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if !self.pv.moves.is_empty() {
+            write!(f, "pv ")?;
+        }
+        for &m in self.pv.moves() {
+            write!(f, "{} ", m.display(self.chess960))?;
+        }
+        Ok(())
+    }
 }
 
 impl Display for PVariation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if !self.moves.is_empty() {
-            write!(f, "pv ")?;
-        }
-        let frc = CHESS960.load(Ordering::Relaxed);
-        for &m in self.moves() {
-            write!(f, "{} ", m.display(frc))?;
-        }
-        Ok(())
+        self.display(false).fmt(f)
     }
 }

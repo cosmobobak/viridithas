@@ -357,8 +357,6 @@ impl Game {
 
 #[cfg(test)]
 mod tests {
-    use crate::chess::CHESS960;
-
     use super::*;
 
     use crate::chess::types::Square;
@@ -430,10 +428,10 @@ mod tests {
             assert_eq!(lhs.state.threats, rhs.state.threats, "threats {msg}");
             assert_eq!(lhs.height(), rhs.height(), "height {msg}");
         }
-        CHESS960.store(true, std::sync::atomic::Ordering::SeqCst);
         // Grab `valid.sfens` from `cozy-chess` to run test
         for sfen in include_str!("valid.sfens").lines() {
-            let board = Board::from_fen(sfen).unwrap();
+            let mut board = Board::from_fen(sfen).unwrap();
+            board.set_chess960(true);
             let packed = marlinformat::PackedBoard::pack(&board, 0, 0, 0);
             let (unpacked, _, _, _) = packed.unpack();
             check_eq(&board, &unpacked, sfen);

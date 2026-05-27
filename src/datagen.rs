@@ -27,7 +27,6 @@ use rand::{Rng, rngs::ThreadRng, seq::IndexedRandom};
 
 use crate::{
     chess::{
-        CHESS960,
         board::{Board, DrawType, GameOutcome, WinType},
         chessmove::Move,
         fen::Fen,
@@ -39,7 +38,6 @@ use crate::{
     nnue::network::{NNUEParams, NNUEState},
     search::{parameters::Config, search_position, static_exchange_eval},
     searchinfo::Control,
-    tablebases::probe::SYZYGY_ENABLED,
     tablebases::{self, probe::WDL},
     threadlocal::make_thread_data,
     threadpool,
@@ -258,13 +256,14 @@ impl StartposGenerator for BookStartposGenerator<'_> {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
     if !cfg!(feature = "datagen") {
         bail!("datagen feature not enabled (compile with --features datagen)");
     }
 
     ctrlc::set_handler(move || {
-        STOP_GENERATION.store(true, Ordering::SeqCst);
+        STOP_GENERATION.store(true, Ordering::Relaxed);
         println!("Stopping generation, please don't force quit.");
     })
     .with_context(|| "Failed to set Ctrl-C handler")?;
@@ -274,8 +273,10 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
 
     let options: DataGenOptions = cli_config.build();
 
-    CHESS960.store(options.generate_dfrc, Ordering::SeqCst);
-    FENS_GENERATED.store(0, Ordering::SeqCst);
+    control
+        .chess960
+        .store(options.generate_dfrc, Ordering::Relaxed);
+    FENS_GENERATED.store(0, Ordering::Relaxed);
 
     println!("Starting data generation with the following configuration:");
     println!("{options}");
@@ -288,8 +289,7 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
     }
     if let Some(tb_path) = &options.tablebases_path {
         let tb_path = tb_path.to_string_lossy();
-        tablebases::probe::init(&tb_path);
-        SYZYGY_ENABLED.store(true, Ordering::SeqCst);
+        tablebases::probe::init(&tb_path, &control);
         println!("Syzygy tablebases enabled.");
     }
 
@@ -948,7 +948,7 @@ pub fn run_topgn(
             let san = board.san(mv).with_context(|| {
                 format!(
                     "Failed to create SAN for move {} in position {board:X}.",
-                    mv.display(CHESS960.load(Ordering::Relaxed))
+                    mv.display(board.chess960())
                 )
             })?;
             if board.turn() == Colour::White {
@@ -1514,12 +1514,10 @@ pub fn dataset_count(path: &Path) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{chess::CHESS960, datagen::dataformat, evaluation::is_decisive};
+    use crate::{datagen::dataformat, evaluation::is_decisive};
 
     #[test]
     fn test_scaling() {
-        CHESS960.store(true, std::sync::atomic::Ordering::Relaxed);
-
         let input_binpacks = include_bytes!("../embeds/test-vf.bin");
         let mut input_cursor = std::io::Cursor::new(input_binpacks);
         let mut output_cursor = std::io::Cursor::new(Vec::new());

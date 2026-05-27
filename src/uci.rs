@@ -22,7 +22,6 @@ use crate::{
     NAME, VERSION,
     bench::BENCH_POSITIONS,
     chess::{
-        CHESS960,
         board::{
             Board,
             movegen::{self, MoveList},
@@ -127,6 +126,7 @@ pub fn main_loop() -> Result<(), UciError> {
                     control.pretty_print.load(Ordering::SeqCst)
                 );
                 println!("Ponder: {}", control.ponder.load(Ordering::SeqCst));
+                println!("UCI_Chess960: {}", control.chess960.load(Ordering::SeqCst));
                 println!(
                     "SyzygyProbeLimit: {}",
                     control.syzygy_probe_limit.load(Ordering::SeqCst)
@@ -239,6 +239,8 @@ pub fn main_loop() -> Result<(), UciError> {
                             t.info.conf = conf.search_config.clone();
                             t.info.lm_table = LMTable::new(&t.info.conf);
                             t.info.set_stdin(&stdin);
+                            t.board
+                                .set_chess960(control.chess960.load(Ordering::SeqCst));
                         }
 
                         Ok(())
@@ -693,7 +695,7 @@ fn parse_setoption(
         }
         "SyzygyPath" => {
             let path = opt_value.to_string();
-            tablebases::probe::init(&path);
+            tablebases::probe::init(&path, control);
         }
         "SyzygyProbeLimit" => {
             let value: u8 =
@@ -757,7 +759,7 @@ fn parse_setoption(
                         name: "UCI_Chess960".to_string(),
                         source: e,
                     })?;
-            CHESS960.store(val, Ordering::SeqCst);
+            control.chess960.store(val, Ordering::SeqCst);
         }
         _ => {
             eprintln!("info string ignoring option {opt_name}, type \"uci\" for a list of options");
@@ -1013,10 +1015,7 @@ fn divide_perft(depth: usize, pos: &mut Board) {
         pos.make_move_simple(m);
         let arm_nodes = perft::perft(pos, depth - 1);
         nodes += arm_nodes;
-        println!(
-            "{}: {arm_nodes}",
-            m.display(CHESS960.load(Ordering::Relaxed))
-        );
+        println!("{}: {arm_nodes}", m.display(pos.chess960()));
         pos.unmake_move_base();
     }
     let elapsed = start_time.elapsed();

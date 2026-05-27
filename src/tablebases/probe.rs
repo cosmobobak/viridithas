@@ -23,9 +23,7 @@ use crate::{
         TB_RESULT_WDL_MASK, TB_RESULT_WDL_SHIFT, TB_WIN, tb_init, tb_probe_root, tb_probe_wdl,
     },
 };
-use std::{ffi::CString, sync::atomic::AtomicBool};
-
-pub static SYZYGY_ENABLED: AtomicBool = AtomicBool::new(false);
+use std::ffi::CString;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[allow(clippy::upper_case_acronyms)]
@@ -41,14 +39,16 @@ pub struct WdlDtzResult {
 }
 
 /// Loads Syzygy tablebases stored in `syzygy_path` location.
-pub fn init(syzygy_path: &str) {
+pub fn init(syzygy_path: &str, control: &Control) {
     // SAFETY: Not much.
     #[cfg(feature = "syzygy")]
     unsafe {
         let path = CString::new(syzygy_path).unwrap();
         let res = tb_init(path.as_ptr());
         assert!(res, "Failed to load Syzygy tablebases from {syzygy_path}");
-        SYZYGY_ENABLED.store(true, std::sync::atomic::Ordering::Relaxed);
+        control
+            .syzygy_enabled
+            .store(true, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
@@ -231,18 +231,20 @@ mod tests {
 
     use super::*;
 
+    static TEST_CONTROL: std::sync::LazyLock<Control> = std::sync::LazyLock::new(Control::default);
     static INIT_SYZYGY: std::sync::LazyLock<()> = std::sync::LazyLock::new(|| {
         init(
             std::env::var("SYZYGY_PATH")
                 .unwrap_or_else(|_| "/syzygy".to_string())
                 .as_str(),
+            &TEST_CONTROL,
         );
     });
 
     #[test]
     fn test_syzygy_wdl() {
         LazyLock::force(&INIT_SYZYGY);
-        let control = Control::default();
+        let control = &TEST_CONTROL;
 
         let win_3man = "4Q3/8/8/8/8/8/7k/K7 w - - 0 1";
         let draw_3man = "4N3/8/8/8/8/4K3/8/4k3 w - - 0 1";
@@ -250,7 +252,7 @@ mod tests {
 
         let win_7man = "3k4/4p3/8/1r6/6P1/5P2/4RK2/8 w - - 0 1";
 
-        if get_max_pieces_count(&control) >= 3 {
+        if get_max_pieces_count(control) >= 3 {
             let board = Board::from_fen(win_3man).unwrap();
             assert_eq!(get_wdl(&board), Some(WDL::Win));
 
@@ -261,7 +263,7 @@ mod tests {
             assert_eq!(get_wdl(&board), Some(WDL::Loss));
         }
 
-        if get_max_pieces_count(&control) >= 7 {
+        if get_max_pieces_count(control) >= 7 {
             let board = Board::from_fen(win_7man).unwrap();
             assert_eq!(get_wdl(&board), Some(WDL::Win));
         }
@@ -270,9 +272,9 @@ mod tests {
     #[test]
     fn solve_7man() {
         LazyLock::force(&INIT_SYZYGY);
-        let control = Control::default();
+        let control = &TEST_CONTROL;
 
-        if get_max_pieces_count(&control) < 7 {
+        if get_max_pieces_count(control) < 7 {
             return;
         }
 
@@ -292,7 +294,7 @@ mod tests {
             &stopped,
             &nodes,
             &tbhits,
-            &control,
+            control,
         ));
         t.info.clock = TimeManager::default_with_limit(SearchLimit::Depth(16));
         let (value, mov) = search_position(&pool, std::array::from_mut(&mut t));
@@ -311,9 +313,9 @@ mod tests {
     #[test]
     fn solve_5man() {
         LazyLock::force(&INIT_SYZYGY);
-        let control = Control::default();
+        let control = &TEST_CONTROL;
 
-        if get_max_pieces_count(&control) < 5 {
+        if get_max_pieces_count(control) < 5 {
             return;
         }
 
@@ -333,7 +335,7 @@ mod tests {
             &stopped,
             &nodes,
             &tbhits,
-            &control,
+            control,
         ));
         t.info.clock = TimeManager::default_with_limit(SearchLimit::Depth(10));
         let (value, mov) = search_position(&pool, std::array::from_mut(&mut t));
