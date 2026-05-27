@@ -223,9 +223,9 @@ impl Cache {
             self.table = Box::from_raw(slice_from_raw_parts_mut(ptr.cast(), new_len)).into();
         }
         println!(
-            "info string hash initialisation of {}mb complete in {}µs",
+            "info string hash initialisation of {}mb complete in {}ms",
             bytes / MEGABYTE,
-            start.elapsed().as_micros()
+            start.elapsed().as_millis()
         );
     }
 
