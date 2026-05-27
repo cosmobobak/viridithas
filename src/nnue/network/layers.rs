@@ -11,8 +11,6 @@ const FT_SHIFT: u32 = 9;
 #[allow(clippy::cast_precision_loss)]
 const L1_MUL: f32 = (1 << FT_SHIFT) as f32 / (QA as i32 * QA as i32 * QB as i32) as f32;
 
-const SWISH_K: f32 = 6.0;
-
 #[cfg(feature = "nnz-counts")]
 pub static NNZ_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 #[cfg(feature = "nnz-counts")]
@@ -30,8 +28,8 @@ pub static FT_OUTPUT_FILE: std::sync::LazyLock<
 mod simd {
     use crate::nnue::{
         network::{
-            Align, L1_CHUNK_PER_32, L1_SIZE, L2_SIZE, L3_SIZE, QA,
-            layers::{AVX512CHUNK, FT_SHIFT, L1_MUL, SWISH_K},
+            Align, D_FFN, D_STREAM, L1_CHUNK_PER_32, L1_SIZE, QA,
+            layers::{AVX512CHUNK, FT_SHIFT, L1_MUL},
         },
         simd::{self, F32_CHUNK, I16_CHUNK, S, U8_CHUNK, VecI32},
     };
@@ -100,9 +98,9 @@ mod simd {
         ntm_psqt: &Align<[i16; L1_SIZE]>,
         stm_thrt: &Align<[i16; L1_SIZE]>,
         ntm_thrt: &Align<[i16; L1_SIZE]>,
-        weights: &Align<[i8; L1_SIZE * L2_SIZE]>,
-        biases: &Align<[f32; L2_SIZE]>,
-        output: &mut Align<[f32; L2_SIZE]>,
+        weights: &Align<[i8; L1_SIZE * D_STREAM]>,
+        biases: &Align<[f32; D_STREAM]>,
+        output: &mut Align<[f32; D_STREAM]>,
     ) {
         const L1_PAIR_COUNT: usize = L1_SIZE / 2;
         const NNZ_INPUT_SIMD_WIDTH: usize =
@@ -259,11 +257,11 @@ mod simd {
     fn propagate_l1(
         ft_outputs: &Align<[MaybeUninit<u8>; L1_SIZE]>,
         nnz_slice: &[u16],
-        weights: &Align<[i8; L1_SIZE * L2_SIZE]>,
-        biases: &Align<[f32; L2_SIZE]>,
-        output: &mut Align<[f32; L2_SIZE]>,
+        weights: &Align<[i8; L1_SIZE * D_STREAM]>,
+        biases: &Align<[f32; D_STREAM]>,
+        output: &mut Align<[f32; D_STREAM]>,
     ) {
-        const NUM_ACCS: usize = L2_SIZE / F32_CHUNK;
+        const NUM_ACCS: usize = D_STREAM / F32_CHUNK;
         // SAFETY: Breaking it down by unsafe operations:
         // 1. get_unchecked[_mut] / .as[_mut]_ptr().add(): We only ever index at most
         // div_ceil(L1_PAIR_COUNT - 1, I16_CHUNK * 2) + I16_CHUNK + L1_PAIR_COUNT
@@ -281,8 +279,8 @@ mod simd {
             // from the same issues. If you feel like conditionally compiling
             // this based on target CPU, past-cosmonaut would not object.
             // c.f. https://github.com/official-stockfish/Stockfish/pull/6336.
-            let mut acc = Align([0; L2_SIZE]);
-            let mut aux = Align([0; L2_SIZE]);
+            let mut acc = Align([0; D_STREAM]);
+            let mut aux = Align([0; D_STREAM]);
 
             let nnz_count = nnz_slice.len();
 
@@ -308,10 +306,10 @@ mod simd {
                 let input32_c = simd::trans_i32_i8(simd::splat_i32(*input32.get_unchecked(nnz_ic)));
                 let input32_d = simd::trans_i32_i8(simd::splat_i32(*input32.get_unchecked(nnz_id)));
                 // compute the block indices into the weights matrix.
-                let w_offset_a = nnz_ia * L2_SIZE * L1_CHUNK_PER_32;
-                let w_offset_b = nnz_ib * L2_SIZE * L1_CHUNK_PER_32;
-                let w_offset_c = nnz_ic * L2_SIZE * L1_CHUNK_PER_32;
-                let w_offset_d = nnz_id * L2_SIZE * L1_CHUNK_PER_32;
+                let w_offset_a = nnz_ia * D_STREAM * L1_CHUNK_PER_32;
+                let w_offset_b = nnz_ib * D_STREAM * L1_CHUNK_PER_32;
+                let w_offset_c = nnz_ic * D_STREAM * L1_CHUNK_PER_32;
+                let w_offset_d = nnz_id * D_STREAM * L1_CHUNK_PER_32;
                 // for each SIMD-block in the row, compute the product
                 // of the non-zero activation with the corresponding
                 // weight, and add it to the accumulator.
@@ -336,7 +334,7 @@ mod simd {
                 // load the non-zero block, and splat it into a SIMD register.
                 let input32 = simd::trans_i32_i8(simd::splat_i32(*input32.get_unchecked(nnz_i)));
                 // compute the block index into the weights matrix.
-                let w_offset = nnz_i * L2_SIZE * L1_CHUNK_PER_32;
+                let w_offset = nnz_i * D_STREAM * L1_CHUNK_PER_32;
                 // for each SIMD-block in the row, compute the product
                 // of the non-zero activation with the corresponding
                 // weight, and add it to the accumulator.
@@ -356,86 +354,112 @@ mod simd {
                 simd::store_i32(acc.as_mut_ptr().add(k * F32_CHUNK), res);
             }
 
-            // Hard-Swish activation
-            // act(x) = x · clamp(x + k/2, 0, k) / k
-            let zero = simd::zero_f32();
-            let k = simd::splat_f32(SWISH_K);
-            let inv_k = simd::splat_f32(1.0 / SWISH_K);
-            let half_k = simd::splat_f32(SWISH_K / 2.0);
             let sum_mul = simd::splat_f32(L1_MUL);
-            for i in 0..L2_SIZE / F32_CHUNK {
+            for i in 0..D_STREAM / F32_CHUNK {
                 // convert i32 to f32, multiplying by the quantisation constant
                 let bias = simd::load_f32(biases.as_ptr().add(i * F32_CHUNK));
                 let unscaled = simd::i32_to_f32(simd::load_i32(acc.as_ptr().add(i * F32_CHUNK)));
                 let preact = simd::madd_f32(unscaled, sum_mul, bias);
-                // activate
-                let gate = simd::min_f32(simd::max_f32(simd::add_f32(preact, half_k), zero), k);
-                let act = simd::mul_f32(preact, gate);
-                let act = simd::mul_f32(act, inv_k);
-                simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK), act);
+                simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK), preact);
             }
         }
     }
 
-    #[allow(clippy::needless_range_loop, clippy::cast_ptr_alignment)]
+    #[allow(
+        clippy::needless_range_loop,
+        clippy::cast_ptr_alignment,
+        clippy::too_many_arguments,
+        clippy::cast_precision_loss
+    )]
     pub fn propagate_l2(
-        inputs: &Align<[f32; L2_SIZE]>,
-        weights: &Align<[f32; L2_SIZE * L3_SIZE * 2]>,
-        biases: &Align<[f32; L3_SIZE * 2]>,
-        output: &mut Align<[f32; L3_SIZE]>,
+        inputs: &Align<[f32; D_STREAM]>,
+        ln_gamma: &Align<[f32; D_STREAM]>,
+        ln_beta: &Align<[f32; D_STREAM]>,
+        up_weights: &Align<[f32; D_STREAM * D_FFN]>,
+        up_biases: &Align<[f32; D_FFN]>,
+        down_weights: &Align<[f32; D_FFN * D_STREAM]>,
+        down_biases: &Align<[f32; D_STREAM]>,
+        output: &mut Align<[f32; D_STREAM]>,
     ) {
-        // skip connection safety:
-        const { assert!(L2_SIZE == L3_SIZE) };
-        // SAFETY: Breaking it down by unsafe operations:
-        // 1. get_unchecked[_mut] / .as[_mut]_ptr().add(): We only ever index at most (L3_SIZE * 2 / F32_CHUNK - 1) * F32_CHUNK
-        // into the `sums` and `biases` arrays. This is in bounds, as `sums` has length L3_SIZE * 2 and
-        // `biases` has length L3_SIZE * 2. We only ever index at most
-        // (L2_SIZE - 1) * L3_SIZE * 2 + (L3_SIZE * 2 / F32_CHUNK - 1) * F32_CHUNK
-        // into the `weights` array. This is in bounds, as `weights` has length L2_SIZE * L3_SIZE * 2.
-        // We only ever index at most L2_SIZE - 1 into the `inputs` array. This is in bounds, as `inputs`
-        // has length L2_SIZE. In the activation loop, we index at most (L3_SIZE / F32_CHUNK - 1) * F32_CHUNK + L3_SIZE
-        // into `sums`, which is in bounds as `sums` has length L3_SIZE * 2.
-        // 2. SIMD instructions: All of our loads and stores are aligned.
-        unsafe {
-            let mut sums = biases.clone();
+        const LN_EPS: f32 = 1e-5;
+        const LN_CLIP: f32 = 4.0;
 
-            // affine transform
-            for i in 0..L2_SIZE {
-                let activation = simd::splat_f32(*inputs.get_unchecked(i));
-                for j in 0..L3_SIZE * 2 / F32_CHUNK {
+        // Layer-norm over the D_STREAM features. The reduction is scalar,
+        // in a fixed order, so behaviour is deterministic across architectures.
+        // This might be improvable.
+        let mut mean = 0.0;
+        for i in 0..D_STREAM {
+            mean += inputs[i];
+        }
+        mean /= D_STREAM as f32;
+        let mut var = 0.0;
+        for i in 0..D_STREAM {
+            let centred = inputs[i] - mean;
+            var += centred * centred;
+        }
+        var /= D_STREAM as f32;
+        let inv_std = 1.0 / (var + LN_EPS).sqrt();
+
+        let mut normed = Align([0.0; D_STREAM]);
+        for i in 0..D_STREAM {
+            let v = ((inputs[i] - mean) * inv_std).mul_add(ln_gamma[i], ln_beta[i]);
+            normed[i] = v.clamp(-LN_CLIP, LN_CLIP);
+        }
+
+        // SAFETY: all indices below are derived from the layer dimensions and
+        // stay within the bounds of the respective arrays.
+        // all SIMD loads and stores are aligned.
+        unsafe {
+            // up-projection:
+            let mut hidden = up_biases.clone();
+            for i in 0..D_STREAM {
+                let activation = simd::splat_f32(*normed.get_unchecked(i));
+                for j in 0..D_FFN / F32_CHUNK {
+                    let acc = simd::load_f32(hidden.as_ptr().add(j * F32_CHUNK));
+                    let weight = simd::load_f32(up_weights.as_ptr().add(i * D_FFN + j * F32_CHUNK));
+                    let res = simd::madd_f32(activation, weight, acc);
+                    simd::store_f32(hidden.as_mut_ptr().add(j * F32_CHUNK), res);
+                }
+            }
+
+            // CReLU activation:
+            let zero = simd::zero_f32();
+            let one = simd::splat_f32(1.0);
+            for j in 0..D_FFN / F32_CHUNK {
+                let h = simd::load_f32(hidden.as_ptr().add(j * F32_CHUNK));
+                let act = simd::min_f32(simd::max_f32(h, zero), one);
+                simd::store_f32(hidden.as_mut_ptr().add(j * F32_CHUNK), act);
+            }
+
+            // down-projection:
+            let mut sums = down_biases.clone();
+            for i in 0..D_FFN {
+                let activation = simd::splat_f32(*hidden.get_unchecked(i));
+                for j in 0..D_STREAM / F32_CHUNK {
                     let acc = simd::load_f32(sums.as_ptr().add(j * F32_CHUNK));
                     let weight =
-                        simd::load_f32(weights.as_ptr().add(i * L3_SIZE * 2 + j * F32_CHUNK));
+                        simd::load_f32(down_weights.as_ptr().add(i * D_STREAM + j * F32_CHUNK));
                     let res = simd::madd_f32(activation, weight, acc);
                     simd::store_f32(sums.as_mut_ptr().add(j * F32_CHUNK), res);
                 }
             }
 
-            // SwiGLU activation
-            // act(x) = HardSwish6(x1) * x2
-            let zero = simd::zero_f32();
-            let k = simd::splat_f32(SWISH_K);
-            let inv_k = simd::splat_f32(1.0 / SWISH_K);
-            let half_k = simd::splat_f32(SWISH_K / 2.0);
-            for i in 0..L3_SIZE / F32_CHUNK {
-                let gate_preact = simd::load_f32(sums.as_ptr().add(i * F32_CHUNK));
-                let id_preact = simd::load_f32(sums.as_ptr().add(i * F32_CHUNK + L3_SIZE));
-                let clamped =
-                    simd::min_f32(simd::max_f32(simd::add_f32(gate_preact, half_k), zero), k);
-                let swish = simd::mul_f32(simd::mul_f32(gate_preact, clamped), inv_k);
-                let act = simd::mul_f32(swish, id_preact);
-                // skip connection
-                let input = simd::load_f32(inputs.as_ptr().add(i * F32_CHUNK));
-                let act = simd::add_f32(act, input);
-                simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK), act);
+            // residual connection:
+            for j in 0..D_STREAM / F32_CHUNK {
+                let s = simd::load_f32(sums.as_ptr().add(j * F32_CHUNK));
+                let input = simd::load_f32(inputs.as_ptr().add(j * F32_CHUNK));
+                simd::store_f32(
+                    output.as_mut_ptr().add(j * F32_CHUNK),
+                    simd::add_f32(s, input),
+                );
             }
         }
     }
 
     #[allow(clippy::modulo_one)]
     pub fn propagate_l3(
-        inputs: &Align<[f32; L3_SIZE]>,
-        weights: &Align<[f32; L3_SIZE]>,
+        inputs: &Align<[f32; D_STREAM]>,
+        weights: &Align<[f32; D_STREAM]>,
         bias: f32,
         output: &mut f32,
     ) {
@@ -444,15 +468,15 @@ mod simd {
         // We multiply the weights by the inputs, and sum them up
         const NUM_SUMS: usize = AVX512CHUNK / F32_CHUNK;
         // SAFETY: Breaking it down by unsafe operations:
-        // 1. get_unchecked[_mut] / .as[_mut]_ptr().add(): We only ever index at most (L3_SIZE / F32_CHUNK - 1) * F32_CHUNK
-        // into the `weights` and `inputs` arrays. This is in bounds, as `weights` has length L3_SIZE and
-        // `inputs` has length L3_SIZE.
+        // 1. get_unchecked[_mut] / .as[_mut]_ptr().add(): We only ever index at most (D_STREAM / F32_CHUNK - 1) * F32_CHUNK
+        // into the `weights` and `inputs` arrays. This is in bounds, as `weights` has length D_STREAM and
+        // `inputs` has length D_STREAM.
         // 2. SIMD instructions: All of our loads and stores are aligned.
         unsafe {
             let mut sum_vecs = [simd::zero_f32(); NUM_SUMS];
 
             // affine transform
-            for i in 0..L3_SIZE / F32_CHUNK {
+            for i in 0..D_STREAM / F32_CHUNK {
                 let act = simd::load_f32(inputs.as_ptr().add(i * F32_CHUNK));
                 let weight = simd::load_f32(weights.as_ptr().add(i * F32_CHUNK));
                 sum_vecs[i % NUM_SUMS] = simd::madd_f32(act, weight, sum_vecs[i % NUM_SUMS]);
