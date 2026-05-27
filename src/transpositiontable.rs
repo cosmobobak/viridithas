@@ -129,7 +129,13 @@ struct RawCacheSet {
 #[repr(C, align(32))]
 struct CacheSet {
     entries: [CacheEntry; 3],
-    padding: [u8; 2],
+    coherer: u16,
+}
+
+impl CacheSet {
+    pub fn checksum(&self) -> u16 {
+        self.entries[0].tag ^ self.entries[1].tag ^ self.entries[2].tag
+    }
 }
 
 impl RawCacheSet {
@@ -370,6 +376,7 @@ impl CacheView<'_> {
                 evaluation: eval.try_into().expect("eval with value outwith i16"),
             };
             cluster.entries[idx] = write;
+            cluster.coherer = cluster.checksum();
             self.table[cluster_index].store(cluster);
         }
     }
@@ -378,6 +385,10 @@ impl CacheView<'_> {
         let (index, tag) = self.derive_index_tag(key);
 
         let cluster = self.table[index].load();
+
+        if cluster.checksum() != cluster.coherer {
+            return None;
+        }
 
         for entry in cluster.entries {
             if entry.tag != tag {
