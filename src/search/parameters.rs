@@ -565,6 +565,7 @@ impl Config {
     }
 }
 
+#[cfg(test)]
 mod tests {
     #[test]
     fn macro_hackery_same_length() {

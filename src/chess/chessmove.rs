@@ -4,6 +4,7 @@ use std::{
 };
 
 use crate::chess::{
+    board::Rules,
     piece::PieceType,
     squareset::SquareSet,
     types::{File, Square},
@@ -158,11 +159,12 @@ impl Move {
 
     #[allow(dead_code)]
     pub fn from_raw(data: u16) -> Option<Self> {
+        // this is just a safe `transmute`.
         NonZeroU16::new(data).map(|nz| Self { data: nz })
     }
 
-    pub const fn display(self, chess960: bool) -> MoveDisplay {
-        MoveDisplay { m: self, chess960 }
+    pub const fn display(self, rules: Rules) -> MoveDisplay {
+        MoveDisplay { m: self, rules }
     }
 
     pub fn is_double_pawn_push_ranks(self) -> bool {
@@ -175,12 +177,12 @@ impl Move {
 
 pub struct MoveDisplay {
     m: Move,
-    chess960: bool,
+    rules: Rules,
 }
 
 impl Display for MoveDisplay {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        if self.chess960 {
+        if self.rules == Rules::Chess960 {
             if let Some(promo) = self.m.promotion_type() {
                 let pchar = promo.promo_char().unwrap_or('?');
                 write!(f, "{}{}{pchar}", self.m.from(), self.m.to())?;
@@ -213,10 +215,16 @@ impl Display for MoveDisplay {
 
 impl Debug for Move {
     fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
-        write!(f, "{}, bits: {:016b}", self.display(true), self.data.get())
+        write!(
+            f,
+            "{}, bits: {:016b}",
+            self.display(Rules::Classical),
+            self.data.get()
+        )
     }
 }
 
+#[cfg(test)]
 mod tests {
     #[test]
     fn test_simple_move() {

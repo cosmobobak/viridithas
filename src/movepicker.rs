@@ -2,7 +2,10 @@ use std::cell::Cell;
 
 use crate::{
     chess::{
-        board::movegen::{AllMoves, MoveList, MoveListEntry, SkipQuiets, pawn_attacks_by},
+        board::{
+            Rules,
+            movegen::{AllMoves, MoveList, MoveListEntry, SkipQuiets, pawn_attacks_by},
+        },
         chessmove::Move,
         piece::PieceType,
         squareset::SquareSet,
@@ -155,7 +158,7 @@ impl MovePicker {
             debug_assert!(
                 best.score < WINNING_CAPTURE_BONUS / 2 || best.score >= MIN_WINNING_SEE_SCORE,
                 "{}'s score is {}, lower bound is {}, this is too close.",
-                best.mov.display(false),
+                best.mov.display(Rules::Classical),
                 best.score,
                 MIN_WINNING_SEE_SCORE
             );

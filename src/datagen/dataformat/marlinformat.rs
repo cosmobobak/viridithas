@@ -1,5 +1,5 @@
 use crate::chess::{
-    board::{Board, GameOutcome},
+    board::{Board, GameOutcome, Rules},
     piece::{Colour, Piece, PieceType},
     squareset::SquareSet,
     types::{Rank, Square},
@@ -73,7 +73,12 @@ impl PackedBoard {
     }
 
     pub fn unpack(&self) -> (Board, i16, u8, u8) {
-        let mut builder = Board::empty();
+        #![expect(
+            deprecated,
+            reason = "incremental construction of `Board`s is unpleasant."
+        )]
+
+        let mut builder = Board::empty(Rules::Classical);
 
         let mut seen_king = [false; 2];
         for (i, sq) in SquareSet::from_inner(self.occupancy.get())
@@ -110,6 +115,13 @@ impl PackedBoard {
 
         builder.regenerate_zobrist();
         builder.regenerate_threats();
+
+        let rules = if builder.castling_rights_mut().is_nonclassical() {
+            Rules::Chess960
+        } else {
+            Rules::Classical
+        };
+        *builder.rules_mut() = rules;
 
         (builder, self.eval.get(), self.wdl, self.extra)
     }

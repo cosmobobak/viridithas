@@ -626,7 +626,7 @@ mod tests {
     fn check_all_moves(fen: &str) {
         let board = Board::from_fen(fen).unwrap();
         for m in board.legal_moves() {
-            let uci = format!("{}", m.display(false));
+            let uci = format!("{}", m.display(board.rules()));
             check_move(fen, &uci);
         }
     }
@@ -646,7 +646,7 @@ mod tests {
     use crate::{
         chess::piece::Colour,
         nnue::network::{L1_SIZE, NNUEParams, NNUEState, feature::threat_index},
-        util::Align64,
+        util::Align,
     };
 
     /// Compute sorted threat feature indices for a given perspective.
@@ -724,7 +724,7 @@ mod tests {
         for colour in [Colour::White, Colour::Black] {
             // compute expected accumulator by summing weight rows
             let indices = threat_indices(&board, colour);
-            let mut expected = Align64([0i16; L1_SIZE]);
+            let mut expected = Align([0i16; L1_SIZE]);
             for &idx in &indices {
                 let start = idx * L1_SIZE;
                 let row = &nnue_params.l0_threat[start..start + L1_SIZE];
@@ -735,7 +735,7 @@ mod tests {
 
             // compute actual accumulator via refresh_threats
             let mut acc = crate::nnue::accumulator::Accumulator {
-                halves: [Align64([0i16; L1_SIZE]), Align64([0i16; L1_SIZE])],
+                halves: [Align([0i16; L1_SIZE]), Align([0i16; L1_SIZE])],
             };
             NNUEState::refresh_threats(nnue_params, &board, colour, &mut acc);
 

@@ -27,8 +27,7 @@ use rand::{Rng, rngs::ThreadRng, seq::IndexedRandom};
 
 use crate::{
     chess::{
-        CHESS960,
-        board::{Board, DrawType, GameOutcome, WinType},
+        board::{Board, DrawType, GameOutcome, Rules, WinType},
         chessmove::Move,
         fen::Fen,
         piece::{Colour, PieceType},
@@ -38,12 +37,12 @@ use crate::{
     evaluation::{is_decisive, is_mate_score},
     nnue::network::{NNUEParams, NNUEState},
     search::{parameters::Config, search_position, static_exchange_eval},
-    tablebases::probe::SYZYGY_ENABLED,
+    searchinfo::Control,
     tablebases::{self, probe::WDL},
     threadlocal::make_thread_data,
     threadpool,
     timemgmt::{SearchLimit, TimeManager},
-    transpositiontable::TT,
+    transpositiontable::Cache,
     util::MEGABYTE,
 };
 
@@ -122,13 +121,13 @@ impl DataGenOptions {
     }
 
     /// Gives a summarised string representation of the options.
-    fn summary(&self) -> String {
+    fn summary(&self, control: &Control) -> String {
         format!(
             "{}g-{}t-{}-{}-n{}{}",
             self.num_games,
             self.num_threads,
             if self.tablebases_path.is_some() {
-                format!("tb{}", tablebases::probe::get_max_pieces_count())
+                format!("tb{}", tablebases::probe::get_max_pieces_count(control))
             } else {
                 "no_tb".into()
             },
@@ -257,23 +256,27 @@ impl StartposGenerator for BookStartposGenerator<'_> {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
     if !cfg!(feature = "datagen") {
         bail!("datagen feature not enabled (compile with --features datagen)");
     }
 
     ctrlc::set_handler(move || {
-        STOP_GENERATION.store(true, Ordering::SeqCst);
+        STOP_GENERATION.store(true, Ordering::Relaxed);
         println!("Stopping generation, please don't force quit.");
     })
     .with_context(|| "Failed to set Ctrl-C handler")?;
 
     let nnue_params = NNUEParams::decompress_and_alloc()?;
+    let control = Control::default();
 
     let options: DataGenOptions = cli_config.build();
 
-    CHESS960.store(options.generate_dfrc, Ordering::SeqCst);
-    FENS_GENERATED.store(0, Ordering::SeqCst);
+    control
+        .chess960
+        .store(options.generate_dfrc, Ordering::Relaxed);
+    FENS_GENERATED.store(0, Ordering::Relaxed);
 
     println!("Starting data generation with the following configuration:");
     println!("{options}");
@@ -286,8 +289,7 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
     }
     if let Some(tb_path) = &options.tablebases_path {
         let tb_path = tb_path.to_string_lossy();
-        tablebases::probe::init(&tb_path);
-        SYZYGY_ENABLED.store(true, Ordering::SeqCst);
+        tablebases::probe::init(&tb_path, &control);
         println!("Syzygy tablebases enabled.");
     }
 
@@ -299,7 +301,7 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
     let run_id = format!(
         "run_{}_{}",
         chrono::Utc::now().format("%Y-%m-%d_%H-%M-%S"),
-        options.summary()
+        options.summary(&control)
     );
     println!("This run will be saved to the directory \"data/{run_id}\"");
     println!("Each thread will save its data to a separate file in this directory.");
@@ -326,6 +328,7 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
                 let opt_ref = &options;
                 let path_ref = &data_dir;
                 let nnue_params_ref = &nnue_params;
+                let control_ref = &control;
                 s.spawn(move || {
                     // this rng is different between each thread
                     // (https://rust-random.github.io/book/guide-parallel.html)
@@ -342,7 +345,14 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
                     } else {
                         Box::new(ClassicalStartposGenerator { rng }) as Box<_>
                     };
-                    generate_on_thread(id, opt_ref, path_ref, nnue_params_ref, startpos_src)
+                    generate_on_thread(
+                        id,
+                        opt_ref,
+                        path_ref,
+                        nnue_params_ref,
+                        control_ref,
+                        startpos_src,
+                    )
                 })
             })
             .collect::<Vec<_>>();
@@ -402,6 +412,7 @@ fn generate_on_thread<'a>(
     options: &DataGenOptions,
     data_dir: &Path,
     nnue_params: &'static NNUEParams,
+    control: &'a Control,
     mut startpos_src: Box<dyn StartposGenerator + 'a>,
 ) -> anyhow::Result<HashMap<GameOutcome, u64>> {
     // Datagen uses the default configuration:
@@ -418,14 +429,14 @@ fn generate_on_thread<'a>(
         .unwrap();
 
     // We allocate four megabytes of cache for each worker,
-    // because search budgets are so small and smaller TTs
+    // because search budgets are so small and smaller caches
     // increase speed. We split all state by colour, so that
     // the two players of each game can't "see into each
-    // other's minds" via the TT / histories. Additionally,
+    // other's minds" via the cache / histories. Additionally,
     // search is tuned around each move in the game being
     // two ply forward from the previous move, so this is
     // prudent just from a robustness perspective.
-    let mut tts = [TT::new(), TT::new()];
+    let mut tts = [Cache::new(), Cache::new()];
     tts[Colour::White].resize(4 * MEGABYTE, from_ref(&worker_thread));
     tts[Colour::Black].resize(4 * MEGABYTE, from_ref(&worker_thread));
     let stopped = AtomicBool::new(false);
@@ -439,6 +450,7 @@ fn generate_on_thread<'a>(
             &stopped,
             &nodes,
             &tbhits,
+            control,
             from_ref(&worker_thread),
         )
         .unwrap()
@@ -446,6 +458,12 @@ fn generate_on_thread<'a>(
         .next()
         .unwrap()
     });
+
+    let rules = if control.chess960.load(Ordering::Relaxed) {
+        Rules::Chess960
+    } else {
+        Rules::Classical
+    };
 
     let time_manager = TimeManager::default_with_limit(SearchLimit::SoftNodes {
         soft_limit: options.nodes,
@@ -477,7 +495,7 @@ fn generate_on_thread<'a>(
         }
         // generate game
         // STEP 1: get the next starting position from the callback
-        let mut startpos = Board::empty();
+        let mut startpos = Board::empty(rules);
         match startpos_src.generate(&mut startpos, &conf) {
             ControlFlow::Break(()) => continue 'generation_main_loop,
             ControlFlow::Continue(()) => {}
@@ -936,7 +954,7 @@ pub fn run_topgn(
             let san = board.san(mv).with_context(|| {
                 format!(
                     "Failed to create SAN for move {} in position {board:X}.",
-                    mv.display(CHESS960.load(Ordering::Relaxed))
+                    mv.display(board.rules())
                 )
             })?;
             if board.turn() == Colour::White {
@@ -1502,12 +1520,10 @@ pub fn dataset_count(path: &Path) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{chess::CHESS960, datagen::dataformat, evaluation::is_decisive};
+    use crate::{datagen::dataformat, evaluation::is_decisive};
 
     #[test]
     fn test_scaling() {
-        CHESS960.store(true, std::sync::atomic::Ordering::Relaxed);
-
         let input_binpacks = include_bytes!("../embeds/test-vf.bin");
         let mut input_cursor = std::io::Cursor::new(input_binpacks);
         let mut output_cursor = std::io::Cursor::new(Vec::new());

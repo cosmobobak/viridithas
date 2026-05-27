@@ -26,7 +26,7 @@ use crate::{
         self,
         network::feature::{ThreatFeatureIndex, threat_index},
     },
-    util::{self, Align64, MAX_DEPTH},
+    util::{Align, MAX_DEPTH},
 };
 
 use super::accumulator::{self, Accumulator};
@@ -173,14 +173,14 @@ struct QuantisedNetwork {
 #[rustfmt::skip]
 #[repr(C)]
 pub struct NNUEParams {
-    pub l0_threat:    Align64<[ i8; THREAT_FEATURES * L1_SIZE]>,
-    pub l0_weights:   Align64<[i16; PSQT_FEATURES * L1_SIZE * BUCKETS]>,
-    pub l0_biases:    Align64<[i16; L1_SIZE]>,
-    pub l1_weights:  [Align64<[ i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
-    pub l1_bias:     [Align64<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
-    pub l2_weights:  [Align64<[f32; L2_SIZE * L3_SIZE * 2]>; OUTPUT_BUCKETS],
-    pub l2_bias:     [Align64<[f32; L3_SIZE * 2]>; OUTPUT_BUCKETS],
-    pub l3_weights: [[Align64<[f32; L3_SIZE]>; HEADS]; OUTPUT_BUCKETS],
+    pub l0_threat:    Align<[ i8; THREAT_FEATURES * L1_SIZE]>,
+    pub l0_weights:   Align<[i16; PSQT_FEATURES * L1_SIZE * BUCKETS]>,
+    pub l0_biases:    Align<[i16; L1_SIZE]>,
+    pub l1_weights:  [Align<[ i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
+    pub l1_bias:     [Align<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
+    pub l2_weights:  [Align<[f32; L2_SIZE * L3_SIZE * 2]>; OUTPUT_BUCKETS],
+    pub l2_bias:     [Align<[f32; L3_SIZE * 2]>; OUTPUT_BUCKETS],
+    pub l3_weights: [[Align<[f32; L3_SIZE]>; HEADS]; OUTPUT_BUCKETS],
     pub l3_bias:             [[f32; HEADS]; OUTPUT_BUCKETS],
 }
 
@@ -371,7 +371,7 @@ impl UnquantisedNetwork {
         unsafe {
             let mut net = Self::zeroed();
             let mem = std::slice::from_raw_parts_mut(
-                util::from_mut(net.as_mut()).cast::<u8>(),
+                std::ptr::from_mut(net.as_mut()).cast::<u8>(),
                 size_of::<Self>(),
             );
             reader.read_exact(mem)?;
@@ -695,7 +695,7 @@ impl QuantisedNetwork {
     }
 
     fn write(&self, writer: &mut impl std::io::Write) -> anyhow::Result<()> {
-        let ptr = util::from_ref::<Self>(self).cast::<u8>();
+        let ptr = std::ptr::from_ref::<Self>(self).cast::<u8>();
         let len = size_of::<Self>();
         // SAFETY: We're writing a slice of bytes, and we know that the slice is valid.
         writer.write_all(unsafe { std::slice::from_raw_parts(ptr, len) })?;
@@ -746,7 +746,7 @@ fn repermute_ft_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
 }
 
 fn repermute_threat_weights(
-    tgt: &mut Align64<[i8; THREAT_FEATURES * L1_SIZE]>,
+    tgt: &mut Align<[i8; THREAT_FEATURES * L1_SIZE]>,
     unsorted: &[i8; THREAT_FEATURES * L1_SIZE],
 ) {
     for i in 0..THREAT_FEATURES {
@@ -853,7 +853,7 @@ impl NNUEParams {
         // SAFETY: QN is POD and we only write to it.
         let mut mem = unsafe {
             std::slice::from_raw_parts_mut(
-                util::from_mut(net.as_mut()).cast::<u8>(),
+                std::ptr::from_mut(net.as_mut()).cast::<u8>(),
                 size_of::<QuantisedNetwork>(),
             )
         };
@@ -1064,10 +1064,7 @@ impl NNUEParams {
         }
     }
 
-    pub fn select_feature_weights(
-        &self,
-        bucket: usize,
-    ) -> &Align64<[i16; PSQT_FEATURES * L1_SIZE]> {
+    pub fn select_feature_weights(&self, bucket: usize) -> &Align<[i16; PSQT_FEATURES * L1_SIZE]> {
         // handle mirroring
         let bucket = bucket % BUCKETS;
         let start = bucket * PSQT_FEATURES * L1_SIZE;
@@ -1122,7 +1119,7 @@ pub fn dump_verbatim(output: &std::path::Path) -> anyhow::Result<()> {
     // SAFETY: look,
     let slice = unsafe {
         std::slice::from_raw_parts(
-            util::from_ref::<NNUEParams>(network).cast::<u8>(),
+            std::ptr::from_ref::<NNUEParams>(network).cast::<u8>(),
             size_of::<NNUEParams>(),
         )
     };
@@ -1274,7 +1271,7 @@ impl UpdateBuffer {
 pub struct BucketAccumulatorCache {
     // both of these are BUCKETS * 2, rather than just BUCKETS,
     // because we use a horizontally-mirrored architecture.
-    accs: [[Align64<[i16; L1_SIZE]>; 2]; BUCKETS * 2],
+    accs: [[Align<[i16; L1_SIZE]>; 2]; BUCKETS * 2],
     board_states: [[PieceLayout; BUCKETS * 2]; 2],
 }
 
@@ -1795,8 +1792,8 @@ impl NNUEState {
             ]
         };
 
-        let mut l1_outputs = Align64([0.0; L2_SIZE]);
-        let mut l2_outputs = Align64([0.0; L3_SIZE]);
+        let mut l1_outputs = Align([0.0; L2_SIZE]);
+        let mut l2_outputs = Align([0.0; L3_SIZE]);
 
         layers::activate_ft_and_propagate_l1(
             stm_psqt,

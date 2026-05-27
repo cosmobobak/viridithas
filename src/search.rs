@@ -10,7 +10,6 @@ use arrayvec::ArrayVec;
 use crate::{
     cfor,
     chess::{
-        CHESS960,
         board::{
             Board,
             movegen::{self, MAX_POSITION_MOVES, RAY_FULL},
@@ -34,7 +33,7 @@ use crate::{
     threadlocal::ThreadData,
     threadpool::{self, ScopeExt},
     timemgmt::SearchLimit,
-    transpositiontable::{Bound, TTHit},
+    transpositiontable::{Bound, CacheResult},
     uci,
     util::{INFINITY, MAX_DEPTH, VALUE_NONE},
 };
@@ -207,8 +206,10 @@ pub fn search_position(
 
     // Probe the tablebases if we're in a TB position and in a game.
     if thread_headers[0].info.clock.is_dynamic()
-        && let Some((best_move, score)) =
-            tablebases::probe::get_tablebase_move(&thread_headers[0].board)
+        && let Some((best_move, score)) = tablebases::probe::get_tablebase_move(
+            &thread_headers[0].board,
+            thread_headers[0].info.control,
+        )
     {
         let pv = &mut thread_headers[0].pvs[1];
         pv.load_from(best_move, &PVariation::new());
@@ -226,7 +227,7 @@ pub fn search_position(
         if thread_headers[0].info.print_to_stdout {
             println!(
                 "bestmove {}",
-                best_move.display(CHESS960.load(Ordering::Relaxed))
+                best_move.display(thread_headers[0].board.rules())
             );
         }
         return (score, Some(best_move));
@@ -285,12 +286,12 @@ pub fn search_position(
         let maybe_ponder = pv.moves().get(1).map_or_else(String::new, |ponder_move| {
             format!(
                 " ponder {}",
-                ponder_move.display(CHESS960.load(Ordering::Relaxed))
+                ponder_move.display(thread_headers[0].board.rules())
             )
         });
         println!(
             "bestmove {}{maybe_ponder}",
-            best_move.display(CHESS960.load(Ordering::Relaxed))
+            best_move.display(thread_headers[0].board.rules())
         );
         #[cfg(feature = "stats")]
         {
@@ -422,7 +423,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
         if ThTy::MAIN_THREAD {
             readout_info(t, &t.info, Bound::Exact, t.info.nodes.get_global(), false);
 
-            if let Some(margin) = t.info.clock.check_for_forced_move(t.root_depth) {
+            if let Some(margin) = t.info.clock.forcedness_margin(t.root_depth) {
                 let saved_seldepth = t.info.seldepth;
                 let forced = is_forced(
                     margin,
@@ -484,9 +485,10 @@ fn dyn_max_depth(t: &ThreadData<'_>) -> usize {
 
 /// Give a legal default move in the case where we don't have enough time to search.
 fn default_move(t: &ThreadData) -> Move {
-    let tt_move =
-        t.tt.probe_move(t.board.state.keys.zobrist)
-            .and_then(|e| e.0);
+    let tt_move = t
+        .cache
+        .probe_move(t.board.state.keys.zobrist)
+        .and_then(|e| e.0);
 
     let mut mp = MovePicker::new(tt_move, t.killer_move_table[t.board.height()], 0);
 
@@ -546,8 +548,8 @@ pub fn quiescence<NT: NodeType>(
 
     let clock = t.board.fifty_move_counter();
 
-    // probe the TT and see if we get a cutoff.
-    let tt_hit = if let Some(hit) = t.tt.probe(key, height, clock) {
+    // probe the cache and see if we get a cutoff.
+    let cache_hit = if let Some(hit) = t.cache.probe(key, height, clock) {
         let illegal = hit
             .mov
             .is_some_and(|m| !t.board.is_pseudo_legal(m) || !t.board.is_legal(m));
@@ -568,7 +570,7 @@ pub fn quiescence<NT: NodeType>(
         None
     };
 
-    t.ss[height].ttpv = NT::PV || tt_hit.is_some_and(|hit| hit.was_pv);
+    t.ss[height].ttpv = NT::PV || cache_hit.is_some_and(|hit| hit.was_pv);
 
     let raw_eval;
     let stand_pat;
@@ -577,25 +579,25 @@ pub fn quiescence<NT: NodeType>(
         // could be being mated!
         raw_eval = VALUE_NONE;
         stand_pat = -INFINITY;
-    } else if let Some(tte) = tt_hit {
-        // if we have a TT hit, check the cached TT eval.
-        if tte.eval == VALUE_NONE {
+    } else if let Some(ce) = cache_hit {
+        // if we have a hit, check the cached eval.
+        if ce.eval == VALUE_NONE {
             // regenerate the static eval if it's VALUE_NONE.
             raw_eval = evaluate(t, t.info.nodes.get_local());
         } else {
-            // if the TT eval is not VALUE_NONE, use it.
-            raw_eval = tte.eval;
+            // if the cached eval is not VALUE_NONE, use it.
+            raw_eval = ce.eval;
         }
         let adj_eval = adj_shuffle(t, raw_eval, clock) + t.correction();
 
         // try correcting via search score from TT.
         // notably, this doesn't work for main search for ~reasons.
-        if !is_decisive(tte.value)
-            && (tte.bound == Bound::Exact
-                || tte.bound == Bound::Upper && tte.value < adj_eval
-                || tte.bound == Bound::Lower && tte.value > adj_eval)
+        if !is_decisive(ce.value)
+            && (ce.bound == Bound::Exact
+                || ce.bound == Bound::Upper && ce.value < adj_eval
+                || ce.bound == Bound::Lower && ce.value > adj_eval)
         {
-            stand_pat = tte.value;
+            stand_pat = ce.value;
         } else {
             stand_pat = adj_eval;
         }
@@ -605,13 +607,13 @@ pub fn quiescence<NT: NodeType>(
 
         // store the eval into the TT. We know that we won't overwrite anything,
         // because this branch is one where there wasn't a TT-hit.
-        t.tt.store(
+        t.cache.store(
             key,
             height,
             None,
             VALUE_NONE,
             raw_eval,
-            Bound::None,
+            Bound::Empty,
             0,
             t.ss[height].ttpv,
         );
@@ -632,14 +634,17 @@ pub fn quiescence<NT: NodeType>(
     let mut best_score = stand_pat;
 
     let mut moves_made = 0;
-    let mut move_picker =
-        MovePicker::new(tt_hit.and_then(|e| e.mov), None, t.info.conf.qs_see_bound);
+    let mut move_picker = MovePicker::new(
+        cache_hit.and_then(|e| e.mov),
+        None,
+        t.info.conf.qs_see_bound,
+    );
     move_picker.skip_quiets = !in_check;
 
     let futility = stand_pat + t.info.conf.qs_futility;
 
     while let Some(m) = move_picker.next(t) {
-        t.tt.prefetch(t.board.key_after(m));
+        t.cache.prefetch(t.board.key_after(m));
         if !t.board.is_legal(m) {
             continue;
         }
@@ -714,7 +719,7 @@ pub fn quiescence<NT: NodeType>(
         Bound::Upper
     };
 
-    t.tt.store(
+    t.cache.store(
         key,
         height,
         best_move,
@@ -780,7 +785,7 @@ pub fn alpha_beta<NT: NodeType>(
         }
 
         // are we too deep?
-        let max_height = MAX_DEPTH.min(uci::GO_MATE_MAX_DEPTH.load(Ordering::SeqCst));
+        let max_height = MAX_DEPTH.min(t.info.control.go_mate_max_depth.load(Ordering::Relaxed));
         if height >= max_height {
             return if in_check {
                 0
@@ -808,8 +813,8 @@ pub fn alpha_beta<NT: NodeType>(
     let clock = t.board.fifty_move_counter();
 
     let excluded = t.ss[height].excluded;
-    let tt_hit = if excluded.is_none()
-        && let Some(hit) = t.tt.probe(key, height, clock)
+    let cached = if excluded.is_none()
+        && let Some(hit) = t.cache.probe(key, height, clock)
     {
         let illegal = hit
             .mov
@@ -843,23 +848,24 @@ pub fn alpha_beta<NT: NodeType>(
 
         if illegal { None } else { Some(hit) }
     } else {
-        // do not probe the TT if we're in a singular-verification search.
+        // do not probe the cache if we're in a singular-verification search.
         None
     };
 
     if excluded.is_none() {
-        t.ss[height].ttpv = NT::PV || tt_hit.is_some_and(|hit| hit.was_pv);
+        t.ss[height].ttpv = NT::PV || cached.is_some_and(|hit| hit.was_pv);
     }
 
     // Probe the tablebases.
     let (mut syzygy_max, mut syzygy_min) = (MATE_SCORE, -MATE_SCORE);
-    let cardinality = u32::from(tablebases::probe::get_max_pieces_count());
+    let cardinality = u32::from(tablebases::probe::get_max_pieces_count(t.info.control));
     let n_men = t.board.state.bbs.occupied().count();
     if !NT::ROOT
         && excluded.is_none()
         && n_men <= cardinality
-        && tablebases::probe::SYZYGY_ENABLED.load(Ordering::Relaxed)
-        && (depth >= uci::SYZYGY_PROBE_DEPTH.load(Ordering::Relaxed) || n_men < cardinality)
+        && t.info.control.syzygy_enabled.load(Ordering::Relaxed)
+        && (depth >= t.info.control.syzygy_probe_depth.load(Ordering::Relaxed)
+            || n_men < cardinality)
         && let Some(wdl) = tablebases::probe::get_wdl(&t.board)
     {
         t.info.tbhits.increment();
@@ -884,7 +890,7 @@ pub fn alpha_beta<NT: NodeType>(
             || (tb_bound == Bound::Upper && tb_value <= alpha)
         {
             #[expect(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
-            t.tt.store(
+            t.cache.store(
                 key,
                 height,
                 None,
@@ -924,28 +930,28 @@ pub fn alpha_beta<NT: NodeType>(
         static_eval = t.ss[height].static_eval;
         eval = t.ss[height].eval;
         t.nnue.hint_common_access(&t.board, t.nnue_params);
-    } else if let Some(tte) = &tt_hit {
-        let v = tte.eval; // if we have a TT hit, check the cached TT eval.
+    } else if let Some(ce) = &cached {
+        let v = ce.eval; // if we have a hit, check the cached eval.
         if v == VALUE_NONE {
             // regenerate the static eval if it's VALUE_NONE.
             raw_eval = evaluate(t, t.info.nodes.get_local());
         } else {
-            // if the TT eval is not VALUE_NONE, use it.
+            // if the cached eval is not VALUE_NONE, use it.
             raw_eval = v;
             if NT::PV {
                 t.nnue.hint_common_access(&t.board, t.nnue_params);
             }
         }
         static_eval = adj_shuffle(t, raw_eval, clock) + correction;
-        if tte.value != VALUE_NONE
-            && match tte.bound {
-                Bound::Upper => tte.value < static_eval,
-                Bound::Lower => tte.value > static_eval,
+        if ce.value != VALUE_NONE
+            && match ce.bound {
+                Bound::Upper => ce.value < static_eval,
+                Bound::Lower => ce.value > static_eval,
                 Bound::Exact => true,
-                Bound::None => false,
+                Bound::Empty => false,
             }
         {
-            eval = tte.value;
+            eval = ce.value;
         } else {
             eval = static_eval;
         }
@@ -955,13 +961,13 @@ pub fn alpha_beta<NT: NodeType>(
 
         // store the eval into the TT. We know that we won't overwrite anything,
         // because this branch is one where there wasn't a TT-hit.
-        t.tt.store(
+        t.cache.store(
             key,
             height,
             None,
             VALUE_NONE,
             raw_eval,
-            Bound::None,
+            Bound::Empty,
             0,
             t.ss[height].ttpv,
         );
@@ -973,13 +979,13 @@ pub fn alpha_beta<NT: NodeType>(
     t.ss[height].static_eval = static_eval;
     t.ss[height].eval = eval;
 
-    let tt_complexity = tt_hit.as_ref().map_or(0, |tte| {
-        if !is_decisive(tte.value)
-            && (tte.bound == Bound::Exact
-                || (tte.bound == Bound::Upper && tte.value < static_eval)
-                || (tte.bound == Bound::Lower && tte.value > static_eval))
+    let tt_complexity = cached.as_ref().map_or(0, |ce| {
+        if !is_decisive(ce.value)
+            && (ce.bound == Bound::Exact
+                || (ce.bound == Bound::Upper && ce.value < static_eval)
+                || (ce.bound == Bound::Lower && ce.value > static_eval))
         {
-            i32::abs(static_eval - tte.value)
+            i32::abs(static_eval - ce.value)
         } else {
             0
         }
@@ -1037,7 +1043,7 @@ pub fn alpha_beta<NT: NodeType>(
     // clear out the next killer move.
     t.killer_move_table[height + 1] = None;
 
-    let tt_move = tt_hit.and_then(|e| e.mov);
+    let tt_move = cached.and_then(|e| e.mov);
     let tt_capture = tt_move.filter(|m| t.board.is_tactical(*m));
 
     // whole-node techniques:
@@ -1096,13 +1102,13 @@ pub fn alpha_beta<NT: NodeType>(
                 >= beta
             && !t.nmp_banned_for(t.board.turn())
             && t.board.zugzwang_unlikely()
-            // don't nmp when the tt thinks it’s worthless:
-            && !matches!(tt_hit, Some(TTHit { bound: Bound::Upper, value, .. }) if value < beta)
-            // don't nmp when we have a tt fail-high on an obvious capture:
-            && !matches!(tt_hit, Some(TTHit { bound: Bound::Lower, mov: Some(m), .. })
+            // don't nmp when the cached data indicates it’s worthless:
+            && !matches!(cached, Some(CacheResult { bound: Bound::Upper, value, .. }) if value < beta)
+            // don't nmp when we have a cached fail-high on an obvious capture:
+            && !matches!(cached, Some(CacheResult { bound: Bound::Lower, mov: Some(m), .. })
                 if t.board.estimated_see(&t.info.conf, m) > t.info.conf.see_pawn_value * 2)
         {
-            t.tt.prefetch(t.board.key_after_null_move());
+            t.cache.prefetch(t.board.key_after_null_move());
             let r = 4
                 + depth / 3
                 + std::cmp::min(
@@ -1149,10 +1155,10 @@ pub fn alpha_beta<NT: NodeType>(
         }
     }
 
-    // cutnode-based TT reduction.
+    // reduction in uncached expected-Cut nodes:
     if cut_node
         && excluded.is_none()
-        && (tt_move.is_none() || !matches!(tt_hit, Some(tte) if tte.depth + 4 > depth))
+        && (tt_move.is_none() || !matches!(cached, Some(ce) if ce.depth + 4 > depth))
     {
         depth -= i32::from(depth >= 8);
     }
@@ -1170,15 +1176,15 @@ pub fn alpha_beta<NT: NodeType>(
         MINIMUM_TB_WIN_SCORE - 1,
     );
     // as usual, don't probcut in PV / check / singular verification / if there are GT truth scores in flight.
-    // additionally, if we have a TT hit that's sufficiently deep, we skip trying probcut if the TT value indicates
-    // that it's not going to be helpful.
+    // additionally, if we have a cache hit that's sufficiently high-quality, we skip trying probcut if the
+    // cached value indicates that it's not going to be helpful.
     if cut_node
         && !in_check
         && excluded.is_none()
         && depth >= 3
         && !is_decisive(beta)
         // don't probcut if we have a tthit with value < pcbeta
-        && tt_hit.is_none_or(|tte| tte.value >= pc_beta)
+        && cached.is_none_or(|ce| ce.value >= pc_beta)
     {
         // base reduced probcut depth
         let depth_base = depth - 3 - (static_eval - beta) / t.info.conf.probcut_eval_div;
@@ -1186,7 +1192,7 @@ pub fn alpha_beta<NT: NodeType>(
         let mut move_picker = MovePicker::new(tt_capture, None, see_pivot);
         move_picker.skip_quiets = true;
         while let Some(m) = move_picker.next(t) {
-            t.tt.prefetch(t.board.key_after(m));
+            t.cache.prefetch(t.board.key_after(m));
             if !t.board.is_legal(m) {
                 continue;
             }
@@ -1235,7 +1241,7 @@ pub fn alpha_beta<NT: NodeType>(
             t.board.unmake_move(&mut t.nnue);
 
             if value >= pc_beta {
-                t.tt.store(
+                t.cache.store(
                     key,
                     height,
                     Some(m),
@@ -1282,7 +1288,7 @@ pub fn alpha_beta<NT: NodeType>(
             continue;
         }
 
-        t.tt.prefetch(t.board.key_after(m));
+        t.cache.prefetch(t.board.key_after(m));
         if !t.board.is_legal(m) {
             continue;
         }
@@ -1376,14 +1382,14 @@ pub fn alpha_beta<NT: NodeType>(
         } else if Some(m) == tt_move
             && excluded.is_none()
             && depth >= 6 + i32::from(t.ss[height].ttpv)
-            && let Some(tte) = tt_hit
-            && tte.value != VALUE_NONE
-            && !is_decisive(tte.value)
-            && tte.bound.is_lower()
-            && tte.depth >= depth - 3
+            && let Some(ce) = cached
+            && ce.value != VALUE_NONE
+            && !is_decisive(ce.value)
+            && ce.bound.is_lower()
+            && ce.depth >= depth - 3
             && height < root_depth * 2
         {
-            let r_beta = tte.value - depth * 48 / 64;
+            let r_beta = ce.value - depth * 48 / 64;
             let r_depth = (depth - 1) / 2;
 
             // execute a search of the position, pretending that
@@ -1419,7 +1425,7 @@ pub fn alpha_beta<NT: NodeType>(
                 // it's completely fine to return decisive scores here,
                 // as they lower-bound the true score.
                 return value;
-            } else if tte.value >= beta {
+            } else if ce.value >= beta {
                 // a sort of light multi-cut.
                 extension = -3 + i32::from(NT::PV);
             } else if cut_node {
@@ -1460,10 +1466,10 @@ pub fn alpha_beta<NT: NodeType>(
                 // reduce more on non-PV nodes
                 r += i32::from(!NT::PV) * t.info.conf.lmr_non_pv_mul;
                 r -= i32::from(t.ss[height].ttpv) * t.info.conf.lmr_ttpv_mul;
-                // reduce more for ttpv positions whose TT score is <= alpha
+                // reduce more for ttpv positions whose cached score is <= alpha
                 r += i32::from(
                     t.ss[height].ttpv
-                        && tt_hit.is_some_and(|tte| tte.value != VALUE_NONE && tte.value <= alpha),
+                        && cached.is_some_and(|ce| ce.value != VALUE_NONE && ce.value <= alpha),
                 ) * t.info.conf.lmr_ttpv_fail_low_mul;
                 // reduce more on cut nodes
                 r += i32::from(cut_node) * t.info.conf.lmr_cut_node_mul;
@@ -1644,7 +1650,7 @@ pub fn alpha_beta<NT: NodeType>(
         {
             t.update_correction_history(depth, tt_complexity, best_score - fresh_eval);
         }
-        t.tt.store(
+        t.cache.store(
             key,
             height,
             best_move,
@@ -2045,11 +2051,11 @@ fn readout_info(
     let ThreadData {
         board,
         iteration,
-        tt,
+        cache: tt,
         ..
     } = t;
     let pv = t.pv();
-    let normal_uci_output = !uci::PRETTY_PRINT.load(Ordering::SeqCst);
+    let normal_uci_output = !info.control.pretty_print.load(Ordering::SeqCst);
     let nps = (nodes as f64 / info.clock.elapsed().as_secs_f64()) as u64;
     if board.turn() == Colour::Black {
         bound = bound.invert();
@@ -2068,6 +2074,7 @@ fn readout_info(
             hashfull = tt.hashfull(),
             tbhits = t.info.tbhits.get_global(),
             wdl = uci::fmt::format_wdl(pv.score, board.ply()),
+            pv = pv.display(board.rules()),
         );
     } else {
         let value = uci::fmt::pretty_format_score(pv.score, board.turn());
@@ -2121,7 +2128,7 @@ pub fn draw_score(t: &ThreadData, nodes: u64, stm: Colour) -> i32 {
     // higher contempt means we will play on in drawn positions more often,
     // so if we are to play in a drawn position, then we should return the
     // negative of the contempt score.
-    let contempt = uci::CONTEMPT.load(Ordering::Relaxed);
+    let contempt = t.info.control.contempt.load(Ordering::Relaxed);
     let contempt_component = if stm == t.stm_at_root {
         -contempt
     } else {

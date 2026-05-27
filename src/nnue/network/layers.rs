@@ -28,15 +28,12 @@ pub static FT_OUTPUT_FILE: std::sync::LazyLock<
 });
 
 mod simd {
-    use crate::{
-        nnue::{
-            network::{
-                Align64, L1_CHUNK_PER_32, L1_SIZE, L2_SIZE, L3_SIZE, QA,
-                layers::{AVX512CHUNK, FT_SHIFT, L1_MUL, SWISH_K},
-            },
-            simd::{self, F32_CHUNK, I16_CHUNK, S, U8_CHUNK, VecI32},
+    use crate::nnue::{
+        network::{
+            Align, L1_CHUNK_PER_32, L1_SIZE, L2_SIZE, L3_SIZE, QA,
+            layers::{AVX512CHUNK, FT_SHIFT, L1_MUL, SWISH_K},
         },
-        util,
+        simd::{self, F32_CHUNK, I16_CHUNK, S, U8_CHUNK, VecI32},
     };
     use std::mem::MaybeUninit;
 
@@ -76,15 +73,15 @@ mod simd {
 
     // used in only one place, separate function for clarity.
     unsafe fn reinterpret_as_i32s(
-        ptr: &Align64<[MaybeUninit<u8>; L1_SIZE]>,
-    ) -> &Align64<[i32; L1_SIZE / 4]> {
-        let ptr = util::from_ref(ptr);
+        ptr: &Align<[MaybeUninit<u8>; L1_SIZE]>,
+    ) -> &Align<[i32; L1_SIZE / 4]> {
+        let ptr = std::ptr::from_ref(ptr);
         // check that the reference is aligned:
         debug_assert!(ptr.cast::<i32>().is_aligned());
-        debug_assert!(ptr.cast::<Align64<[i32; L1_SIZE / 4]>>().is_aligned());
+        debug_assert!(ptr.cast::<Align<[i32; L1_SIZE / 4]>>().is_aligned());
         // cast:
         // Safety: pointer is known to be aligned.
-        unsafe { &*ptr.cast::<Align64<[i32; L1_SIZE / 4]>>() }
+        unsafe { &*ptr.cast::<Align<[i32; L1_SIZE / 4]>>() }
     }
 
     #[allow(
@@ -99,13 +96,13 @@ mod simd {
         clippy::similar_names
     )]
     pub fn activate_ft_and_propagate_l1(
-        stm_psqt: &Align64<[i16; L1_SIZE]>,
-        ntm_psqt: &Align64<[i16; L1_SIZE]>,
-        stm_thrt: &Align64<[i16; L1_SIZE]>,
-        ntm_thrt: &Align64<[i16; L1_SIZE]>,
-        weights: &Align64<[i8; L1_SIZE * L2_SIZE]>,
-        biases: &Align64<[f32; L2_SIZE]>,
-        output: &mut Align64<[f32; L2_SIZE]>,
+        stm_psqt: &Align<[i16; L1_SIZE]>,
+        ntm_psqt: &Align<[i16; L1_SIZE]>,
+        stm_thrt: &Align<[i16; L1_SIZE]>,
+        ntm_thrt: &Align<[i16; L1_SIZE]>,
+        weights: &Align<[i8; L1_SIZE * L2_SIZE]>,
+        biases: &Align<[f32; L2_SIZE]>,
+        output: &mut Align<[f32; L2_SIZE]>,
     ) {
         const L1_PAIR_COUNT: usize = L1_SIZE / 2;
         const NNZ_INPUT_SIMD_WIDTH: usize =
@@ -131,9 +128,9 @@ mod simd {
             let ft_zero = simd::zero_i16();
             let ft_one = simd::splat_i16(QA);
 
-            let mut ft_outputs: Align64<[MaybeUninit<u8>; L1_SIZE]> =
+            let mut ft_outputs: Align<[MaybeUninit<u8>; L1_SIZE]> =
                 MaybeUninit::uninit().assume_init();
-            let mut nnz: Align64<[MaybeUninit<u16>; L1_SIZE / L1_CHUNK_PER_32]> =
+            let mut nnz: Align<[MaybeUninit<u16>; L1_SIZE / L1_CHUNK_PER_32]> =
                 MaybeUninit::uninit().assume_init();
             let mut nnz_count = 0;
 
@@ -244,7 +241,7 @@ mod simd {
             {
                 use std::io::Write;
 
-                let ptr = util::from_ref(&ft_outputs);
+                let ptr = std::ptr::from_ref(&ft_outputs);
                 let ft_outputs = &*ptr.cast::<[u8; L1_SIZE]>();
 
                 super::FT_OUTPUT_FILE
@@ -260,11 +257,11 @@ mod simd {
 
     #[allow(clippy::similar_names, clippy::identity_op)]
     fn propagate_l1(
-        ft_outputs: &Align64<[MaybeUninit<u8>; L1_SIZE]>,
+        ft_outputs: &Align<[MaybeUninit<u8>; L1_SIZE]>,
         nnz_slice: &[u16],
-        weights: &Align64<[i8; L1_SIZE * L2_SIZE]>,
-        biases: &Align64<[f32; L2_SIZE]>,
-        output: &mut Align64<[f32; L2_SIZE]>,
+        weights: &Align<[i8; L1_SIZE * L2_SIZE]>,
+        biases: &Align<[f32; L2_SIZE]>,
+        output: &mut Align<[f32; L2_SIZE]>,
     ) {
         const NUM_ACCS: usize = L2_SIZE / F32_CHUNK;
         // SAFETY: Breaking it down by unsafe operations:
@@ -284,8 +281,8 @@ mod simd {
             // from the same issues. If you feel like conditionally compiling
             // this based on target CPU, past-cosmonaut would not object.
             // c.f. https://github.com/official-stockfish/Stockfish/pull/6336.
-            let mut acc = Align64([0; L2_SIZE]);
-            let mut aux = Align64([0; L2_SIZE]);
+            let mut acc = Align([0; L2_SIZE]);
+            let mut aux = Align([0; L2_SIZE]);
 
             let nnz_count = nnz_slice.len();
 
@@ -382,10 +379,10 @@ mod simd {
 
     #[allow(clippy::needless_range_loop, clippy::cast_ptr_alignment)]
     pub fn propagate_l2(
-        inputs: &Align64<[f32; L2_SIZE]>,
-        weights: &Align64<[f32; L2_SIZE * L3_SIZE * 2]>,
-        biases: &Align64<[f32; L3_SIZE * 2]>,
-        output: &mut Align64<[f32; L3_SIZE]>,
+        inputs: &Align<[f32; L2_SIZE]>,
+        weights: &Align<[f32; L2_SIZE * L3_SIZE * 2]>,
+        biases: &Align<[f32; L3_SIZE * 2]>,
+        output: &mut Align<[f32; L3_SIZE]>,
     ) {
         // skip connection safety:
         const { assert!(L2_SIZE == L3_SIZE) };
@@ -437,8 +434,8 @@ mod simd {
 
     #[allow(clippy::modulo_one)]
     pub fn propagate_l3(
-        inputs: &Align64<[f32; L3_SIZE]>,
-        weights: &Align64<[f32; L3_SIZE]>,
+        inputs: &Align<[f32; L3_SIZE]>,
+        weights: &Align<[f32; L3_SIZE]>,
         bias: f32,
         output: &mut f32,
     ) {

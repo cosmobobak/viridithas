@@ -653,6 +653,16 @@ impl CastlingRights {
         self.data &= mask;
         self.data |= (value << shift) | presence;
     }
+
+    /// A set of castling rights is nonclassical if they contain
+    /// rights that are non-A for queenside or non-H for kingside.
+    #[allow(unused)]
+    pub fn is_nonclassical(self) -> bool {
+        self.kingside(Colour::White).is_some_and(|f| f != File::H)
+            || self.kingside(Colour::Black).is_some_and(|f| f != File::H)
+            || self.queenside(Colour::White).is_some_and(|f| f != File::A)
+            || self.queenside(Colour::Black).is_some_and(|f| f != File::A)
+    }
 }
 
 #[cfg(test)]

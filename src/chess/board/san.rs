@@ -348,13 +348,6 @@ impl Board {
 mod tests {
     use super::*;
 
-    fn board_from_fen(fen: &str) -> Board {
-        use crate::chess::fen::Fen;
-        let mut board = Board::empty();
-        board.set_from_fen(&Fen::parse(fen).unwrap());
-        board
-    }
-
     #[test]
     fn simple_pawn_move() {
         let board = Board::startpos();
@@ -381,7 +374,9 @@ mod tests {
 
     #[test]
     fn pawn_capture() {
-        let board = board_from_fen("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 2");
+        let board =
+            Board::from_fen("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 2")
+                .unwrap();
         let m = board.parse_san("exd5").unwrap();
         assert_eq!(m.from(), Square::E4);
         assert_eq!(m.to(), Square::D5);
@@ -390,7 +385,8 @@ mod tests {
     #[test]
     fn disambiguation_knight() {
         let board =
-            board_from_fen("r1bqkbnr/pppp1ppp/2n5/1N2p3/4P3/5N2/PPPP1PPP/R1BQKB1R w KQ - 14 9");
+            Board::from_fen("r1bqkbnr/pppp1ppp/2n5/1N2p3/4P3/5N2/PPPP1PPP/R1BQKB1R w KQ - 14 9")
+                .unwrap();
         let e = board.parse_san("Nd4").unwrap_err();
         assert_eq!(e, SanError::AmbiguousMove("Nd4".into()));
         let m = board.parse_san("Nfd4").unwrap();
@@ -409,8 +405,10 @@ mod tests {
 
     #[test]
     fn disambiguation_pin() {
-        let board =
-            board_from_fen("r1b1k1nr/ppppbppp/2n5/1N2p3/2Q1P1q1/5N2/PPPP1PPP/R1BK1B1R w - - 20 12");
+        let board = Board::from_fen(
+            "r1b1k1nr/ppppbppp/2n5/1N2p3/2Q1P1q1/5N2/PPPP1PPP/R1BK1B1R w - - 20 12",
+        )
+        .unwrap();
         let e = board.parse_san("Nfd4").unwrap_err();
         assert_eq!(e, SanError::IllegalMove("Nfd4".into()));
         let e = board.parse_san("N3d4").unwrap_err();
@@ -428,7 +426,7 @@ mod tests {
 
     #[test]
     fn disambiguation_rank() {
-        let board = board_from_fen("4k3/8/8/R7/8/8/8/R3K3 w Q - 0 1");
+        let board = Board::from_fen("4k3/8/8/R7/8/8/8/R3K3 w Q - 0 1").unwrap();
         let e = board.parse_san("Ra3").unwrap_err();
         assert_eq!(e, SanError::AmbiguousMove("Ra3".into()));
         let m = board.parse_san("R1a3").unwrap();
@@ -438,7 +436,7 @@ mod tests {
 
     #[test]
     fn castling_kingside() {
-        let board = board_from_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1");
+        let board = Board::from_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1").unwrap();
         let m = board.parse_san("O-O").unwrap();
         assert!(m.is_castle());
         assert_eq!(m.from(), Square::E1);
@@ -447,7 +445,7 @@ mod tests {
 
     #[test]
     fn castling_queenside() {
-        let board = board_from_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1");
+        let board = Board::from_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1").unwrap();
         let m = board.parse_san("O-O-O").unwrap();
         assert!(m.is_castle());
         assert_eq!(m.from(), Square::E1);
@@ -456,7 +454,7 @@ mod tests {
 
     #[test]
     fn castling_zeros() {
-        let board = board_from_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1");
+        let board = Board::from_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1").unwrap();
         let m = board.parse_san("0-0").unwrap();
         assert!(m.is_castle());
         let m2 = board.parse_san("0-0-0").unwrap();
@@ -465,7 +463,7 @@ mod tests {
 
     #[test]
     fn promotion() {
-        let board = board_from_fen("8/P7/8/8/8/8/8/4K2k w - - 0 1");
+        let board = Board::from_fen("8/P7/8/8/8/8/8/4K2k w - - 0 1").unwrap();
         let m = board.parse_san("a8=Q").unwrap();
         assert_eq!(m.from(), Square::A7);
         assert_eq!(m.to(), Square::A8);
@@ -474,7 +472,7 @@ mod tests {
 
     #[test]
     fn missing_promotion() {
-        let board = board_from_fen("8/P7/8/8/8/8/8/4K2k w - - 0 1");
+        let board = Board::from_fen("8/P7/8/8/8/8/8/4K2k w - - 0 1").unwrap();
         let e = board.parse_san("a8").unwrap_err();
         assert_eq!(e, SanError::MissingPromotion("a8".into()));
         let e = board.parse_san("a7a8").unwrap_err();
@@ -483,7 +481,7 @@ mod tests {
 
     #[test]
     fn terse_promotion() {
-        let board = board_from_fen("8/P7/8/8/8/8/8/4K2k w - - 0 1");
+        let board = Board::from_fen("8/P7/8/8/8/8/8/4K2k w - - 0 1").unwrap();
         let m = board.parse_san("a8q").unwrap();
         assert_eq!(m.from(), Square::A7);
         assert_eq!(m.to(), Square::A8);
@@ -496,21 +494,23 @@ mod tests {
 
     #[test]
     fn promotion_knight() {
-        let board = board_from_fen("8/P7/8/8/8/8/8/4K2k w - - 0 1");
+        let board = Board::from_fen("8/P7/8/8/8/8/8/4K2k w - - 0 1").unwrap();
         let m = board.parse_san("a8=N").unwrap();
         assert_eq!(m.promotion_type(), Some(PieceType::Knight));
     }
 
     #[test]
     fn promotion_without_equals() {
-        let board = board_from_fen("8/P7/8/8/8/8/8/4K2k w - - 0 1");
+        let board = Board::from_fen("8/P7/8/8/8/8/8/4K2k w - - 0 1").unwrap();
         let m = board.parse_san("a8Q").unwrap();
         assert_eq!(m.promotion_type(), Some(PieceType::Queen));
     }
 
     #[test]
     fn with_check_marker() {
-        let board = board_from_fen("rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq - 0 2");
+        let board =
+            Board::from_fen("rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq - 0 2")
+                .unwrap();
         let m = board.parse_san("Qh4+").unwrap();
         assert_eq!(m.from(), Square::D8);
         assert_eq!(m.to(), Square::H4);
@@ -518,14 +518,18 @@ mod tests {
 
     #[test]
     fn capture_with_x() {
-        let board = board_from_fen("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 2");
+        let board =
+            Board::from_fen("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 2")
+                .unwrap();
         let m = board.parse_san("exd5").unwrap();
         assert_eq!(m.to(), Square::D5);
     }
 
     #[test]
     fn capture_without_x() {
-        let board = board_from_fen("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 2");
+        let board =
+            Board::from_fen("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 2")
+                .unwrap();
         let m = board.parse_san("ed5").unwrap();
         assert_eq!(m.to(), Square::D5);
     }
@@ -561,7 +565,7 @@ mod tests {
             "rn3r2/pbppq1p1/1p2pN2/8/3P2NP/6P1/PPP1BP1R/R3K1k1 w Q - 5 18",
         ];
         for p in positions {
-            let board = board_from_fen(p);
+            let board = Board::from_fen(p).unwrap();
             for legal_move in board.legal_moves() {
                 let san_str = board.san(legal_move).unwrap().to_string();
                 let parsed = board.parse_san(&san_str).unwrap();
@@ -584,7 +588,8 @@ mod tests {
 
     #[test]
     fn en_passant() {
-        let board = board_from_fen("rnbqkbnr/pppp1ppp/8/4pP2/8/8/PPPPP1PP/RNBQKBNR w KQkq e6 0 3");
+        let board = Board::from_fen("rnbqkbnr/pppp1ppp/8/4pP2/8/8/PPPPP1PP/RNBQKBNR w KQkq e6 0 3")
+            .unwrap();
         let m = board.parse_san("fxe6").unwrap();
         assert!(m.is_ep());
         assert_eq!(m.to(), Square::E6);

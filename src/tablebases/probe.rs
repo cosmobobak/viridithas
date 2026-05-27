@@ -13,6 +13,7 @@ use crate::{
         types::{CastlingRights, Square},
     },
     evaluation::TB_WIN_SCORE,
+    searchinfo::Control,
     tablebases::bindings::{
         PYRRHIC_FLAG_BPROMO as TB_PROMOTES_BISHOP, PYRRHIC_FLAG_NPROMO as TB_PROMOTES_KNIGHT,
         PYRRHIC_FLAG_QPROMO as TB_PROMOTES_QUEEN, PYRRHIC_FLAG_RPROMO as TB_PROMOTES_ROOK,
@@ -21,11 +22,8 @@ use crate::{
         TB_RESULT_PROMOTES_MASK, TB_RESULT_PROMOTES_SHIFT, TB_RESULT_TO_MASK, TB_RESULT_TO_SHIFT,
         TB_RESULT_WDL_MASK, TB_RESULT_WDL_SHIFT, TB_WIN, tb_init, tb_probe_root, tb_probe_wdl,
     },
-    uci,
 };
-use std::{ffi::CString, sync::atomic::AtomicBool};
-
-pub static SYZYGY_ENABLED: AtomicBool = AtomicBool::new(false);
+use std::ffi::CString;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[allow(clippy::upper_case_acronyms)]
@@ -41,23 +39,27 @@ pub struct WdlDtzResult {
 }
 
 /// Loads Syzygy tablebases stored in `syzygy_path` location.
-pub fn init(syzygy_path: &str) {
+pub fn init(syzygy_path: &str, control: &Control) {
     // SAFETY: Not much.
     #[cfg(feature = "syzygy")]
     unsafe {
         let path = CString::new(syzygy_path).unwrap();
         let res = tb_init(path.as_ptr());
         assert!(res, "Failed to load Syzygy tablebases from {syzygy_path}");
-        SYZYGY_ENABLED.store(true, std::sync::atomic::Ordering::Relaxed);
+        control
+            .syzygy_enabled
+            .store(true, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
 /// Gets maximal pieces count supported by loaded Syzygy tablebases. Returns 0 if the feature is disabled.
-pub fn get_max_pieces_count() -> u8 {
+pub fn get_max_pieces_count(control: &Control) -> u8 {
     #![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     #[cfg(feature = "syzygy")]
     {
-        let user_limit = uci::SYZYGY_PROBE_LIMIT.load(std::sync::atomic::Ordering::Relaxed);
+        let user_limit = control
+            .syzygy_probe_limit
+            .load(std::sync::atomic::Ordering::Relaxed);
         // SAFETY: Not much.
         let hard_limit = unsafe { TB_LARGEST as u8 };
         std::cmp::min(user_limit, hard_limit)
@@ -179,8 +181,8 @@ pub fn get_root_wdl_dtz(board: &Board) -> Option<WdlDtzResult> {
 }
 
 /// Checks if there's a tablebase move and returns it as [Some], otherwise [None].
-pub fn get_tablebase_move(board: &Board) -> Option<(Move, i32)> {
-    if board.state.bbs.occupied().count() > u32::from(get_max_pieces_count()) {
+pub fn get_tablebase_move(board: &Board, control: &Control) -> Option<(Move, i32)> {
+    if board.state.bbs.occupied().count() > u32::from(get_max_pieces_count(control)) {
         return None;
     }
 
@@ -223,23 +225,26 @@ mod tests {
         threadlocal::ThreadData,
         threadpool,
         timemgmt::{SearchLimit, TimeManager},
-        transpositiontable::TT,
+        transpositiontable::Cache,
         util::MEGABYTE,
     };
 
     use super::*;
 
+    static TEST_CONTROL: std::sync::LazyLock<Control> = std::sync::LazyLock::new(Control::default);
     static INIT_SYZYGY: std::sync::LazyLock<()> = std::sync::LazyLock::new(|| {
         init(
             std::env::var("SYZYGY_PATH")
                 .unwrap_or_else(|_| "/syzygy".to_string())
                 .as_str(),
+            &TEST_CONTROL,
         );
     });
 
     #[test]
     fn test_syzygy_wdl() {
         LazyLock::force(&INIT_SYZYGY);
+        let control = &TEST_CONTROL;
 
         let win_3man = "4Q3/8/8/8/8/8/7k/K7 w - - 0 1";
         let draw_3man = "4N3/8/8/8/8/4K3/8/4k3 w - - 0 1";
@@ -247,7 +252,7 @@ mod tests {
 
         let win_7man = "3k4/4p3/8/1r6/6P1/5P2/4RK2/8 w - - 0 1";
 
-        if get_max_pieces_count() >= 3 {
+        if get_max_pieces_count(control) >= 3 {
             let board = Board::from_fen(win_3man).unwrap();
             assert_eq!(get_wdl(&board), Some(WDL::Win));
 
@@ -258,7 +263,7 @@ mod tests {
             assert_eq!(get_wdl(&board), Some(WDL::Loss));
         }
 
-        if get_max_pieces_count() >= 7 {
+        if get_max_pieces_count(control) >= 7 {
             let board = Board::from_fen(win_7man).unwrap();
             assert_eq!(get_wdl(&board), Some(WDL::Win));
         }
@@ -267,8 +272,9 @@ mod tests {
     #[test]
     fn solve_7man() {
         LazyLock::force(&INIT_SYZYGY);
+        let control = &TEST_CONTROL;
 
-        if get_max_pieces_count() < 7 {
+        if get_max_pieces_count(control) < 7 {
             return;
         }
 
@@ -277,17 +283,18 @@ mod tests {
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
         let pool = threadpool::make_worker_threads(1);
-        let mut tt = TT::new();
-        tt.resize(MEGABYTE, &pool);
+        let mut cache = Cache::new();
+        cache.resize(MEGABYTE, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = Box::new(ThreadData::new(
             0,
             position,
-            tt.view(),
+            cache.view(),
             nnue_params,
             &stopped,
             &nodes,
             &tbhits,
+            control,
         ));
         t.info.clock = TimeManager::default_with_limit(SearchLimit::Depth(16));
         let (value, mov) = search_position(&pool, std::array::from_mut(&mut t));
@@ -306,8 +313,9 @@ mod tests {
     #[test]
     fn solve_5man() {
         LazyLock::force(&INIT_SYZYGY);
+        let control = &TEST_CONTROL;
 
-        if get_max_pieces_count() < 5 {
+        if get_max_pieces_count(control) < 5 {
             return;
         }
 
@@ -316,17 +324,18 @@ mod tests {
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
         let pool = threadpool::make_worker_threads(1);
-        let mut tt = TT::new();
-        tt.resize(MEGABYTE, &pool);
+        let mut cache = Cache::new();
+        cache.resize(MEGABYTE, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = Box::new(ThreadData::new(
             0,
             position,
-            tt.view(),
+            cache.view(),
             nnue_params,
             &stopped,
             &nodes,
             &tbhits,
+            control,
         ));
         t.info.clock = TimeManager::default_with_limit(SearchLimit::Depth(10));
         let (value, mov) = search_position(&pool, std::array::from_mut(&mut t));

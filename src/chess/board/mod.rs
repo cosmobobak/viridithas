@@ -2,17 +2,13 @@ pub mod movegen;
 mod san;
 pub mod validation;
 
-use std::{
-    fmt::{self, Debug, Display, Formatter, Write},
-    sync::atomic::Ordering,
-};
+use std::fmt::{self, Debug, Display, Formatter, Write};
 
 use arrayvec::ArrayVec;
 use movegen::{MAX_POSITION_MOVES, RAY_BETWEEN, RAY_FULL};
 
 use crate::{
     chess::{
-        CHESS960,
         board::movegen::{MoveList, diag_attacks, orth_attacks, pawn_attacks, pawn_attacks_by},
         chessmove::{Move, MoveFlags},
         fen::Fen,
@@ -31,6 +27,12 @@ use crate::{
     search::pv::PVariation,
 };
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+pub enum Rules {
+    Classical,
+    Chess960,
+}
+
 #[derive(PartialEq, Eq, Clone)]
 pub struct Board {
     /// Copyable state for the board.
@@ -39,8 +41,11 @@ pub struct Board {
     side: Colour,
     /// The number of half moves made since the start of the game.
     ply: usize,
-
+    /// How many ply are we from the root of the search tree?
     height: usize,
+    /// Is this a Chess960 game?
+    rules: Rules,
+    /// Stack of previous board states.
     history: Vec<State>,
 }
 
@@ -52,6 +57,7 @@ impl Debug for Board {
             .field("ep_sq", &self.state.ep_square)
             .field("fifty_move_counter", &self.state.fifty_move_counter)
             .field("height", &self.height)
+            .field("chess960", &self.rules)
             .field("ply", &self.ply)
             .field("key", &self.state.keys.zobrist)
             .field("threats", &self.state.threats)
@@ -66,12 +72,13 @@ impl Board {
     pub const STARTING_FEN_960: &'static str =
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w AHah - 0 1";
 
-    pub fn empty() -> Self {
+    pub fn empty(rules: Rules) -> Self {
         let mut out = Self {
             state: State::default(),
             side: Colour::White,
             height: 0,
             ply: 0,
+            rules,
             history: Vec::new(),
         };
         out.reset();
@@ -129,6 +136,16 @@ impl Board {
         self.height
     }
 
+    pub const fn rules(&self) -> Rules {
+        self.rules
+    }
+
+    #[deprecated(note = "don’t break this invariant!")]
+    #[allow(unused)]
+    pub fn rules_mut(&mut self) -> &mut Rules {
+        &mut self.rules
+    }
+
     pub const fn turn(&self) -> Colour {
         self.side
     }
@@ -152,18 +169,24 @@ impl Board {
         self.state.threats = self.state.bbs.generate_threats(self.side);
     }
 
+    // NOTE: Mutable operations like this are basically awful and should be removed or made private.
     pub fn reset(&mut self) {
+        // preserve ruleset across resets
+        let rules = self.rules;
         self.state = State::default();
         self.side = Colour::White;
         self.height = 0;
         self.ply = 0;
+        self.rules = rules;
         self.history.clear();
     }
 
+    // NOTE: Mutable operations like this are basically awful and should be removed or made private.
     pub fn set_frc_idx(&mut self, scharnagl: usize) {
         #![allow(clippy::cast_possible_truncation)]
         assert!(scharnagl < 960, "scharnagl index out of range");
         let backrank = Self::get_scharnagl_backrank(scharnagl);
+        self.rules = Rules::Chess960;
         self.reset();
         for (&piece_type, file) in backrank.iter().zip(File::all()) {
             let sq = Square::from_rank_file(Rank::One, file);
@@ -206,11 +229,13 @@ impl Board {
         ];
     }
 
+    // NOTE: Mutable operations like this are basically awful and should be removed or made private.
     pub fn set_dfrc_idx(&mut self, scharnagl: usize) {
         #![allow(clippy::cast_possible_truncation)]
         assert!(scharnagl < 960 * 960, "double scharnagl index out of range");
         let white_backrank = Self::get_scharnagl_backrank(scharnagl % 960);
         let black_backrank = Self::get_scharnagl_backrank(scharnagl / 960);
+        self.rules = Rules::Chess960;
         self.reset();
         for (&piece_type, file) in white_backrank.iter().zip(File::all()) {
             let sq = Square::from_rank_file(Rank::One, file);
@@ -337,6 +362,7 @@ impl Board {
         out.map(Option::unwrap)
     }
 
+    // NOTE: Mutable operations like this are basically awful and should be removed or made private.
     pub fn set_from_fen(&mut self, fen: &Fen) {
         self.reset();
 
@@ -384,11 +410,11 @@ impl Board {
         }
     }
 
+    // NOTE: Mutable operations like this are basically awful and should be removed or made private.
     pub fn set_startpos(&mut self) {
-        let starting_fen = if CHESS960.load(Ordering::SeqCst) {
-            Self::STARTING_FEN_960
-        } else {
-            Self::STARTING_FEN
+        let starting_fen = match self.rules {
+            Rules::Classical => Self::STARTING_FEN,
+            Rules::Chess960 => Self::STARTING_FEN_960,
         };
         let fen = Fen::parse(starting_fen).expect("STARTING_FEN is broken");
         self.set_from_fen(&fen);
@@ -418,7 +444,7 @@ impl Board {
     }
 
     pub fn startpos() -> Self {
-        let mut out = Self::empty();
+        let mut out = Self::empty(Rules::Classical);
         out.set_startpos();
         out
     }
@@ -426,21 +452,26 @@ impl Board {
     #[cfg(test)]
     pub fn from_fen(fen: &str) -> Result<Self, crate::errors::FenParseError> {
         let parsed = Fen::parse_relaxed(fen)?;
-        let mut out = Self::empty();
+        // interpret rights to generate mode:
+        let rules = if parsed.castling.is_nonclassical() {
+            Rules::Chess960
+        } else {
+            Rules::Classical
+        };
+        let mut out = Self::empty(rules);
         out.set_from_fen(&parsed);
         Ok(out)
     }
 
-    #[cfg(test)]
     pub fn from_frc_idx(scharnagl: usize) -> Self {
-        let mut out = Self::empty();
+        let mut out = Self::empty(Rules::Chess960);
         out.set_frc_idx(scharnagl);
         out
     }
 
     #[cfg(test)]
     pub fn from_dfrc_idx(scharnagl: usize) -> Self {
-        let mut out = Self::empty();
+        let mut out = Self::empty(Rules::Chess960);
         out.set_dfrc_idx(scharnagl);
         out
     }
@@ -448,7 +479,13 @@ impl Board {
     #[cfg(test)]
     pub fn from_quick(record: &str) -> Result<Self, crate::errors::QuickParseError> {
         let parsed = Quick::parse(record.trim_ascii())?;
-        let mut out = Self::empty();
+        // interpret rights to generate mode:
+        let rules = if parsed.rights.is_nonclassical() {
+            Rules::Chess960
+        } else {
+            Rules::Classical
+        };
+        let mut out = Self::empty(rules);
         out.set_from_quick(&parsed);
         Ok(out)
     }
@@ -616,7 +653,7 @@ impl Board {
         debug_assert!(
             self.is_pseudo_legal(m),
             "got {} in position: {}",
-            m.display(true),
+            m.display(self.rules),
             self
         );
 
@@ -639,8 +676,7 @@ impl Board {
             let king_to = m.history_to_square();
             // TODO: determine necessity of first conditional component
             return !(self.state.threats.all.contains_square(king_to)
-                || CHESS960.load(Ordering::Relaxed)
-                    && self.state.pinned[turn].contains_square(to));
+                || self.rules == Rules::Chess960 && self.state.pinned[turn].contains_square(to));
         } else if m.is_ep() {
             let rank = to.rank();
             let file = to.file();
@@ -1150,12 +1186,10 @@ impl Board {
             File::from_index(san_bytes[2] - b'a').ok_or(Unknown)?,
         );
 
-        let frc_cleanup = !CHESS960.load(Ordering::Relaxed);
-
         self.legal_moves()
             .into_iter()
             .find(|&m| {
-                let m_to = if frc_cleanup && m.is_castle() {
+                let m_to = if self.rules == Rules::Classical && m.is_castle() {
                     // if we're in normal UCI mode, we'll rework our castling moves into the
                     // standard format.
                     match m.to() {
@@ -1192,6 +1226,7 @@ impl Board {
             side: *side,
             ply: *ply,
             height: *height,
+            rules: self.rules,
             history: Vec::new(),
         };
         playout.make_move_simple(m);
@@ -1553,8 +1588,7 @@ impl std::fmt::UpperHex for Board {
 #[cfg(test)]
 mod tests {
     use crate::chess::{
-        CHESS960,
-        board::Board,
+        board::{Board, Rules},
         chessmove::{Move, MoveFlags},
         types::Square,
     };
@@ -1642,7 +1676,8 @@ mod tests {
     fn scharnagl_full_works() {
         #![allow(clippy::similar_names)]
         use super::Board;
-        let normal = Board::from_fen(Board::STARTING_FEN).unwrap();
+        let mut normal = Board::empty(Rules::Chess960);
+        normal.set_startpos();
         let frc = Board::from_frc_idx(518);
         let dfrc = Board::from_dfrc_idx(518 * 960 + 518);
         assert_eq!(normal, frc);
@@ -1811,9 +1846,9 @@ mod tests {
 
     #[test]
     fn can_make_swap_castle() {
-        CHESS960.store(true, std::sync::atomic::Ordering::Relaxed);
         let mut board =
             Board::from_fen("b1q1rrkb/pppppppp/3nn3/8/P7/1PPP4/4PPPP/BQNNRKRB w GE - 1 9").unwrap();
+
         let castle_move = Move::new_with_flags(Square::F1, Square::G1, MoveFlags::Castle);
 
         assert!(board.is_pseudo_legal(castle_move));

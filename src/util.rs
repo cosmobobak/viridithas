@@ -5,12 +5,12 @@ use std::{
 
 use crate::evaluation::MATE_SCORE;
 
-pub const BOARD_N_SQUARES: usize = 64;
 pub const MAX_DEPTH: usize = 128;
 pub const INFINITY: i32 = MATE_SCORE + 1;
 pub const VALUE_NONE: i32 = INFINITY + 1;
 pub const MEGABYTE: usize = 1024 * 1024;
 
+/// A flushing atomic counter to reduce contention.
 #[derive(Debug, Clone, Copy)]
 pub struct BatchedAtomicCounter<'a> {
     buffer: u64,
@@ -29,6 +29,8 @@ impl<'a> BatchedAtomicCounter<'a> {
         }
     }
 
+    /// Add one to the local counter.
+    /// Flushes to the global counter every `BatchedAtomicCounter::GRANULARITY` calls.
     pub fn increment(&mut self) {
         self.buffer += 1;
         if self.buffer >= Self::GRANULARITY {
@@ -56,6 +58,7 @@ impl<'a> BatchedAtomicCounter<'a> {
         self.local = 0;
     }
 
+    /// Whether all local increments have been published globally.
     pub const fn just_ticked_over(&self) -> bool {
         self.buffer == 0
     }
@@ -67,37 +70,19 @@ impl<'a> BatchedAtomicCounter<'a> {
     }
 }
 
-/// Polyfill for backwards compatibility with old rust compilers.
-#[inline]
-pub const fn from_ref<T>(r: &T) -> *const T
-where
-    T: ?Sized,
-{
-    r
-}
-
-/// Polyfill for backwards compatibility with old rust compilers.
-#[inline]
-pub fn from_mut<T>(r: &mut T) -> *mut T
-where
-    T: ?Sized,
-{
-    r
-}
-
-/// A 64-byte aligned wrapper type for data that needs to be aligned to 64 bytes.
+/// A transparent wrapper that aligns its contents to 64 bytes.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[repr(C, align(64))]
-pub struct Align64<T: ?Sized>(pub T);
+pub struct Align<T: ?Sized>(pub T);
 
-impl<T, const SIZE: usize> Deref for Align64<[T; SIZE]> {
+impl<T, const SIZE: usize> Deref for Align<[T; SIZE]> {
     type Target = [T; SIZE];
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<T, const SIZE: usize> DerefMut for Align64<[T; SIZE]> {
+impl<T, const SIZE: usize> DerefMut for Align<[T; SIZE]> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }

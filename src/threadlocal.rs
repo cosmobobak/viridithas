@@ -15,10 +15,10 @@ use crate::{
     },
     nnue::{self, network::NNUEParams},
     search::pv::PVariation,
-    searchinfo::SearchInfo,
-    stack::StackEntry,
+    searchinfo::{Control, SearchInfo},
+    stack::StackFrame,
     threadpool::{self, ScopeExt},
-    transpositiontable::TTView,
+    transpositiontable::CacheView,
     util::MAX_DEPTH,
 };
 
@@ -26,7 +26,7 @@ use crate::{
 pub struct ThreadData<'a> {
     // stack array is right-padded by one because singular verification
     // will try to access the next ply in an edge case.
-    pub ss: [StackEntry; MAX_DEPTH + 1],
+    pub ss: [StackFrame; MAX_DEPTH + 1],
     pub banned_nmp: u8,
     pub nnue: Box<nnue::network::NNUEState>,
     pub nnue_params: &'static NNUEParams,
@@ -56,7 +56,7 @@ pub struct ThreadData<'a> {
     pub stm_at_root: Colour,
     pub optimism: [i32; 2],
 
-    pub tt: TTView<'a>,
+    pub cache: CacheView<'a>,
 
     pub board: Board,
     pub info: SearchInfo<'a>,
@@ -66,17 +66,19 @@ impl<'a> ThreadData<'a> {
     const WHITE_BANNED_NMP: u8 = 0b01;
     const BLACK_BANNED_NMP: u8 = 0b10;
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         thread_id: usize,
         board: Board,
-        tt: TTView<'a>,
+        cache: CacheView<'a>,
         nnue_params: &'static NNUEParams,
         stopped: &'a AtomicBool,
         nodes: &'a AtomicU64,
         tbhits: &'a AtomicU64,
+        control: &'a Control,
     ) -> Self {
         let mut td = Self {
-            ss: array::from_fn(|_| StackEntry::default()),
+            ss: array::from_fn(|_| StackFrame::default()),
             banned_nmp: 0,
             nnue: nnue::network::NNUEState::new(&board, nnue_params),
             nnue_params,
@@ -107,9 +109,9 @@ impl<'a> ThreadData<'a> {
             root_depth: 0,
             stm_at_root: board.turn(),
             optimism: [0; 2],
-            tt,
+            cache,
             board,
-            info: SearchInfo::new(stopped, nodes, tbhits),
+            info: SearchInfo::new(stopped, nodes, tbhits, control),
         };
 
         td.clear_tables();
@@ -188,13 +190,15 @@ impl<'a> ThreadData<'a> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn make_thread_data<'a>(
     pos: &Board,
-    tt: TTView<'a>,
+    cache: CacheView<'a>,
     nnue_params: &'static NNUEParams,
     stopped: &'a AtomicBool,
     nodes: &'a AtomicU64,
     tbhits: &'a AtomicU64,
+    control: &'a Control,
     worker_threads: &[threadpool::WorkerThread],
 ) -> anyhow::Result<Vec1<Box<ThreadData<'a>>>> {
     std::thread::scope(|s| -> anyhow::Result<Vec1<Box<ThreadData>>> {
@@ -209,11 +213,12 @@ pub fn make_thread_data<'a>(
                         tx.send(Box::new(ThreadData::new(
                             thread_id,
                             pos.clone(),
-                            tt,
+                            cache,
                             nnue_params,
                             stopped,
                             nodes,
                             tbhits,
+                            control,
                         )))
                         .unwrap();
                     },
