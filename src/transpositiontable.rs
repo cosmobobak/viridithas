@@ -166,12 +166,6 @@ struct TTClusterMemory {
     memory: [AtomicU64; 4],
 }
 
-#[repr(C, align(32))]
-struct TTCluster {
-    entries: [TTEntry; 3],
-    padding: [u8; 2],
-}
-
 impl TTClusterMemory {
     pub fn load(&self) -> TTCluster {
         let a = self.memory[0].load(Ordering::Relaxed);
@@ -203,6 +197,18 @@ const _CLUSTER_SIZE: () = assert!(
     size_of::<TTClusterMemory>() == 32,
     "TT Cluster size is suboptimal."
 );
+
+#[repr(C, align(32))]
+struct TTCluster {
+    entries: [TTEntry; 3],
+    coherer: u16,
+}
+
+impl TTCluster {
+    pub fn checksum(&self) -> u16 {
+        self.entries[0].key ^ self.entries[1].key ^ self.entries[2].key
+    }
+}
 
 #[derive(Debug)]
 pub struct TT {
@@ -397,6 +403,7 @@ impl TTView<'_> {
                 evaluation: eval.try_into().expect("eval with value outwith i16"),
             };
             cluster.entries[idx] = write;
+            cluster.coherer = cluster.checksum();
             self.table[cluster_index].store(cluster);
         }
     }
@@ -406,6 +413,10 @@ impl TTView<'_> {
         let key = TT::pack_key(key);
 
         let cluster = self.table[index].load();
+
+        if cluster.checksum() != cluster.coherer {
+            return None;
+        }
 
         for entry in cluster.entries {
             if entry.key != key {
