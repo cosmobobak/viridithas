@@ -110,7 +110,6 @@ pub fn main_loop() -> Result<(), UciError> {
         let input = line.trim();
 
         let res: Result<(), UciError> = match input {
-            "\n" => continue,
             "uci" => {
                 #[cfg(feature = "tuning")]
                 print_uci_response(&thread_data[0].info, true);
@@ -201,10 +200,13 @@ pub fn main_loop() -> Result<(), UciError> {
                     hash_mb: cache.size() / MEGABYTE,
                     threads: thread_data.len(),
                 };
+                let hash_before = pre_config.hash_mb;
                 let threads_before = thread_data.len();
                 match parse_setoption(input, pre_config) {
                     Ok(conf) => {
-                        if threads_before != conf.threads {
+                        let hash_changed = hash_before != conf.hash_mb;
+                        let threads_changed = threads_before != conf.threads;
+                        if threads_changed {
                             println!(
                                 "info string changing threads from {threads_before} to {}",
                                 conf.threads
@@ -214,22 +216,24 @@ pub fn main_loop() -> Result<(), UciError> {
                                 .for_each(threadpool::WorkerThread::join);
                             worker_threads = threadpool::make_worker_threads(conf.threads);
                         }
-                        let new_size = conf.hash_mb * MEGABYTE;
-                        let pos = thread_data[0].board.clone();
-                        // drop all the thread_data, as they are borrowing the old tt
-                        std::mem::drop(thread_data);
-                        cache.resize(new_size, &worker_threads);
-                        // recreate the thread_data with the new tt
-                        thread_data = make_thread_data(
-                            &pos,
-                            cache.view(),
-                            nnue_params,
-                            &stopped,
-                            &nodes,
-                            &tbhits,
-                            &worker_threads,
-                        )
-                        .map_err(|e| UciError::NnueInit(e.to_string()))?;
+                        if hash_changed || threads_changed {
+                            let pos = thread_data[0].board.clone();
+                            // Drop all thread data before resizing, as they borrow the old TT.
+                            std::mem::drop(thread_data);
+                            if hash_changed {
+                                cache.resize(conf.hash_mb * MEGABYTE, &worker_threads);
+                            }
+                            thread_data = make_thread_data(
+                                &pos,
+                                cache.view(),
+                                nnue_params,
+                                &stopped,
+                                &nodes,
+                                &tbhits,
+                                &worker_threads,
+                            )
+                            .map_err(|e| UciError::NnueInit(e.to_string()))?;
+                        }
 
                         for t in &mut thread_data {
                             t.info.conf = conf.search_config.clone();

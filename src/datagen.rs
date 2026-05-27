@@ -43,7 +43,7 @@ use crate::{
     threadlocal::make_thread_data,
     threadpool,
     timemgmt::{SearchLimit, TimeManager},
-    transpositiontable::TT,
+    transpositiontable::Cache,
     util::MEGABYTE,
 };
 
@@ -425,7 +425,7 @@ fn generate_on_thread<'a>(
     // search is tuned around each move in the game being
     // two ply forward from the previous move, so this is
     // prudent just from a robustness perspective.
-    let mut tts = [TT::new(), TT::new()];
+    let mut tts = [Cache::new(), Cache::new()];
     tts[Colour::White].resize(4 * MEGABYTE, from_ref(&worker_thread));
     tts[Colour::Black].resize(4 * MEGABYTE, from_ref(&worker_thread));
     let stopped = AtomicBool::new(false);
