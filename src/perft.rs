@@ -8,7 +8,7 @@ use std::{
 use anyhow::{Context, bail};
 
 use crate::chess::{
-    board::{Board, movegen::MoveList},
+    board::{Board, Rules, movegen::MoveList},
     fen::Fen,
 };
 
@@ -111,7 +111,7 @@ pub fn gamut() -> anyhow::Result<()> {
     println!("running perft on perftsuite.epd");
     let f = File::open("assets/epds/perftsuite.epd")
         .with_context(|| "Failed to open assets/epds/perftsuite.epd")?;
-    let mut pos = Board::empty();
+    let mut pos = Board::empty(Rules::Classical);
     for line in BufReader::new(f).lines() {
         let line = line?;
         let mut parts = line.split(';');
@@ -141,8 +141,7 @@ pub fn gamut() -> anyhow::Result<()> {
     // open frcperftsuite.epd
     println!("running perft on frcperftsuite.epd");
     let f = File::open("assets/epds/frcperftsuite.epd").unwrap();
-    let mut pos = Board::empty();
-    pos.set_chess960(true);
+    let mut pos = Board::empty(Rules::Chess960);
     for line in BufReader::new(f).lines() {
         let line = line.unwrap();
         let mut parts = line.split(';');
@@ -192,7 +191,7 @@ mod tests {
         assert_eq!(perft(&mut pos, 1), 48, "got {}", {
             pos.legal_moves()
                 .into_iter()
-                .map(|m| m.display(pos.chess960()).to_string())
+                .map(|m| m.display(pos.rules()).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -205,12 +204,11 @@ mod tests {
     fn perft_start_position() {
         use super::*;
 
-        let mut pos = Board::empty();
-        pos.set_startpos();
+        let mut pos = Board::startpos();
         assert_eq!(perft(&mut pos, 1), 20, "got {}", {
             pos.legal_moves()
                 .into_iter()
-                .map(|m| m.display(pos.chess960()).to_string())
+                .map(|m| m.display(pos.rules()).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -245,7 +243,7 @@ mod tests {
             t.board
                 .legal_moves()
                 .into_iter()
-                .map(|m| m.display(t.board.chess960()).to_string())
+                .map(|m| m.display(t.board.rules()).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -281,7 +279,7 @@ mod tests {
             t.board
                 .legal_moves()
                 .into_iter()
-                .map(|m| m.display(t.board.chess960()).to_string())
+                .map(|m| m.display(t.board.rules()).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -319,7 +317,7 @@ mod tests {
             t.board
                 .legal_moves()
                 .into_iter()
-                .map(|m| m.display(t.board.chess960()).to_string())
+                .map(|m| m.display(t.board.rules()).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -356,7 +354,7 @@ mod tests {
             t.board
                 .legal_moves()
                 .into_iter()
-                .map(|m| m.display(t.board.chess960()).to_string())
+                .map(|m| m.display(t.board.rules()).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -392,7 +390,7 @@ mod tests {
             t.board
                 .legal_moves()
                 .into_iter()
-                .map(|m| m.display(t.board.chess960()).to_string())
+                .map(|m| m.display(t.board.rules()).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -408,7 +406,7 @@ mod tests {
         assert_eq!(perft(&mut pos, 1), 3, "got {}", {
             pos.legal_moves()
                 .into_iter()
-                .map(|m| m.display(pos.chess960()).to_string())
+                .map(|m| m.display(pos.rules()).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -418,8 +416,7 @@ mod tests {
     fn simple_move_undoability() {
         use super::*;
 
-        let mut pos = Board::empty();
-        pos.set_startpos();
+        let mut pos = Board::startpos();
         let e4 = Move::new(Square::E2, Square::E4);
         let piece_layout_before = pos.state.bbs;
         println!("{piece_layout_before}");

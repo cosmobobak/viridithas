@@ -201,6 +201,7 @@ pub fn main_loop() -> Result<(), UciError> {
                 };
                 let hash_before = pre_config.hash_mb;
                 let threads_before = thread_data.len();
+                let chess960_before = control.chess960.load(Ordering::Relaxed);
                 match parse_setoption(input, pre_config, &control) {
                     Ok(conf) => {
                         let hash_changed = hash_before != conf.hash_mb;
@@ -239,8 +240,21 @@ pub fn main_loop() -> Result<(), UciError> {
                             t.info.conf = conf.search_config.clone();
                             t.info.lm_table = LMTable::new(&t.info.conf);
                             t.info.set_stdin(&stdin);
-                            t.board
-                                .set_chess960(control.chess960.load(Ordering::SeqCst));
+                        }
+
+                        let chess960 = control.chess960.load(Ordering::Relaxed);
+                        if chess960 != chess960_before {
+                            if chess960 {
+                                println!("info string Chess960 enabled, setting scharnagl #0");
+                                for t in &mut thread_data {
+                                    t.board = Board::from_frc_idx(0);
+                                }
+                            } else {
+                                println!("info string Chess960 disabled, setting startpos");
+                                for t in &mut thread_data {
+                                    t.board = Board::startpos();
+                                }
+                            }
                         }
 
                         Ok(())
@@ -1015,7 +1029,7 @@ fn divide_perft(depth: usize, pos: &mut Board) {
         pos.make_move_simple(m);
         let arm_nodes = perft::perft(pos, depth - 1);
         nodes += arm_nodes;
-        println!("{}: {arm_nodes}", m.display(pos.chess960()));
+        println!("{}: {arm_nodes}", m.display(pos.rules()));
         pos.unmake_move_base();
     }
     let elapsed = start_time.elapsed();

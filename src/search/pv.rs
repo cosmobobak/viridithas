@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 use arrayvec::ArrayVec;
 
+use crate::chess::board::Rules;
 use crate::chess::chessmove::Move;
 use crate::util::MAX_DEPTH;
 
@@ -35,14 +36,14 @@ impl PVariation {
             .expect("attempted to construct a PV longer than MAX_PLY.");
     }
 
-    pub const fn display(&self, chess960: bool) -> PVariationDisplay<'_> {
-        PVariationDisplay { pv: self, chess960 }
+    pub const fn display(&self, rules: Rules) -> PVariationDisplay<'_> {
+        PVariationDisplay { pv: self, rules }
     }
 }
 
 pub struct PVariationDisplay<'a> {
     pv: &'a PVariation,
-    chess960: bool,
+    rules: Rules,
 }
 
 impl Display for PVariationDisplay<'_> {
@@ -51,7 +52,7 @@ impl Display for PVariationDisplay<'_> {
             write!(f, "pv ")?;
         }
         for &m in self.pv.moves() {
-            write!(f, "{} ", m.display(self.chess960))?;
+            write!(f, "{} ", m.display(self.rules))?;
         }
         Ok(())
     }
@@ -59,6 +60,6 @@ impl Display for PVariationDisplay<'_> {
 
 impl Display for PVariation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.display(false).fmt(f)
+        self.display(Rules::Classical).fmt(f)
     }
 }

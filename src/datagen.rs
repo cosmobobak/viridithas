@@ -27,7 +27,7 @@ use rand::{Rng, rngs::ThreadRng, seq::IndexedRandom};
 
 use crate::{
     chess::{
-        board::{Board, DrawType, GameOutcome, WinType},
+        board::{Board, DrawType, GameOutcome, Rules, WinType},
         chessmove::Move,
         fen::Fen,
         piece::{Colour, PieceType},
@@ -459,6 +459,12 @@ fn generate_on_thread<'a>(
         .unwrap()
     });
 
+    let rules = if control.chess960.load(Ordering::Relaxed) {
+        Rules::Chess960
+    } else {
+        Rules::Classical
+    };
+
     let time_manager = TimeManager::default_with_limit(SearchLimit::SoftNodes {
         soft_limit: options.nodes,
         hard_limit: options.nodes * 8,
@@ -489,7 +495,7 @@ fn generate_on_thread<'a>(
         }
         // generate game
         // STEP 1: get the next starting position from the callback
-        let mut startpos = Board::empty();
+        let mut startpos = Board::empty(rules);
         match startpos_src.generate(&mut startpos, &conf) {
             ControlFlow::Break(()) => continue 'generation_main_loop,
             ControlFlow::Continue(()) => {}
@@ -948,7 +954,7 @@ pub fn run_topgn(
             let san = board.san(mv).with_context(|| {
                 format!(
                     "Failed to create SAN for move {} in position {board:X}.",
-                    mv.display(board.chess960())
+                    mv.display(board.rules())
                 )
             })?;
             if board.turn() == Colour::White {

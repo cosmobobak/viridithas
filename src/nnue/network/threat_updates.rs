@@ -626,7 +626,7 @@ mod tests {
     fn check_all_moves(fen: &str) {
         let board = Board::from_fen(fen).unwrap();
         for m in board.legal_moves() {
-            let uci = format!("{}", m.display(false));
+            let uci = format!("{}", m.display(board.rules()));
             check_move(fen, &uci);
         }
     }

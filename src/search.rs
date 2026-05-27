@@ -227,7 +227,7 @@ pub fn search_position(
         if thread_headers[0].info.print_to_stdout {
             println!(
                 "bestmove {}",
-                best_move.display(thread_headers[0].board.chess960())
+                best_move.display(thread_headers[0].board.rules())
             );
         }
         return (score, Some(best_move));
@@ -286,12 +286,12 @@ pub fn search_position(
         let maybe_ponder = pv.moves().get(1).map_or_else(String::new, |ponder_move| {
             format!(
                 " ponder {}",
-                ponder_move.display(thread_headers[0].board.chess960())
+                ponder_move.display(thread_headers[0].board.rules())
             )
         });
         println!(
             "bestmove {}{maybe_ponder}",
-            best_move.display(thread_headers[0].board.chess960())
+            best_move.display(thread_headers[0].board.rules())
         );
         #[cfg(feature = "stats")]
         {
@@ -2074,7 +2074,7 @@ fn readout_info(
             hashfull = tt.hashfull(),
             tbhits = t.info.tbhits.get_global(),
             wdl = uci::fmt::format_wdl(pv.score, board.ply()),
-            pv = pv.display(board.chess960()),
+            pv = pv.display(board.rules()),
         );
     } else {
         let value = uci::fmt::pretty_format_score(pv.score, board.turn());

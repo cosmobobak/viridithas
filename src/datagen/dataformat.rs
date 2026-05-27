@@ -430,8 +430,7 @@ mod tests {
         }
         // Grab `valid.sfens` from `cozy-chess` to run test
         for sfen in include_str!("valid.sfens").lines() {
-            let mut board = Board::from_fen(sfen).unwrap();
-            board.set_chess960(true);
+            let board = Board::from_fen(sfen).unwrap();
             let packed = marlinformat::PackedBoard::pack(&board, 0, 0, 0);
             let (unpacked, _, _, _) = packed.unpack();
             check_eq(&board, &unpacked, sfen);
