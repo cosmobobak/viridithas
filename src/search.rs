@@ -423,7 +423,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
         if ThTy::MAIN_THREAD {
             readout_info(t, &t.info, Bound::Exact, t.info.nodes.get_global(), false);
 
-            if let Some(margin) = t.info.clock.check_for_forced_move(t.root_depth) {
+            if let Some(margin) = t.info.clock.forcedness_margin(t.root_depth) {
                 let saved_seldepth = t.info.seldepth;
                 let forced = is_forced(
                     margin,
