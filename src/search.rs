@@ -207,8 +207,10 @@ pub fn search_position(
 
     // Probe the tablebases if we're in a TB position and in a game.
     if thread_headers[0].info.clock.is_dynamic()
-        && let Some((best_move, score)) =
-            tablebases::probe::get_tablebase_move(&thread_headers[0].board)
+        && let Some((best_move, score)) = tablebases::probe::get_tablebase_move(
+            &thread_headers[0].board,
+            thread_headers[0].info.control,
+        )
     {
         let pv = &mut thread_headers[0].pvs[1];
         pv.load_from(best_move, &PVariation::new());
@@ -784,7 +786,7 @@ pub fn alpha_beta<NT: NodeType>(
         }
 
         // are we too deep?
-        let max_height = MAX_DEPTH.min(uci::GO_MATE_MAX_DEPTH.load(Ordering::SeqCst));
+        let max_height = MAX_DEPTH.min(t.info.control.go_mate_max_depth.load(Ordering::Relaxed));
         if height >= max_height {
             return if in_check {
                 0
@@ -857,13 +859,14 @@ pub fn alpha_beta<NT: NodeType>(
 
     // Probe the tablebases.
     let (mut syzygy_max, mut syzygy_min) = (MATE_SCORE, -MATE_SCORE);
-    let cardinality = u32::from(tablebases::probe::get_max_pieces_count());
+    let cardinality = u32::from(tablebases::probe::get_max_pieces_count(t.info.control));
     let n_men = t.board.state.bbs.occupied().count();
     if !NT::ROOT
         && excluded.is_none()
         && n_men <= cardinality
         && tablebases::probe::SYZYGY_ENABLED.load(Ordering::Relaxed)
-        && (depth >= uci::SYZYGY_PROBE_DEPTH.load(Ordering::Relaxed) || n_men < cardinality)
+        && (depth >= t.info.control.syzygy_probe_depth.load(Ordering::Relaxed)
+            || n_men < cardinality)
         && let Some(wdl) = tablebases::probe::get_wdl(&t.board)
     {
         t.info.tbhits.increment();
@@ -2053,7 +2056,7 @@ fn readout_info(
         ..
     } = t;
     let pv = t.pv();
-    let normal_uci_output = !uci::PRETTY_PRINT.load(Ordering::SeqCst);
+    let normal_uci_output = !info.control.pretty_print.load(Ordering::SeqCst);
     let nps = (nodes as f64 / info.clock.elapsed().as_secs_f64()) as u64;
     if board.turn() == Colour::Black {
         bound = bound.invert();
@@ -2125,7 +2128,7 @@ pub fn draw_score(t: &ThreadData, nodes: u64, stm: Colour) -> i32 {
     // higher contempt means we will play on in drawn positions more often,
     // so if we are to play in a drawn position, then we should return the
     // negative of the contempt score.
-    let contempt = uci::CONTEMPT.load(Ordering::Relaxed);
+    let contempt = t.info.control.contempt.load(Ordering::Relaxed);
     let contempt_component = if stm == t.stm_at_root {
         -contempt
     } else {

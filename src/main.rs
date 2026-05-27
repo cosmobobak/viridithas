@@ -64,7 +64,8 @@ fn main() -> anyhow::Result<()> {
             let stopped = std::sync::atomic::AtomicBool::new(false);
             let nodes = std::sync::atomic::AtomicU64::new(0);
             let tbhits = std::sync::atomic::AtomicU64::new(0);
-            let info = searchinfo::SearchInfo::new(&stopped, &nodes, &tbhits);
+            let control = searchinfo::Control::default();
+            let info = searchinfo::SearchInfo::new(&stopped, &nodes, &tbhits, &control);
             Ok(uci::bench(
                 "openbench",
                 &info.conf,

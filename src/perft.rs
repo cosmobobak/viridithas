@@ -179,6 +179,7 @@ mod tests {
     use crate::{
         chess::{CHESS960, chessmove::Move, piece::PieceType, types::Square},
         nnue::network::NNUEParams,
+        searchinfo::Control,
         threadpool,
         transpositiontable::Cache,
         util::MEGABYTE,
@@ -232,6 +233,7 @@ mod tests {
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
+        let control = Control::default();
         let mut t = ThreadData::new(
             0,
             Board::startpos(),
@@ -240,6 +242,7 @@ mod tests {
             &stopped,
             &nodes,
             &tbhits,
+            &control,
         );
         assert_eq!(nnue_perft(&mut t, 1), 20, "got {}", {
             t.board
@@ -266,7 +269,17 @@ mod tests {
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
-        let mut t = ThreadData::new(0, pos, cache.view(), nnue_params, &stopped, &nodes, &tbhits);
+        let control = Control::default();
+        let mut t = ThreadData::new(
+            0,
+            pos,
+            cache.view(),
+            nnue_params,
+            &stopped,
+            &nodes,
+            &tbhits,
+            &control,
+        );
         assert_eq!(movepicker_perft(&mut t, 1), 20, "got {}", {
             t.board
                 .legal_moves()
@@ -294,7 +307,17 @@ mod tests {
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
-        let mut t = ThreadData::new(0, pos, cache.view(), nnue_params, &stopped, &nodes, &tbhits);
+        let control = Control::default();
+        let mut t = ThreadData::new(
+            0,
+            pos,
+            cache.view(),
+            nnue_params,
+            &stopped,
+            &nodes,
+            &tbhits,
+            &control,
+        );
         assert_eq!(movepicker_perft(&mut t, 1), 48, "got {}", {
             t.board
                 .legal_moves()
@@ -321,7 +344,17 @@ mod tests {
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
-        let mut t = ThreadData::new(0, pos, cache.view(), nnue_params, &stopped, &nodes, &tbhits);
+        let control = Control::default();
+        let mut t = ThreadData::new(
+            0,
+            pos,
+            cache.view(),
+            nnue_params,
+            &stopped,
+            &nodes,
+            &tbhits,
+            &control,
+        );
         assert_eq!(movepicker_perft(&mut t, 1), 4, "got {}", {
             t.board
                 .legal_moves()
@@ -347,7 +380,17 @@ mod tests {
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
-        let mut t = ThreadData::new(0, pos, cache.view(), nnue_params, &stopped, &nodes, &tbhits);
+        let control = Control::default();
+        let mut t = ThreadData::new(
+            0,
+            pos,
+            cache.view(),
+            nnue_params,
+            &stopped,
+            &nodes,
+            &tbhits,
+            &control,
+        );
         assert_eq!(movepicker_perft(&mut t, 1), 8, "got {}", {
             t.board
                 .legal_moves()

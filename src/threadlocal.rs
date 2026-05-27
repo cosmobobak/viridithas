@@ -15,7 +15,7 @@ use crate::{
     },
     nnue::{self, network::NNUEParams},
     search::pv::PVariation,
-    searchinfo::SearchInfo,
+    searchinfo::{Control, SearchInfo},
     stack::StackEntry,
     threadpool::{self, ScopeExt},
     transpositiontable::CacheView,
@@ -66,6 +66,7 @@ impl<'a> ThreadData<'a> {
     const WHITE_BANNED_NMP: u8 = 0b01;
     const BLACK_BANNED_NMP: u8 = 0b10;
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         thread_id: usize,
         board: Board,
@@ -74,6 +75,7 @@ impl<'a> ThreadData<'a> {
         stopped: &'a AtomicBool,
         nodes: &'a AtomicU64,
         tbhits: &'a AtomicU64,
+        control: &'a Control,
     ) -> Self {
         let mut td = Self {
             ss: array::from_fn(|_| StackEntry::default()),
@@ -109,7 +111,7 @@ impl<'a> ThreadData<'a> {
             optimism: [0; 2],
             cache,
             board,
-            info: SearchInfo::new(stopped, nodes, tbhits),
+            info: SearchInfo::new(stopped, nodes, tbhits, control),
         };
 
         td.clear_tables();
@@ -188,6 +190,7 @@ impl<'a> ThreadData<'a> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn make_thread_data<'a>(
     pos: &Board,
     cache: CacheView<'a>,
@@ -195,6 +198,7 @@ pub fn make_thread_data<'a>(
     stopped: &'a AtomicBool,
     nodes: &'a AtomicU64,
     tbhits: &'a AtomicU64,
+    control: &'a Control,
     worker_threads: &[threadpool::WorkerThread],
 ) -> anyhow::Result<Vec1<Box<ThreadData<'a>>>> {
     std::thread::scope(|s| -> anyhow::Result<Vec1<Box<ThreadData>>> {
@@ -214,6 +218,7 @@ pub fn make_thread_data<'a>(
                             stopped,
                             nodes,
                             tbhits,
+                            control,
                         )))
                         .unwrap();
                     },

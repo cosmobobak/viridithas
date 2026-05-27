@@ -38,6 +38,7 @@ use crate::{
     evaluation::{is_decisive, is_mate_score},
     nnue::network::{NNUEParams, NNUEState},
     search::{parameters::Config, search_position, static_exchange_eval},
+    searchinfo::Control,
     tablebases::probe::SYZYGY_ENABLED,
     tablebases::{self, probe::WDL},
     threadlocal::make_thread_data,
@@ -122,13 +123,13 @@ impl DataGenOptions {
     }
 
     /// Gives a summarised string representation of the options.
-    fn summary(&self) -> String {
+    fn summary(&self, control: &Control) -> String {
         format!(
             "{}g-{}t-{}-{}-n{}{}",
             self.num_games,
             self.num_threads,
             if self.tablebases_path.is_some() {
-                format!("tb{}", tablebases::probe::get_max_pieces_count())
+                format!("tb{}", tablebases::probe::get_max_pieces_count(control))
             } else {
                 "no_tb".into()
             },
@@ -269,6 +270,7 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
     .with_context(|| "Failed to set Ctrl-C handler")?;
 
     let nnue_params = NNUEParams::decompress_and_alloc()?;
+    let control = Control::default();
 
     let options: DataGenOptions = cli_config.build();
 
@@ -299,7 +301,7 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
     let run_id = format!(
         "run_{}_{}",
         chrono::Utc::now().format("%Y-%m-%d_%H-%M-%S"),
-        options.summary()
+        options.summary(&control)
     );
     println!("This run will be saved to the directory \"data/{run_id}\"");
     println!("Each thread will save its data to a separate file in this directory.");
@@ -326,6 +328,7 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
                 let opt_ref = &options;
                 let path_ref = &data_dir;
                 let nnue_params_ref = &nnue_params;
+                let control_ref = &control;
                 s.spawn(move || {
                     // this rng is different between each thread
                     // (https://rust-random.github.io/book/guide-parallel.html)
@@ -342,7 +345,14 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
                     } else {
                         Box::new(ClassicalStartposGenerator { rng }) as Box<_>
                     };
-                    generate_on_thread(id, opt_ref, path_ref, nnue_params_ref, startpos_src)
+                    generate_on_thread(
+                        id,
+                        opt_ref,
+                        path_ref,
+                        nnue_params_ref,
+                        control_ref,
+                        startpos_src,
+                    )
                 })
             })
             .collect::<Vec<_>>();
@@ -402,6 +412,7 @@ fn generate_on_thread<'a>(
     options: &DataGenOptions,
     data_dir: &Path,
     nnue_params: &'static NNUEParams,
+    control: &'a Control,
     mut startpos_src: Box<dyn StartposGenerator + 'a>,
 ) -> anyhow::Result<HashMap<GameOutcome, u64>> {
     // Datagen uses the default configuration:
@@ -439,6 +450,7 @@ fn generate_on_thread<'a>(
             &stopped,
             &nodes,
             &tbhits,
+            control,
             from_ref(&worker_thread),
         )
         .unwrap()

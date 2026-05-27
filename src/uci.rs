@@ -11,8 +11,8 @@ pub mod fmt;
 use std::{
     io::Write as _,
     sync::{
-        Mutex, Once,
-        atomic::{self, AtomicBool, AtomicI32, AtomicU8, AtomicU64, AtomicUsize, Ordering},
+        Arc, Mutex, Once,
+        atomic::{self, AtomicBool, AtomicU64, Ordering},
         mpsc,
     },
     time::Instant,
@@ -37,7 +37,7 @@ use crate::{
     nnue::{self, network::NNUEParams},
     perft,
     search::{LMTable, adj_shuffle, parameters::Config, search_position},
-    searchinfo::SearchInfo,
+    searchinfo::{Control, SearchInfo},
     tablebases, term,
     threadlocal::{ThreadData, make_thread_data},
     threadpool,
@@ -57,13 +57,6 @@ const BENCH_THREADS: usize = 1;
 
 static SET_TERM: Once = Once::new();
 static STDIN_READER_THREAD_KEEP_RUNNING: AtomicBool = AtomicBool::new(true);
-pub static QUIT: AtomicBool = AtomicBool::new(false);
-pub static GO_MATE_MAX_DEPTH: AtomicUsize = AtomicUsize::new(MAX_DEPTH);
-pub static PRETTY_PRINT: AtomicBool = AtomicBool::new(true);
-pub static SYZYGY_PROBE_LIMIT: AtomicU8 = AtomicU8::new(7);
-pub static SYZYGY_PROBE_DEPTH: AtomicI32 = AtomicI32::new(1);
-pub static CONTEMPT: AtomicI32 = AtomicI32::new(0);
-
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub fn main_loop() -> Result<(), UciError> {
     let version_extension = if cfg!(feature = "final-release") {
@@ -78,10 +71,11 @@ pub fn main_loop() -> Result<(), UciError> {
     let mut cache = Cache::new();
     cache.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE, &worker_threads); // default hash size
 
+    let control = Arc::new(Control::default());
     let nnue_params =
         NNUEParams::decompress_and_alloc().map_err(|e| UciError::NnueInit(e.to_string()))?;
 
-    let (stdin, stdin_reader_handle) = stdin_reader()?;
+    let (stdin, stdin_reader_handle) = stdin_reader(Arc::clone(&control))?;
     let stdin = Mutex::new(stdin);
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
@@ -93,6 +87,7 @@ pub fn main_loop() -> Result<(), UciError> {
         &stopped,
         &nodes,
         &tbhits,
+        &control,
         &worker_threads,
     )
     .map_err(|e| UciError::NnueInit(e.to_string()))?;
@@ -115,28 +110,32 @@ pub fn main_loop() -> Result<(), UciError> {
                 print_uci_response(&thread_data[0].info, true);
                 #[cfg(not(feature = "tuning"))]
                 print_uci_response(&thread_data[0].info, false);
-                PRETTY_PRINT.store(false, Ordering::SeqCst);
+                control.pretty_print.store(false, Ordering::SeqCst);
                 Ok(())
             }
             "ucifull" => {
                 print_uci_response(&thread_data[0].info, true);
-                PRETTY_PRINT.store(false, Ordering::SeqCst);
+                control.pretty_print.store(false, Ordering::SeqCst);
                 Ok(())
             }
             arg @ ("ucidump" | "ucidumpfull") => {
                 // dump the values of the current UCI options
                 println!("Hash: {}", cache.size() / MEGABYTE);
                 println!("Threads: {}", thread_data.len());
-                println!("PrettyPrint: {}", PRETTY_PRINT.load(Ordering::SeqCst));
+                println!(
+                    "PrettyPrint: {}",
+                    control.pretty_print.load(Ordering::SeqCst)
+                );
+                println!("Ponder: {}", control.ponder.load(Ordering::SeqCst));
                 println!(
                     "SyzygyProbeLimit: {}",
-                    SYZYGY_PROBE_LIMIT.load(Ordering::SeqCst)
+                    control.syzygy_probe_limit.load(Ordering::SeqCst)
                 );
                 println!(
                     "SyzygyProbeDepth: {}",
-                    SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst)
+                    control.syzygy_probe_depth.load(Ordering::SeqCst)
                 );
-                println!("Contempt: {}", CONTEMPT.load(Ordering::SeqCst));
+                println!("Contempt: {}", control.contempt.load(Ordering::SeqCst));
                 if arg == "ucidumpfull" {
                     for (id, default) in Config::default().ids_with_values() {
                         println!("{id}: {default}");
@@ -149,7 +148,7 @@ pub fn main_loop() -> Result<(), UciError> {
                 Ok(())
             }
             "quit" => {
-                QUIT.store(true, Ordering::SeqCst);
+                control.quit.store(true, Ordering::SeqCst);
                 break;
             }
             "ucinewgame" => do_newgame(&cache, &mut thread_data, &worker_threads),
@@ -202,7 +201,7 @@ pub fn main_loop() -> Result<(), UciError> {
                 };
                 let hash_before = pre_config.hash_mb;
                 let threads_before = thread_data.len();
-                match parse_setoption(input, pre_config) {
+                match parse_setoption(input, pre_config, &control) {
                     Ok(conf) => {
                         let hash_changed = hash_before != conf.hash_mb;
                         let threads_changed = threads_before != conf.threads;
@@ -230,6 +229,7 @@ pub fn main_loop() -> Result<(), UciError> {
                                 &stopped,
                                 &nodes,
                                 &tbhits,
+                                &control,
                                 &worker_threads,
                             )
                             .map_err(|e| UciError::NnueInit(e.to_string()))?;
@@ -262,13 +262,13 @@ pub fn main_loop() -> Result<(), UciError> {
                 thread_data[0].info.clock.start();
 
                 // if we're in pretty-printing mode, set the terminal properly:
-                if PRETTY_PRINT.load(Ordering::SeqCst) {
+                if control.pretty_print.load(Ordering::SeqCst) {
                     SET_TERM.call_once(|| {
                         term::set_mode_uci();
                     });
                 }
 
-                match parse_go(input, thread_data[0].board.turn()) {
+                match parse_go(input, thread_data[0].board.turn(), &control) {
                     Ok(search_limit) => {
                         thread_data[0].info.clock.set_limit(search_limit);
                         cache.increase_age();
@@ -355,7 +355,7 @@ pub fn main_loop() -> Result<(), UciError> {
             eprintln!("info string {e}");
         }
 
-        if QUIT.load(Ordering::SeqCst) {
+        if control.quit.load(Ordering::SeqCst) {
             // quit can be set true in parse_go
             break;
         }
@@ -451,7 +451,7 @@ fn parse_position(text: &str, pos: &mut Board) -> Result<(), PositionParseError>
     Ok(())
 }
 
-fn parse_go(text: &str, stm: Colour) -> Result<SearchLimit, GoParseError> {
+fn parse_go(text: &str, stm: Colour, control: &Control) -> Result<SearchLimit, GoParseError> {
     #![allow(clippy::too_many_lines)]
 
     let mut depth: Option<usize> = None;
@@ -480,7 +480,7 @@ fn parse_go(text: &str, stm: Colour) -> Result<SearchLimit, GoParseError> {
             "mate" => {
                 let mate_distance: usize = go_part_parse("mate", parts.next())?;
                 let ply = mate_distance * 2; // gives padding when we're giving mate, but whatever
-                GO_MATE_MAX_DEPTH.store(ply, Ordering::SeqCst);
+                control.go_mate_max_depth.store(ply, Ordering::SeqCst);
                 limit = SearchLimit::Mate { ply };
             }
             "nodes" => nodes = Some(go_part_parse("nodes", parts.next())?),
@@ -489,7 +489,7 @@ fn parse_go(text: &str, stm: Colour) -> Result<SearchLimit, GoParseError> {
         }
     }
     if !matches!(limit, SearchLimit::Mate { .. }) {
-        GO_MATE_MAX_DEPTH.store(MAX_DEPTH, Ordering::SeqCst);
+        control.go_mate_max_depth.store(MAX_DEPTH, Ordering::SeqCst);
     }
 
     if let Some(movetime) = movetime {
@@ -583,7 +583,11 @@ struct SetOptions {
 }
 
 #[allow(clippy::too_many_lines)]
-fn parse_setoption(text: &str, pre_config: SetOptions) -> Result<SetOptions, SetOptionParseError> {
+fn parse_setoption(
+    text: &str,
+    pre_config: SetOptions,
+    control: &Control,
+) -> Result<SetOptions, SetOptionParseError> {
     let mut parts = text.split_ascii_whitespace();
     // Skip "setoption"
     let _ = parts.next();
@@ -675,7 +679,17 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> Result<SetOptions, Set
                         name: "PrettyPrint".to_string(),
                         source: e,
                     })?;
-            PRETTY_PRINT.store(value, Ordering::SeqCst);
+            control.pretty_print.store(value, Ordering::SeqCst);
+        }
+        "Ponder" => {
+            let value: bool =
+                opt_value
+                    .parse()
+                    .map_err(|e| SetOptionParseError::InvalidBoolValue {
+                        name: "Ponder".to_string(),
+                        source: e,
+                    })?;
+            control.ponder.store(value, Ordering::SeqCst);
         }
         "SyzygyPath" => {
             let path = opt_value.to_string();
@@ -697,7 +711,7 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> Result<SetOptions, Set
                     got: i64::from(value),
                 });
             }
-            SYZYGY_PROBE_LIMIT.store(value, Ordering::SeqCst);
+            control.syzygy_probe_limit.store(value, Ordering::SeqCst);
         }
         "SyzygyProbeDepth" => {
             let value: i32 =
@@ -715,7 +729,7 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> Result<SetOptions, Set
                     got: i64::from(value),
                 });
             }
-            SYZYGY_PROBE_DEPTH.store(value, Ordering::SeqCst);
+            control.syzygy_probe_depth.store(value, Ordering::SeqCst);
         }
         "Contempt" => {
             let value: i32 =
@@ -733,7 +747,7 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> Result<SetOptions, Set
                     got: i64::from(value),
                 });
             }
-            CONTEMPT.store(value, Ordering::SeqCst);
+            control.contempt.store(value, Ordering::SeqCst);
         }
         "UCI_Chess960" => {
             let val: bool =
@@ -757,15 +771,15 @@ type StdinReader = (
     std::thread::JoinHandle<Result<(), UciError>>,
 );
 
-fn stdin_reader() -> Result<StdinReader, std::io::Error> {
+fn stdin_reader(control: Arc<Control>) -> Result<StdinReader, std::io::Error> {
     let (sender, receiver) = mpsc::channel();
     let handle = std::thread::Builder::new()
         .name("stdin-reader".into())
-        .spawn(|| stdin_reader_worker(sender))?;
+        .spawn(move || stdin_reader_worker(sender, &control))?;
     Ok((receiver, handle))
 }
 
-fn stdin_reader_worker(sender: mpsc::Sender<String>) -> Result<(), UciError> {
+fn stdin_reader_worker(sender: mpsc::Sender<String>, control: &Control) -> Result<(), UciError> {
     let mut linebuf = String::with_capacity(128);
     while let Ok(bytes) = std::io::stdin().read_line(&mut linebuf) {
         if bytes == 0 {
@@ -773,7 +787,7 @@ fn stdin_reader_worker(sender: mpsc::Sender<String>) -> Result<(), UciError> {
             sender
                 .send("quit".into())
                 .map_err(|e| UciError::Thread(e.to_string()))?;
-            QUIT.store(true, Ordering::SeqCst);
+            control.quit.store(true, Ordering::SeqCst);
             break;
         }
         let cmd = linebuf.trim();
@@ -833,6 +847,7 @@ pub fn bench(
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
     let tbhits = AtomicU64::new(0);
+    let control = Control::default();
     let pool = threadpool::make_worker_threads(threads.unwrap_or(BENCH_THREADS));
     let mut cache = Cache::new();
     cache.resize(16 * MEGABYTE, &pool);
@@ -843,6 +858,7 @@ pub fn bench(
         &stopped,
         &nodes,
         &tbhits,
+        &control,
         &pool,
     )
     .map_err(|e| UciError::NnueInit(e.to_string()))?;
@@ -867,7 +883,7 @@ pub fn bench(
             t.nnue.reïnit_from(&t.board, nnue_params);
         }
         thread_data[0].info.clock.start();
-        let res = parse_go(&bench_string, thread_data[0].board.turn());
+        let res = parse_go(&bench_string, thread_data[0].board.turn(), &control);
         match res {
             Ok(limit) => thread_data[0].info.clock.set_limit(limit),
             Err(e) => {
@@ -938,6 +954,7 @@ pub fn go_benchmark(nnue_params: &'static NNUEParams) -> Result<(), UciError> {
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
     let tbhits = AtomicU64::new(0);
+    let control = Control::default();
     let pool = threadpool::make_worker_threads(THREADS);
     let mut cache = Cache::new();
     cache.resize(16 * MEGABYTE, &pool);
@@ -948,6 +965,7 @@ pub fn go_benchmark(nnue_params: &'static NNUEParams) -> Result<(), UciError> {
         &stopped,
         &nodes,
         &tbhits,
+        &control,
         &pool,
     )
     .map_err(|e| UciError::NnueInit(e.to_string()))?;
@@ -958,6 +976,7 @@ pub fn go_benchmark(nnue_params: &'static NNUEParams) -> Result<(), UciError> {
         let limit = parse_go(
             std::hint::black_box("go wtime 0 btime 0 winc 0 binc 0"),
             thread_data[0].board.turn(),
+            &control,
         )?;
         thread_data[0].info.clock.set_limit(limit);
         cache.increase_age();
