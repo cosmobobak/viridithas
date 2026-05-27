@@ -224,6 +224,7 @@ impl Debug for Move {
     }
 }
 
+#[cfg(test)]
 mod tests {
     #[test]
     fn test_simple_move() {

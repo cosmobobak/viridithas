@@ -75,6 +75,7 @@ pub static CASTLE_KEYS: [u64; 16] = init_hash_keys().2;
 pub const SIDE_KEY: u64 = init_hash_keys().3;
 pub static HM_CLOCK_KEYS: [u64; 256] = init_hash_keys().4;
 
+#[cfg(test)]
 mod tests {
     #[test]
     fn all_piece_keys_different() {

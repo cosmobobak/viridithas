@@ -168,6 +168,7 @@ pub fn gamut() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
 mod tests {
     #![allow(unused_imports)]
     use std::sync::atomic::{AtomicBool, AtomicU64};

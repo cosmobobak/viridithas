@@ -298,7 +298,7 @@ impl CacheView<'_> {
     pub fn store(
         &self,
         key: u64,
-        ply: usize,
+        height: usize,
         mut best_move: Option<Move>,
         score: i32,
         eval: i32,
@@ -368,7 +368,7 @@ impl CacheView<'_> {
                 tag,
                 m: best_move,
                 // normalise mate / TB scores:
-                score: normalise_gt_truth_score(score, ply)
+                score: normalise_gt_truth_score(score, height)
                     .try_into()
                     .expect("score with value outwith i16"),
                 depth: depth.try_into().unwrap(),
@@ -454,45 +454,72 @@ impl CacheView<'_> {
     }
 }
 
-const fn normalise_gt_truth_score(mut score: i32, ply: usize) -> i32 {
+/// Normalise a game-theoretic score for storage into the cache.
+///
+/// Positions in the tree can be reached through different sequences,
+/// and the distance of a solved node from the root is relevant to its
+/// value (#2 is better than #33). When storing and later loading from
+/// the cache, the loading node may have a different height than the
+/// storing node, which means that naïvely preserving game-theoretic
+/// scores is incorrect.
+///
+/// Instead, scores are *shifted*. If a node is yielding mate-in-8-ply,
+/// and is found 5 ply from the root, it is really mate-in-⟨8 – 5 = 3⟩-ply.
+/// Then, when loading, game-theoretic scores are unshifted, so mate-in-3-ply
+/// two steps from the root becomes mate-in-⟨3 + 2 = 5⟩-ply.
+/// This is a fairly simple rerooting mechanism for such scores.
+const fn normalise_gt_truth_score(mut score: i32, height: usize) -> i32 {
     #![allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
     if score == VALUE_NONE {
         return VALUE_NONE;
     }
     if score >= MINIMUM_TB_WIN_SCORE {
-        score += ply as i32;
+        score += height as i32;
     } else if score <= -MINIMUM_TB_WIN_SCORE {
-        score -= ply as i32;
+        score -= height as i32;
     }
     score
 }
 
-const fn reconstruct_gt_truth_score(score: i32, ply: usize, clock: u8) -> i32 {
+/// Reconstruct a game-theoretic score probed from the cache by rerooting
+/// it to the current branch.
+const fn reconstruct_gt_truth_score(score: i32, height: usize, clock: u8) -> i32 {
     #![allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
     if score == VALUE_NONE {
         return VALUE_NONE;
     }
     if score >= MINIMUM_TB_WIN_SCORE {
+        // If the score is mating, but it will take more moves than we have
+        // halfmove clock in which to mate, return a wonderful but non-winning value.
         if score >= MINIMUM_MATE_SCORE && MATE_SCORE - score > 100 - clock as i32 {
             return MINIMUM_TB_WIN_SCORE - 1;
         }
+        // If the score is TB-winning, but it will take more moves than we have
+        // halfmove clock in which to TB-win, return a wonderful but non-winning value.
         if MINIMUM_TB_WIN_SCORE - score > 100 - clock as i32 {
             return MINIMUM_TB_WIN_SCORE - 1;
         }
-        return score - ply as i32;
+        // re-root the score to the current branch.
+        return score - height as i32;
     }
     if score <= -MINIMUM_TB_WIN_SCORE {
+        // If the score is mated, but it will take more moves than we have
+        // halfmove clock in which to mate, return a terrible but non-losing value.
         if score <= -MINIMUM_MATE_SCORE && MATE_SCORE + score > 100 - clock as i32 {
             return -MINIMUM_TB_WIN_SCORE + 1;
         }
+        // If the score is TB-losing, but it will take more moves than we have
+        // halfmove clock in which to TB-lose, return a terrible but non-losing value.
         if -MINIMUM_TB_WIN_SCORE + score > 100 - clock as i32 {
             return -MINIMUM_TB_WIN_SCORE + 1;
         }
-        return score + ply as i32;
+        // re-root the score to the current branch.
+        return score + height as i32;
     }
     score
 }
 
+#[cfg(test)]
 mod tests {
     #![allow(unused_imports)]
     use crate::{chess::piece::PieceType, chess::types::Square};
