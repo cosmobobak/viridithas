@@ -16,7 +16,7 @@ use crate::{
     nnue::{self, network::NNUEParams},
     search::pv::PVariation,
     searchinfo::{Control, SearchInfo},
-    stack::StackEntry,
+    stack::StackFrame,
     threadpool::{self, ScopeExt},
     transpositiontable::CacheView,
     util::MAX_DEPTH,
@@ -26,7 +26,7 @@ use crate::{
 pub struct ThreadData<'a> {
     // stack array is right-padded by one because singular verification
     // will try to access the next ply in an edge case.
-    pub ss: [StackEntry; MAX_DEPTH + 1],
+    pub ss: [StackFrame; MAX_DEPTH + 1],
     pub banned_nmp: u8,
     pub nnue: Box<nnue::network::NNUEState>,
     pub nnue_params: &'static NNUEParams,
@@ -78,7 +78,7 @@ impl<'a> ThreadData<'a> {
         control: &'a Control,
     ) -> Self {
         let mut td = Self {
-            ss: array::from_fn(|_| StackEntry::default()),
+            ss: array::from_fn(|_| StackFrame::default()),
             banned_nmp: 0,
             nnue: nnue::network::NNUEState::new(&board, nnue_params),
             nnue_params,
