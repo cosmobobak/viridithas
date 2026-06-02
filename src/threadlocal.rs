@@ -19,7 +19,7 @@ use crate::{
     stack::StackFrame,
     threadpool::{self, ScopeExt},
     transpositiontable::CacheView,
-    util::MAX_DEPTH,
+    util::{MAX_DEPTH, VALUE_NONE},
 };
 
 #[repr(align(64))]
@@ -47,6 +47,8 @@ pub struct ThreadData<'a> {
 
     /// principal variations, indexed by ID iteration.
     pub pvs: Vec<PVariation>,
+    /// evaluations, indexed by ID iteration.
+    pub scores: Vec<i32>,
     /// the iterative deepening loop counter
     pub iteration: usize,
     /// the highest finished ID iteration
@@ -54,6 +56,8 @@ pub struct ThreadData<'a> {
     /// the draft we're actually kicking off searches at
     pub root_depth: i32,
 
+    /// scratch space for value-at-root
+    pub score_scratch: i32,
     /// scratch space for PVs as they move up/down the stack.
     pub pv_scratch: Vec<PVariation>,
 
@@ -103,17 +107,17 @@ impl<'a> ThreadData<'a> {
             thread_id,
             pvs: vec![
                 PVariation {
-                    score: 0,
                     moves: ArrayVec::new_const(),
                 };
                 MAX_DEPTH
             ],
+            scores: vec![VALUE_NONE; MAX_DEPTH],
             iteration: 0,
             completed: 0,
             root_depth: 0,
+            score_scratch: VALUE_NONE,
             pv_scratch: vec![
                 PVariation {
-                    score: 0,
                     moves: ArrayVec::new_const(),
                 };
                 MAX_DEPTH + 1 // reaches forward by one when bootstrapping
@@ -186,6 +190,7 @@ impl<'a> ThreadData<'a> {
     pub fn update_best_line(&mut self) {
         self.completed = self.iteration;
         self.pvs[self.iteration] = self.pv_scratch[0].clone();
+        self.scores[self.iteration] = self.score_scratch;
     }
 
     pub fn revert_best_line(&mut self) {
@@ -196,8 +201,8 @@ impl<'a> ThreadData<'a> {
         &self.pvs[self.completed]
     }
 
-    pub fn pv_mut(&mut self) -> &mut PVariation {
-        &mut self.pvs[self.completed]
+    pub fn score(&self) -> i32 {
+        self.scores[self.completed]
     }
 }
 

@@ -8,14 +8,12 @@ use crate::util::MAX_DEPTH;
 
 #[derive(Clone, Debug)]
 pub struct PVariation {
-    pub(crate) score: i32,
     pub(crate) moves: ArrayVec<Move, MAX_DEPTH>,
 }
 
 impl PVariation {
     pub fn new() -> Self {
         Self {
-            score: 0,
             moves: ArrayVec::new(),
         }
     }

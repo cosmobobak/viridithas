@@ -213,7 +213,6 @@ pub fn search_position(
     {
         let pv = &mut thread_headers[0].pvs[1];
         pv.load_from(best_move, &PVariation::new());
-        pv.score = score;
         thread_headers[0].info.tbhits.increment();
         thread_headers[0].info.tbhits.flush();
         thread_headers[0].completed = 1;
@@ -315,9 +314,9 @@ pub fn search_position(
 
     (
         if thread_headers[0].board.turn() == Colour::White {
-            pv.score
+            best_thread.score_scratch
         } else {
-            -pv.score
+            -best_thread.score_scratch
         },
         Some(best_move),
     )
@@ -362,26 +361,25 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
         // aspiration loop:
         loop {
             let root_draft = (t.root_depth - reduction).max(min_depth);
-            t.pv_scratch[0].score = alpha_beta::<Root>(t, root_draft, alpha, beta, false);
+            t.score_scratch = alpha_beta::<Root>(t, root_draft, alpha, beta, false);
             if t.info.check_up() {
                 break 'deepening; // we've been told to stop searching.
             }
 
-            if t.pv_scratch[0].score <= alpha {
+            if t.score_scratch <= alpha {
                 if ThTy::MAIN_THREAD {
-                    t.pv_mut().score = t.pv_scratch[0].score;
                     readout_info(t, &t.info, Bound::Upper, t.info.nodes.get_global(), false);
                     t.info
                         .clock
                         .report_aspiration_fail(t.root_depth, Bound::Upper, &t.info.conf);
                 }
                 beta = i32::midpoint(alpha, beta);
-                alpha = (t.pv_scratch[0].score - delta).max(-INFINITY);
+                alpha = (t.score_scratch - delta).max(-INFINITY);
                 reduction = 0;
                 // search failed low, so we might have to
                 // revert a fail-high pv update
                 t.revert_best_line();
-            } else if t.pv_scratch[0].score >= beta {
+            } else if t.score_scratch >= beta {
                 t.update_best_line();
                 if ThTy::MAIN_THREAD {
                     readout_info(t, &t.info, Bound::Lower, t.info.nodes.get_global(), false);
@@ -389,10 +387,10 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
                         .clock
                         .report_aspiration_fail(t.root_depth, Bound::Lower, &t.info.conf);
                 }
-                beta = (t.pv_scratch[0].score + delta).min(INFINITY);
+                beta = (t.score_scratch + delta).min(INFINITY);
                 reduction += 1;
                 // decrement depth:
-                if !is_decisive(t.pv_scratch[0].score) {
+                if !is_decisive(t.score_scratch) {
                     t.root_depth = (t.root_depth - 1).max(min_depth);
                 }
             } else {
@@ -413,9 +411,9 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
             .unwrap_or_else(|| default_move(t));
 
         average_value = if average_value == VALUE_NONE {
-            t.pv_scratch[0].score
+            t.score_scratch
         } else {
-            (2 * t.pv_scratch[0].score + average_value) / 3
+            (2 * t.score_scratch + average_value) / 3
         };
 
         if ThTy::MAIN_THREAD {
@@ -427,7 +425,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
                     margin,
                     t,
                     best_move,
-                    t.pv_scratch[0].score,
+                    t.score_scratch,
                     i32::min(12, (t.root_depth - 1) / 2),
                 );
                 t.info.seldepth = saved_seldepth;
@@ -449,7 +447,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
                 };
                 t.info.clock.report_completed_depth(
                     t.root_depth,
-                    t.pv_scratch[0].score,
+                    t.score_scratch,
                     t.pv_scratch[0].moves[0],
                     bm_frac,
                     &t.info.conf,
@@ -467,8 +465,8 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
             // or if we're on the clock and we've solved a mate.
             if t.info.clock.is_past_opt_time(t.info.nodes.get_global())
                 || (iteration > 10
-                    && (t.info.clock.solved_breaker(t.pv_scratch[0].score)
-                        || t.info.clock.mate_found_breaker(t.pv_scratch[0].score)))
+                    && (t.info.clock.solved_breaker(t.score_scratch)
+                        || t.info.clock.mate_found_breaker(t.score_scratch)))
             {
                 t.info.stopped.store(true, Ordering::SeqCst);
                 break 'deepening;
@@ -1922,12 +1920,12 @@ pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadD
     let min_score = thread_headers
         .iter()
         .filter(|t| t.completed > 0)
-        .map(|t| t.pv().score)
+        .map(|t| t.score())
         .min()
         .unwrap_or(0);
 
     let vote_value =
-        |t: &ThreadData| -> i64 { i64::from(t.pv().score - min_score + 10) * t.completed as i64 };
+        |t: &ThreadData| -> i64 { i64::from(t.score() - min_score + 10) * t.completed as i64 };
 
     let mut vote_map = ArrayVec::<_, 256>::new();
     for t in thread_headers {
@@ -1949,8 +1947,8 @@ pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadD
             continue;
         }
 
-        let best_score = best.pv().score;
-        let this_score = thread.pv().score;
+        let best_score = best.score();
+        let this_score = thread.score();
 
         let best_move = best.pv().moves.first().copied();
         let this_move = thread.pv().moves.first().copied();
@@ -2055,14 +2053,14 @@ fn readout_info(
             "info depth {iteration} seldepth {} nodes {nodes} time {} nps {nps} hashfull {hashfull} tbhits {tbhits} score {sstr}{bound_string} wdl {wdl} {pv}",
             info.seldepth as usize,
             info.clock.elapsed().as_millis(),
-            sstr = uci::fmt::format_score(pv.score),
+            sstr = uci::fmt::format_score(t.score()),
             hashfull = tt.hashfull(),
             tbhits = t.info.tbhits.get_global(),
-            wdl = uci::fmt::format_wdl(pv.score, board.ply()),
+            wdl = uci::fmt::format_wdl(t.score(), board.ply()),
             pv = pv.display(board.rules()),
         );
     } else {
-        let value = uci::fmt::pretty_format_score(pv.score, board.turn());
+        let value = uci::fmt::pretty_format_score(t.score(), board.turn());
         let mut pv_string = board.pv_san(pv).unwrap();
         let pv_string_len = pv_string.len();
         // truncate the pv string if it's too long
@@ -2102,7 +2100,7 @@ fn readout_info(
             t = uci::fmt::format_time(info.clock.elapsed().as_millis()),
             nps_fmt = uci::fmt::pretty_format_counter(nps),
             knodes = uci::fmt::pretty_format_counter(nodes),
-            wdl = uci::fmt::pretty_format_wdl(pv.score, board.ply()),
+            wdl = uci::fmt::pretty_format_wdl(t.score(), board.ply()),
         );
     }
 }
