@@ -8,24 +8,14 @@ use crate::util::MAX_DEPTH;
 
 #[derive(Clone, Debug)]
 pub struct PVariation {
-    pub(crate) score: i32,
     pub(crate) moves: ArrayVec<Move, MAX_DEPTH>,
 }
 
 impl PVariation {
     pub fn new() -> Self {
         Self {
-            score: 0,
             moves: ArrayVec::new(),
         }
-    }
-
-    pub fn moves(&self) -> &[Move] {
-        &self.moves
-    }
-
-    pub const fn score(&self) -> i32 {
-        self.score
     }
 
     pub(crate) fn load_from(&mut self, m: Move, rest: &Self) {
@@ -51,7 +41,7 @@ impl Display for PVariationDisplay<'_> {
         if !self.pv.moves.is_empty() {
             write!(f, "pv ")?;
         }
-        for &m in self.pv.moves() {
+        for &m in &self.pv.moves {
             write!(f, "{} ", m.display(self.rules))?;
         }
         Ok(())

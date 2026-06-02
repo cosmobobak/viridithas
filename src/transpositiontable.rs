@@ -145,7 +145,7 @@ impl RawCacheSet {
         let b = self.memory[1].load(Ordering::Relaxed);
         let c = self.memory[2].load(Ordering::Relaxed);
         let d = self.memory[3].load(Ordering::Relaxed);
-        // Safety: TTCluster is POD.
+        // Safety: CacheSet is POD.
         unsafe { std::mem::transmute::<[u64; 4], CacheSet>([a, b, c, d]) }
     }
 
@@ -170,7 +170,7 @@ impl RawCacheSet {
 
 const _CLUSTER_SIZE: () = assert!(
     size_of::<RawCacheSet>() == 32,
-    "TT Cluster size is suboptimal."
+    "Cache set size is suboptimal."
 );
 
 /// The cache for Viridithas’s search. SMP threads communicate by reading and writing this.
@@ -308,60 +308,60 @@ impl CacheView<'_> {
     ) {
         let (cluster_index, tag) = self.derive_index_tag(key);
         // get current table age:
-        let tt_age = i32::from(self.age);
+        let cache_age = i32::from(self.age);
         // load the cluster:
         let mut cluster = self.table[cluster_index].load();
-        let mut tte = cluster.entries[0];
+        let mut ce = cluster.entries[0];
         let mut idx = 0;
 
         // select the entry:
-        if !(tte.tag == 0 || tte.tag == tag) {
+        if !(ce.tag == 0 || ce.tag == tag) {
             for i in 1..CLUSTER_SIZE {
                 let entry = cluster.entries[i];
 
                 if entry.tag == 0 || entry.tag == tag {
-                    tte = entry;
+                    ce = entry;
                     idx = i;
                     break;
                 }
 
-                if i32::from(tte.depth)
-                    - ((MAX_AGE + tt_age - i32::from(tte.info.age())) & AGE_MASK) * 4
+                if i32::from(ce.depth)
+                    - ((MAX_AGE + cache_age - i32::from(ce.info.age())) & AGE_MASK) * 4
                     > i32::from(entry.depth)
-                        - ((MAX_AGE + tt_age - i32::from(entry.info.age())) & AGE_MASK) * 4
+                        - ((MAX_AGE + cache_age - i32::from(entry.info.age())) & AGE_MASK) * 4
                 {
-                    tte = entry;
+                    ce = entry;
                     idx = i;
                 }
             }
         }
 
-        if best_move.is_none() && tte.tag == tag {
+        if best_move.is_none() && ce.tag == tag {
             // if we don't have a best move, and the entry is for the same position,
             // then we should retain the best move from the previous entry.
-            best_move = tte.m;
+            best_move = ce.m;
         }
 
         // give entries a bonus for type:
         // exact = 3, lower = 2, upper = 1
         let insert_flag_bonus = flag as i32;
-        let record_flag_bonus = tte.info.flag() as i32;
+        let record_flag_bonus = ce.info.flag() as i32;
 
         // preferentially overwrite entries that are from searches on previous positions in the game.
-        let age_differential = (MAX_AGE + tt_age - i32::from(tte.info.age())) & AGE_MASK;
+        let age_differential = (MAX_AGE + cache_age - i32::from(ce.info.age())) & AGE_MASK;
 
         // we use quadratic scaling of the age to allow entries that aren't too old to be kept,
         // but to ensure that *really* old entries are overwritten even if they are of high depth.
         let insert_priority =
             depth + insert_flag_bonus + (age_differential * age_differential) / 4 + i32::from(pv);
-        let record_prority = i32::from(tte.depth) + record_flag_bonus;
+        let record_prority = i32::from(ce.depth) + record_flag_bonus;
 
         // replace the entry:
         // 1. if the entry is for a different position
         // 2. if it's an exact entry, and the old entry is not exact
         // 3. if the new entry is of higher priority than the old entry
-        if tte.tag != tag
-            || flag == Bound::Exact && tte.info.flag() != Bound::Exact
+        if ce.tag != tag
+            || flag == Bound::Exact && ce.info.flag() != Bound::Exact
             || insert_priority * 3 >= record_prority * 2
         {
             let write = CacheEntry {

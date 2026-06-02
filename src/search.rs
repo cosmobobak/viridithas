@@ -213,7 +213,6 @@ pub fn search_position(
     {
         let pv = &mut thread_headers[0].pvs[1];
         pv.load_from(best_move, &PVariation::new());
-        pv.score = score;
         thread_headers[0].info.tbhits.increment();
         thread_headers[0].info.tbhits.flush();
         thread_headers[0].completed = 1;
@@ -268,7 +267,7 @@ pub fn search_position(
     let best_thread = select_best(thread_headers);
     let pv = best_thread.pv();
     let best_move = pv
-        .moves()
+        .moves
         .first()
         .copied()
         .unwrap_or_else(|| default_move(&thread_headers[0]));
@@ -283,7 +282,7 @@ pub fn search_position(
     );
 
     if thread_headers[0].info.print_to_stdout {
-        let maybe_ponder = pv.moves().get(1).map_or_else(String::new, |ponder_move| {
+        let maybe_ponder = pv.moves.get(1).map_or_else(String::new, |ponder_move| {
             format!(
                 " ponder {}",
                 ponder_move.display(thread_headers[0].board.rules())
@@ -315,9 +314,9 @@ pub fn search_position(
 
     (
         if thread_headers[0].board.turn() == Colour::White {
-            pv.score
+            best_thread.score_scratch
         } else {
-            -pv.score
+            -best_thread.score_scratch
         },
         Some(best_move),
     )
@@ -332,7 +331,6 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
         !ThTy::MAIN_THREAD || t.thread_id == 0,
         "main thread must have thread_id 0"
     );
-    let mut pv = PVariation::new();
     let max_depth = dyn_max_depth(t);
     let mut average_value = VALUE_NONE;
     'deepening: for iteration in 1..=max_depth {
@@ -363,41 +361,40 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
         // aspiration loop:
         loop {
             let root_draft = (t.root_depth - reduction).max(min_depth);
-            pv.score = alpha_beta::<Root>(&mut pv, t, root_draft, alpha, beta, false);
+            t.score_scratch = alpha_beta::<Root>(t, root_draft, alpha, beta, false);
             if t.info.check_up() {
                 break 'deepening; // we've been told to stop searching.
             }
 
-            if pv.score <= alpha {
+            if t.score_scratch <= alpha {
                 if ThTy::MAIN_THREAD {
-                    t.pv_mut().score = pv.score;
                     readout_info(t, &t.info, Bound::Upper, t.info.nodes.get_global(), false);
                     t.info
                         .clock
                         .report_aspiration_fail(t.root_depth, Bound::Upper, &t.info.conf);
                 }
                 beta = i32::midpoint(alpha, beta);
-                alpha = (pv.score - delta).max(-INFINITY);
+                alpha = (t.score_scratch - delta).max(-INFINITY);
                 reduction = 0;
                 // search failed low, so we might have to
                 // revert a fail-high pv update
                 t.revert_best_line();
-            } else if pv.score >= beta {
-                t.update_best_line(&pv);
+            } else if t.score_scratch >= beta {
+                t.update_best_line();
                 if ThTy::MAIN_THREAD {
                     readout_info(t, &t.info, Bound::Lower, t.info.nodes.get_global(), false);
                     t.info
                         .clock
                         .report_aspiration_fail(t.root_depth, Bound::Lower, &t.info.conf);
                 }
-                beta = (pv.score + delta).min(INFINITY);
+                beta = (t.score_scratch + delta).min(INFINITY);
                 reduction += 1;
                 // decrement depth:
-                if !is_decisive(pv.score) {
+                if !is_decisive(t.score_scratch) {
                     t.root_depth = (t.root_depth - 1).max(min_depth);
                 }
             } else {
-                t.update_best_line(&pv);
+                t.update_best_line();
                 break;
             }
 
@@ -407,17 +404,16 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
         }
 
         // if we've made it here, it means we got an exact score.
-        let score = pv.score;
-        let best_move = pv
-            .moves()
+        let best_move = t.pv_scratch[0]
+            .moves
             .first()
             .copied()
             .unwrap_or_else(|| default_move(t));
 
         average_value = if average_value == VALUE_NONE {
-            score
+            t.score_scratch
         } else {
-            (2 * score + average_value) / 3
+            (2 * t.score_scratch + average_value) / 3
         };
 
         if ThTy::MAIN_THREAD {
@@ -429,7 +425,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
                     margin,
                     t,
                     best_move,
-                    score,
+                    t.score_scratch,
                     i32::min(12, (t.root_depth - 1) / 2),
                 );
                 t.info.seldepth = saved_seldepth;
@@ -451,8 +447,8 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
                 };
                 t.info.clock.report_completed_depth(
                     t.root_depth,
-                    pv.score,
-                    pv.moves[0],
+                    t.score_scratch,
+                    t.pv_scratch[0].moves[0],
                     bm_frac,
                     &t.info.conf,
                 );
@@ -469,8 +465,8 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
             // or if we're on the clock and we've solved a mate.
             if t.info.clock.is_past_opt_time(t.info.nodes.get_global())
                 || (iteration > 10
-                    && (t.info.clock.solved_breaker(pv.score)
-                        || t.info.clock.mate_found_breaker(pv.score)))
+                    && (t.info.clock.solved_breaker(t.score_scratch)
+                        || t.info.clock.mate_found_breaker(t.score_scratch)))
             {
                 t.info.stopped.store(true, Ordering::SeqCst);
                 break 'deepening;
@@ -499,12 +495,7 @@ fn default_move(t: &ThreadData) -> Move {
 
 /// Perform a tactical resolution search, searching only captures and promotions.
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-pub fn quiescence<NT: NodeType>(
-    pv: &mut PVariation,
-    t: &mut ThreadData,
-    mut alpha: i32,
-    beta: i32,
-) -> i32 {
+pub fn quiescence<NT: NodeType>(t: &mut ThreadData, mut alpha: i32, beta: i32) -> i32 {
     #[cfg(debug_assertions)]
     t.board.check_validity();
 
@@ -514,12 +505,13 @@ pub fn quiescence<NT: NodeType>(
 
     let key = t.board.state.keys.zobrist ^ HM_CLOCK_KEYS[t.board.state.fifty_move_counter as usize];
 
-    let mut local_pv = PVariation::new();
-    let l_pv = &mut local_pv;
-
-    pv.moves.clear();
-
     let height = t.board.height();
+
+    if NT::PV {
+        t.pv_scratch[height].moves.clear();
+        t.pv_scratch[height + 1].moves.clear();
+    }
+
     t.info.seldepth = t.info.seldepth.max(i32::try_from(height).unwrap());
 
     // check draw
@@ -680,7 +672,7 @@ pub fn quiescence<NT: NodeType>(
         t.info.nodes.increment();
         moves_made += 1;
 
-        let score = -quiescence::<NT::Next>(l_pv, t, -beta, -alpha);
+        let score = -quiescence::<NT::Next>(t, -beta, -alpha);
 
         t.board.unmake_move(&mut t.nnue);
 
@@ -690,7 +682,11 @@ pub fn quiescence<NT: NodeType>(
                 best_move = Some(m);
                 alpha = score;
                 if NT::PV {
-                    pv.load_from(m, l_pv);
+                    let [up, curr] = t
+                        .pv_scratch
+                        .get_disjoint_mut([height, height + 1])
+                        .expect("disjoint indices");
+                    up.load_from(m, curr);
                 }
             }
             if alpha >= beta {
@@ -736,7 +732,6 @@ pub fn quiescence<NT: NodeType>(
 /// Perform alpha-beta minimax search.
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub fn alpha_beta<NT: NodeType>(
-    pv: &mut PVariation,
     t: &mut ThreadData,
     mut depth: i32,
     mut alpha: i32,
@@ -746,22 +741,22 @@ pub fn alpha_beta<NT: NodeType>(
     #[cfg(debug_assertions)]
     t.board.check_validity();
 
-    let mut local_pv = PVariation::new();
-    let l_pv = &mut local_pv;
-
-    let key = t.board.state.keys.zobrist ^ HM_CLOCK_KEYS[t.board.state.fifty_move_counter as usize];
-
     if depth <= 0 {
-        return quiescence::<NT::Next>(pv, t, alpha, beta);
+        return quiescence::<NT::Next>(t, alpha, beta);
     }
-
-    pv.moves.clear();
 
     if t.info.nodes.just_ticked_over() && t.info.check_up() {
         return 0;
     }
 
+    let key = t.board.state.keys.zobrist ^ HM_CLOCK_KEYS[t.board.state.fifty_move_counter as usize];
+
     let height = t.board.height();
+
+    if NT::PV {
+        t.pv_scratch[height].moves.clear();
+        t.pv_scratch[height + 1].moves.clear();
+    }
 
     debug_assert_eq!(height == 0, NT::ROOT);
     debug_assert!(!(NT::PV && cut_node));
@@ -1069,7 +1064,7 @@ pub fn alpha_beta<NT: NodeType>(
             && static_eval
                 < alpha - t.info.conf.razoring_coeff_0 - t.info.conf.razoring_coeff_1 * depth
         {
-            let v = quiescence::<OffPV>(pv, t, alpha, beta);
+            let v = quiescence::<OffPV>(t, alpha, beta);
             if v <= alpha {
                 return v;
             }
@@ -1124,7 +1119,7 @@ pub fn alpha_beta<NT: NodeType>(
                 to: Square::A1,
             };
             t.board.make_nullmove();
-            let null_score = -alpha_beta::<OffPV>(l_pv, t, nm_depth, -beta, -beta + 1, false);
+            let null_score = -alpha_beta::<OffPV>(t, nm_depth, -beta, -beta + 1, false);
             t.board.unmake_nullmove();
             if t.info.stopped() {
                 return 0;
@@ -1146,7 +1141,7 @@ pub fn alpha_beta<NT: NodeType>(
                 // the side to move, and if we hit the other side deeper in the tree
                 // with sufficient depth, we'll disallow it for them too.
                 t.ban_nmp_for(t.board.turn());
-                let veri_score = alpha_beta::<OffPV>(l_pv, t, nm_depth, beta - 1, beta, false);
+                let veri_score = alpha_beta::<OffPV>(t, nm_depth, beta - 1, beta, false);
                 t.unban_nmp_for(t.board.turn());
                 if veri_score >= beta {
                     return veri_score;
@@ -1205,7 +1200,7 @@ pub fn alpha_beta<NT: NodeType>(
             };
             t.board.make_move(m, &mut t.nnue);
 
-            let mut value = -quiescence::<OffPV>(l_pv, t, -pc_beta, -pc_beta + 1);
+            let mut value = -quiescence::<OffPV>(t, -pc_beta, -pc_beta + 1);
 
             // the full adaptive probcut depth: if QS kicked out a really
             // high value compared to pc_beta, we assume we can slice off
@@ -1224,14 +1219,14 @@ pub fn alpha_beta<NT: NodeType>(
                 .clamp(-MINIMUM_TB_WIN_SCORE + 1, MINIMUM_TB_WIN_SCORE - 1);
 
             if value >= pc_beta && pc_depth > 0 {
-                value = -alpha_beta::<OffPV>(l_pv, t, pc_depth, -ada_beta, -ada_beta + 1, false);
+                value = -alpha_beta::<OffPV>(t, pc_depth, -ada_beta, -ada_beta + 1, false);
 
                 // if we beat pc_beta, but not ada_beta, and we reduced,
                 // then we have a chance of still being able to cut via
                 // a full-fat probcut search, so kick one off:
                 if value < ada_beta && pc_beta < ada_beta {
                     pc_depth = base_pc_depth;
-                    value = -alpha_beta::<OffPV>(l_pv, t, pc_depth, -pc_beta, -pc_beta + 1, false);
+                    value = -alpha_beta::<OffPV>(t, pc_depth, -pc_beta, -pc_beta + 1, false);
                 } else {
                     // this persists over to the next loop.
                     pc_beta = ada_beta;
@@ -1396,14 +1391,7 @@ pub fn alpha_beta<NT: NodeType>(
             // the move `m` is unplayable, to determine how important
             // that move is.
             t.ss[height].excluded = Some(m);
-            let value = alpha_beta::<OffPV>(
-                &mut PVariation::new(),
-                t,
-                r_depth,
-                r_beta - 1,
-                r_beta,
-                cut_node,
-            );
+            let value = alpha_beta::<OffPV>(t, r_depth, r_beta - 1, r_beta, cut_node);
             t.ss[height].excluded = None;
 
             if value == VALUE_NONE {
@@ -1455,8 +1443,7 @@ pub fn alpha_beta<NT: NodeType>(
         if moves_made == 1 {
             // first move (presumably the PV-move)
             let new_depth = depth + extension - 1;
-            score =
-                -alpha_beta::<NT::Next>(l_pv, t, new_depth, -beta, -alpha, !NT::PV && !cut_node);
+            score = -alpha_beta::<NT::Next>(t, new_depth, -beta, -alpha, !NT::PV && !cut_node);
         } else {
             // calculation of LMR stuff
             let r = if depth > 2 && moves_made > (1 + usize::from(NT::ROOT)) {
@@ -1497,7 +1484,7 @@ pub fn alpha_beta<NT: NodeType>(
             // perform a zero-window search
             let mut new_depth = depth + extension;
             let reduced_depth = (new_depth - r).clamp(0, new_depth + 1);
-            score = -alpha_beta::<OffPV>(l_pv, t, reduced_depth, -alpha - 1, -alpha, true);
+            score = -alpha_beta::<OffPV>(t, reduced_depth, -alpha - 1, -alpha, true);
             // simple reduction for any future searches
             t.ss[height].reduction = 1024;
             // if we beat alpha, and reduced more than one ply,
@@ -1516,8 +1503,7 @@ pub fn alpha_beta<NT: NodeType>(
                 // check if we're actually going to do a deeper search than before
                 // (no point if the re-search is the same as the normal one lol)
                 if new_depth - 1 > reduced_depth {
-                    score =
-                        -alpha_beta::<OffPV>(l_pv, t, new_depth - 1, -alpha - 1, -alpha, !cut_node);
+                    score = -alpha_beta::<OffPV>(t, new_depth - 1, -alpha - 1, -alpha, !cut_node);
                 }
                 t.ss[height].reduction = 1024;
 
@@ -1530,7 +1516,7 @@ pub fn alpha_beta<NT: NodeType>(
             // if we failed completely, then do full-window search
             if score > alpha && score < beta {
                 // this is a new best move, so it *is* PV.
-                score = -alpha_beta::<NT::Next>(l_pv, t, new_depth - 1, -beta, -alpha, false);
+                score = -alpha_beta::<NT::Next>(t, new_depth - 1, -beta, -alpha, false);
             }
         }
         t.board.unmake_move(&mut t.nnue);
@@ -1556,7 +1542,11 @@ pub fn alpha_beta<NT: NodeType>(
                 alpha = score;
                 alpha_raises += 1;
                 if NT::PV {
-                    pv.load_from(m, l_pv);
+                    let [up, curr] = t
+                        .pv_scratch
+                        .get_disjoint_mut([height, height + 1])
+                        .expect("disjoint indices");
+                    up.load_from(m, curr);
                 }
             }
             if alpha >= beta {
@@ -1765,14 +1755,7 @@ pub fn is_forced(margin: i32, t: &mut ThreadData, m: Move, value: i32, depth: i3
     t.ss[t.board.height()].excluded = Some(m);
     let pts_prev = t.info.print_to_stdout;
     t.info.print_to_stdout = false;
-    let value = alpha_beta::<CheckForced>(
-        &mut PVariation::new(),
-        t,
-        r_depth,
-        r_beta - 1,
-        r_beta,
-        false,
-    );
+    let value = alpha_beta::<CheckForced>(t, r_depth, r_beta - 1, r_beta, false);
     t.info.print_to_stdout = pts_prev;
     t.ss[t.board.height()].excluded = None;
     value < r_beta
@@ -1937,19 +1920,19 @@ pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadD
     let min_score = thread_headers
         .iter()
         .filter(|t| t.completed > 0)
-        .map(|t| t.pv().score())
+        .map(|t| t.score())
         .min()
         .unwrap_or(0);
 
     let vote_value =
-        |t: &ThreadData| -> i64 { i64::from(t.pv().score() - min_score + 10) * t.completed as i64 };
+        |t: &ThreadData| -> i64 { i64::from(t.score() - min_score + 10) * t.completed as i64 };
 
     let mut vote_map = ArrayVec::<_, 256>::new();
     for t in thread_headers {
         if t.completed == 0 {
             continue;
         }
-        if let Some(&m) = t.pv().moves().first() {
+        if let Some(&m) = t.pv().moves.first() {
             let votes = vote_value(t);
             if let Some(entry) = vote_map.iter_mut().find(|(k, _)| *k == m) {
                 entry.1 += votes;
@@ -1964,11 +1947,11 @@ pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadD
             continue;
         }
 
-        let best_score = best.pv().score();
-        let this_score = thread.pv().score();
+        let best_score = best.score();
+        let this_score = thread.score();
 
-        let best_move = best.pv().moves().first().copied();
-        let this_move = thread.pv().moves().first().copied();
+        let best_move = best.pv().moves.first().copied();
+        let this_move = thread.pv().moves.first().copied();
 
         // If the current best is decisive, only replace with a more accurate decisive score
         // (larger absolute value = shorter line to the game-theoretic result).
@@ -2070,14 +2053,14 @@ fn readout_info(
             "info depth {iteration} seldepth {} nodes {nodes} time {} nps {nps} hashfull {hashfull} tbhits {tbhits} score {sstr}{bound_string} wdl {wdl} {pv}",
             info.seldepth as usize,
             info.clock.elapsed().as_millis(),
-            sstr = uci::fmt::format_score(pv.score),
+            sstr = uci::fmt::format_score(t.score()),
             hashfull = tt.hashfull(),
             tbhits = t.info.tbhits.get_global(),
-            wdl = uci::fmt::format_wdl(pv.score, board.ply()),
+            wdl = uci::fmt::format_wdl(t.score(), board.ply()),
             pv = pv.display(board.rules()),
         );
     } else {
-        let value = uci::fmt::pretty_format_score(pv.score, board.turn());
+        let value = uci::fmt::pretty_format_score(t.score(), board.turn());
         let mut pv_string = board.pv_san(pv).unwrap();
         let pv_string_len = pv_string.len();
         // truncate the pv string if it's too long
@@ -2117,7 +2100,7 @@ fn readout_info(
             t = uci::fmt::format_time(info.clock.elapsed().as_millis()),
             nps_fmt = uci::fmt::pretty_format_counter(nps),
             knodes = uci::fmt::pretty_format_counter(nodes),
-            wdl = uci::fmt::pretty_format_wdl(pv.score, board.ply()),
+            wdl = uci::fmt::pretty_format_wdl(t.score(), board.ply()),
         );
     }
 }

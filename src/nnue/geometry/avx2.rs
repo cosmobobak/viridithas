@@ -146,6 +146,9 @@ pub fn permute_mailbox_ignoring(
         let iota = Vector::load(iota.0.as_ptr());
         let ignore_vec = _mm256_set1_epi8(ignore.inner().cast_signed());
         // None<Piece> is represented as 12 due to niche optimisation.
+        const {
+            assert!(12 == std::mem::transmute::<Option<Piece>, u8>(None));
+        }
         let none_vec = _mm256_set1_epi8(12);
         let mb = Vector::load(mailbox.as_ptr().cast::<u8>());
         let masked_mailbox = Vector {

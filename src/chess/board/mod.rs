@@ -1286,7 +1286,7 @@ impl Board {
     pub fn pv_san(&self, pv: &PVariation) -> Result<String, fmt::Error> {
         let mut playout = self.clone();
         let mut out = String::new();
-        for &m in pv.moves() {
+        for &m in &pv.moves {
             let san = playout.san(m).expect("illegal move in PV");
             write!(out, "{san} ")?;
             playout.make_move_simple(m);

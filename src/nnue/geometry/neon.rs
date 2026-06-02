@@ -139,6 +139,9 @@ pub fn permute_mailbox_ignoring(
         ]);
         let iota = Vector::load(iota.0.as_ptr());
         // None<Piece> is represented as 12 due to niche optimisation.
+        const {
+            assert!(12 == std::mem::transmute::<Option<Piece>, u8>(None));
+        }
         let none_vec = vdupq_n_u8(12);
         let ignore_vec = vdupq_n_u8(ignore.inner());
 

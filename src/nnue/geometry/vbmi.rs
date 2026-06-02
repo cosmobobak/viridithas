@@ -72,6 +72,9 @@ pub fn permute_mailbox_ignoring(
         let lut = _mm512_broadcast_i32x4(_mm_loadu_si128(PIECE_TO_BIT.as_ptr().cast::<__m128i>()));
 
         let ignore_mask: u64 = 1 << ignore.inner();
+        const {
+            assert!(12 == std::mem::transmute::<Option<Piece>, u8>(None));
+        }
         let masked_mailbox = _mm512_mask_blend_epi8(
             ignore_mask,
             _mm512_loadu_si512(mailbox.as_ptr().cast()),
