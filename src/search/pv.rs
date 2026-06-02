@@ -20,14 +20,6 @@ impl PVariation {
         }
     }
 
-    pub fn moves(&self) -> &[Move] {
-        &self.moves
-    }
-
-    pub const fn score(&self) -> i32 {
-        self.score
-    }
-
     pub(crate) fn load_from(&mut self, m: Move, rest: &Self) {
         self.moves.clear();
         self.moves.push(m);
@@ -51,7 +43,7 @@ impl Display for PVariationDisplay<'_> {
         if !self.pv.moves.is_empty() {
             write!(f, "pv ")?;
         }
-        for &m in self.pv.moves() {
+        for &m in &self.pv.moves {
             write!(f, "{} ", m.display(self.rules))?;
         }
         Ok(())

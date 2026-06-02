@@ -45,13 +45,17 @@ pub struct ThreadData<'a> {
 
     pub thread_id: usize,
 
-    pub pvs: [PVariation; MAX_DEPTH],
+    /// principal variations, indexed by ID iteration.
+    pub pvs: Vec<PVariation>,
     /// the iterative deepening loop counter
     pub iteration: usize,
     /// the highest finished ID iteration
     pub completed: usize,
     /// the draft we're actually kicking off searches at
     pub root_depth: i32,
+
+    /// scratch space for PVs as they move up/down the stack.
+    pub pv_scratch: Vec<PVariation>,
 
     pub stm_at_root: Colour,
     pub optimism: [i32; 2],
@@ -97,16 +101,23 @@ impl<'a> ThreadData<'a> {
             minor_corrhist: CorrectionHistoryTable::boxed(),
             cont_corrhist: CorrectionHistoryTable::boxed(),
             thread_id,
-            #[allow(clippy::large_stack_arrays)]
-            pvs: [const {
+            pvs: vec![
                 PVariation {
                     score: 0,
                     moves: ArrayVec::new_const(),
-                }
-            }; MAX_DEPTH],
+                };
+                MAX_DEPTH
+            ],
             iteration: 0,
             completed: 0,
             root_depth: 0,
+            pv_scratch: vec![
+                PVariation {
+                    score: 0,
+                    moves: ArrayVec::new_const(),
+                };
+                MAX_DEPTH + 1 // reaches forward by one when bootstrapping
+            ],
             stm_at_root: board.turn(),
             optimism: [0; 2],
             cache,
@@ -172,20 +183,20 @@ impl<'a> ThreadData<'a> {
         self.stm_at_root = self.board.turn();
     }
 
-    pub fn update_best_line(&mut self, pv: &PVariation) {
+    pub fn update_best_line(&mut self) {
         self.completed = self.iteration;
-        self.pvs[self.iteration] = pv.clone();
+        self.pvs[self.iteration] = self.pv_scratch[0].clone();
     }
 
     pub fn revert_best_line(&mut self) {
         self.completed = self.iteration - 1;
     }
 
-    pub const fn pv(&self) -> &PVariation {
+    pub fn pv(&self) -> &PVariation {
         &self.pvs[self.completed]
     }
 
-    pub const fn pv_mut(&mut self) -> &mut PVariation {
+    pub fn pv_mut(&mut self) -> &mut PVariation {
         &mut self.pvs[self.completed]
     }
 }
