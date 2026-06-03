@@ -196,6 +196,7 @@ mod tests {
                 .collect::<Vec<_>>()
                 .join(", ")
         });
+        #[cfg(not(miri))]
         assert_eq!(perft(&mut pos, 2), 2_039);
         // assert_eq!(perft(&mut pos, 3), 97_862);
         // assert_eq!(perft(&mut pos, 4), 4_085_603);
@@ -214,11 +215,13 @@ mod tests {
                 .join(", ")
         });
         assert_eq!(perft(&mut pos, 2), 400);
+        #[cfg(not(miri))]
         assert_eq!(perft(&mut pos, 3), 8_902);
         // assert_eq!(perft(&mut pos, 4), 197_281);
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn perft_nnue_start_position() {
         use super::*;
 
@@ -254,6 +257,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn perft_movepicker_start_position() {
         use super::*;
 
@@ -290,6 +294,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn perft_movepicker_hard_position() {
         use super::*;
         const TEST_FEN: &str =
@@ -328,6 +333,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn perft_movepicker_forward_promo_evasion() {
         use super::*;
         const TEST_FEN: &str = "r7/P2r4/7R/8/5p2/5K2/3p2P1/R5k1 b - - 0 1";
@@ -364,6 +370,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn perft_movepicker_forward_promo_evasion_and_capture() {
         use super::*;
         const TEST_FEN: &str = "r7/P2r4/7R/8/5p2/5K2/3p2P1/2R3k1 b - - 0 1";

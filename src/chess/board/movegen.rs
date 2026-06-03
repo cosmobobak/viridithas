@@ -1012,6 +1012,7 @@ mod tests {
     };
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn staged_matches_full() {
         let positions = bench::BENCH_POSITIONS
             .into_iter()
