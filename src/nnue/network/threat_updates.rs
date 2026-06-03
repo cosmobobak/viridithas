@@ -301,7 +301,7 @@ mod generic {
     /// Add threats revealed by removal of some piece from
     /// some square, or blocked by arrival of such a piece
     /// on such a square. For direct threats → `push_focus`.
-    pub fn push_discovered<Op: AddSub>(
+    pub unsafe fn push_discovered<Op: AddSub>(
         updates: &mut ThreatUpdateBuffer,
         idxs: geometry::Vector,
         rays: geometry::Vector,
@@ -400,13 +400,16 @@ pub fn on_change<Op: AddSub>(
     // answer the question: do the sliders have a victim on the opposite ray?
     let valid = geometry::ray_fill(victim_mask) & geometry::ray_fill(incoming_sliders);
 
-    push_discovered::<Op>(
-        updates,
-        perm.indexes,
-        rays,
-        incoming_sliders & valid,
-        victim_mask & valid,
-    );
+    // Safety: idxs & rays have valid bit-patterns.
+    unsafe {
+        push_discovered::<Op>(
+            updates,
+            perm.indexes,
+            rays,
+            incoming_sliders & valid,
+            victim_mask & valid,
+        );
+    }
 }
 
 /// Given the transformation of a piece from one type into another,
@@ -497,20 +500,23 @@ pub fn on_move(
     let src_valid = geometry::ray_fill(src_victim_mask) & geometry::ray_fill(src_sliders);
     let dst_valid = geometry::ray_fill(dst_victim_mask) & geometry::ray_fill(dst_sliders);
 
-    push_discovered::<Sub>(
-        updates,
-        src_idxs,
-        src_rays,
-        src_sliders & src_valid,
-        src_victim_mask & src_valid,
-    );
-    push_discovered::<Add>(
-        updates,
-        dst_idxs,
-        dst_rays,
-        dst_sliders & dst_valid,
-        dst_victim_mask & dst_valid,
-    );
+    // Safety: idxs & rays have valid bit-patterns.
+    unsafe {
+        push_discovered::<Sub>(
+            updates,
+            src_idxs,
+            src_rays,
+            src_sliders & src_valid,
+            src_victim_mask & src_valid,
+        );
+        push_discovered::<Add>(
+            updates,
+            dst_idxs,
+            dst_rays,
+            dst_sliders & dst_valid,
+            dst_victim_mask & dst_valid,
+        );
+    }
 }
 
 #[cfg(test)]
