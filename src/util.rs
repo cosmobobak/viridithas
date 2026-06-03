@@ -87,3 +87,28 @@ impl<T, const SIZE: usize> DerefMut for Align<[T; SIZE]> {
         &mut self.0
     }
 }
+
+/// An unsafe `Send` wrapper around a raw pointer, to transport a
+/// pointer to other threads while preserving provenance for MIRI.
+pub struct SendPtr<T>(*mut T);
+
+// Safety: Upon the head of the caller of `SendPtr::new`.
+unsafe impl<T> Send for SendPtr<T> {}
+
+impl<T> SendPtr<T> {
+    /// Wrap a raw pointer so it can be sent across threads.
+    ///
+    /// # Safety
+    ///
+    /// This allows you to move a raw pointer to another thread.
+    /// This isn’t inherently problematic, but be aware of what
+    /// may be thusly permitted, and what horrors may visit you.
+    pub const unsafe fn new(ptr: *mut T) -> Self {
+        Self(ptr)
+    }
+
+    /// Recover the wrapped pointer.
+    pub const fn get(self) -> *mut T {
+        self.0
+    }
+}

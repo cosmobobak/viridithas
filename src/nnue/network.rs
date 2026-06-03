@@ -6,7 +6,7 @@ use std::{
     mem::size_of,
     ops::Deref,
     path::Path,
-    sync::{Mutex, OnceLock},
+    sync::{LazyLock, Mutex, OnceLock},
     time::Duration,
 };
 
@@ -775,6 +775,15 @@ impl NNUEParams {
         static LOCK: Mutex<()> = Mutex::new(());
         // additionally, we'd quite like to cache the results of this function.
         static CACHED: OnceLock<Mmap> = OnceLock::new();
+
+        // If we’re under MIRI, this function is way too slow.
+        if cfg!(miri) {
+            static MIRI_NULL_NETWORK: LazyLock<Box<NNUEParams>> = LazyLock::new(|| {
+                // Safety: All bitpatterns of Self are valid.
+                unsafe { Box::new_zeroed().assume_init() }
+            });
+            return Ok(&*MIRI_NULL_NETWORK);
+        }
 
         if EMBEDDED_NNUE_VERBATIM {
             // if we're using the verbatim network, we don't need to decompress anything.

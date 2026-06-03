@@ -253,6 +253,7 @@ mod tests {
     static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn go_mate_in_2_white() {
         let guard = TEST_LOCK.lock().unwrap();
 
@@ -293,6 +294,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn go_mated_in_2_white() {
         let guard = TEST_LOCK.lock().unwrap();
 
@@ -333,6 +335,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn go_mated_in_2_black() {
         let guard = TEST_LOCK.lock().unwrap();
 
@@ -373,6 +376,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn go_mate_in_2_black() {
         let guard = TEST_LOCK.lock().unwrap();
 

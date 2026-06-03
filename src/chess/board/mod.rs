@@ -1634,6 +1634,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn fen_round_trip() {
         use crate::chess::board::Board;
         use std::{

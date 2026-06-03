@@ -110,23 +110,17 @@ impl<T> ThreatsHistoryTable<T> {
 
 impl ThreatsHistoryTable<PieceToTable> {
     pub fn clear(&mut self) {
-        self.table
-            .iter_mut()
-            .flatten()
-            .flat_map(|h| &mut h.table)
-            .flatten()
-            .for_each(|x| *x = 0);
+        for sub_table in self.table.as_flattened_mut() {
+            sub_table.table.as_flattened_mut().fill(0);
+        }
     }
 }
 
 impl ThreatsHistoryTable<FromToTable> {
     pub fn clear(&mut self) {
-        self.table
-            .iter_mut()
-            .flatten()
-            .flat_map(|h| &mut h.table)
-            .flatten()
-            .for_each(|x| *x = 0);
+        for sub_table in self.table.as_flattened_mut() {
+            sub_table.table.as_flattened_mut().fill(0);
+        }
     }
 }
 
@@ -166,12 +160,9 @@ impl CaptureHistoryTable {
     }
 
     pub fn clear(&mut self) {
-        self.table
-            .iter_mut()
-            .flatten()
-            .flat_map(|h| &mut h.table)
-            .flatten()
-            .for_each(|x| *x = 0);
+        for sub_table in self.table.as_flattened_mut() {
+            sub_table.table.as_flattened_mut().fill(0);
+        }
     }
 }
 
@@ -211,12 +202,9 @@ impl DoubleHistoryTable {
     }
 
     pub fn clear(&mut self) {
-        self.table
-            .iter_mut()
-            .flatten()
-            .flat_map(|h| &mut h.table)
-            .flatten()
-            .for_each(|x| *x = 0);
+        for sub_table in self.table.as_flattened_mut() {
+            sub_table.table.as_flattened_mut().fill(0);
+        }
     }
 }
 
@@ -256,11 +244,9 @@ impl HashHistoryTable {
     }
 
     pub fn clear(&mut self) {
-        self.table
-            .iter_mut()
-            .flat_map(|h| &mut h.table)
-            .flatten()
-            .for_each(|x| *x = 0);
+        for sub_table in &mut self.table {
+            sub_table.table.as_flattened_mut().fill(0);
+        }
     }
 }
 
@@ -300,7 +286,7 @@ impl CorrectionHistoryTable {
     }
 
     pub fn clear(&mut self) {
-        self.table.iter_mut().for_each(|t| t.fill(0));
+        self.table.as_flattened_mut().fill(0);
     }
 
     #[allow(clippy::cast_possible_truncation)]

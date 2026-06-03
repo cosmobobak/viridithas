@@ -553,6 +553,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn roundtrip() {
         // Test that san() and parse_san() are inverses
         let positions = [

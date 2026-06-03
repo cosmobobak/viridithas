@@ -55,20 +55,20 @@ impl Vector {
 }
 
 pub struct Permutation {
-    pub indices: Vector,
+    pub indexes: Vector,
     pub invalid: Vector,
 }
 
 pub fn permutation_for(focus: Square) -> Permutation {
     unsafe {
-        let indices = Vector::cast(&PERMUTATION[focus.index()]);
+        let indexes = Vector::cast(&PERMUTATION[focus.index()]);
         let invalid = Vector {
             raw: [
-                _mm256_cmpeq_epi8(indices.raw[0], _mm256_set1_epi8(0x80u8.cast_signed())),
-                _mm256_cmpeq_epi8(indices.raw[1], _mm256_set1_epi8(0x80u8.cast_signed())),
+                _mm256_cmpeq_epi8(indexes.raw[0], _mm256_set1_epi8(0x80u8.cast_signed())),
+                _mm256_cmpeq_epi8(indexes.raw[1], _mm256_set1_epi8(0x80u8.cast_signed())),
             ],
         };
-        Permutation { indices, invalid }
+        Permutation { indexes, invalid }
     }
 }
 
@@ -98,12 +98,12 @@ fn permute_mailbox_inner(permutation: &Permutation, masked_mailbox: Vector) -> (
                 half_swizzle(
                     masked_mailbox.raw[0],
                     masked_mailbox.raw[1],
-                    permutation.indices.raw[0],
+                    permutation.indexes.raw[0],
                 ),
                 half_swizzle(
                     masked_mailbox.raw[0],
                     masked_mailbox.raw[1],
-                    permutation.indices.raw[1],
+                    permutation.indexes.raw[1],
                 ),
             ],
         };
@@ -137,6 +137,7 @@ pub fn permute_mailbox_ignoring(
     mailbox: &[Option<Piece>; 64],
     ignore: Square,
 ) -> (Vector, Vector) {
+    const NO_PIECE: i8 = unsafe { std::mem::transmute::<Option<Piece>, i8>(None) };
     unsafe {
         let iota = Align([
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
@@ -145,11 +146,7 @@ pub fn permute_mailbox_ignoring(
         ]);
         let iota = Vector::load(iota.0.as_ptr());
         let ignore_vec = _mm256_set1_epi8(ignore.inner().cast_signed());
-        // None<Piece> is represented as 12 due to niche optimisation.
-        const {
-            assert!(12 == std::mem::transmute::<Option<Piece>, u8>(None));
-        }
-        let none_vec = _mm256_set1_epi8(12);
+        let none_vec = _mm256_set1_epi8(NO_PIECE);
         let mb = Vector::load(mailbox.as_ptr().cast::<u8>());
         let masked_mailbox = Vector {
             raw: [

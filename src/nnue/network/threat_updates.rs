@@ -48,6 +48,45 @@ impl Direction for Incoming {
     const OUTGOING: bool = false;
 }
 
+#[cfg(debug_assertions)]
+#[expect(clippy::zero_prefixed_literal)]
+fn check_rays(rays: geometry::Vector) {
+    #[rustfmt::skip]
+    const VALID: [u8; 13] = [
+        00, 01, 02, 03, 04, 05,
+        06, 07, 08, 09, 10, 11,
+        // Safety: All bitpatterns of `u8` are valid.
+        unsafe { std::mem::transmute::<Option<Piece>, u8>(None) }
+    ];
+
+    // Safety: All bitpatterns of `u8` are valid.
+    let ray_bytes: [u8; size_of::<geometry::Vector>()] = unsafe { std::mem::transmute(rays) };
+
+    for byte in ray_bytes {
+        assert!(
+            VALID.contains(&byte),
+            "Got invalid byte for variants of Option<Piece>: {byte}"
+        );
+    }
+}
+
+#[cfg(debug_assertions)]
+fn check_indexes(squares: geometry::Vector) {
+    // Safety: All bitpatterns of `u8` are valid.
+    let square_bytes: [u8; size_of::<geometry::Vector>()] = unsafe { std::mem::transmute(squares) };
+
+    for byte in square_bytes {
+        // 0×80 is the sentinel for unused permutation slots.
+        // This value is selected s.t. a _mm256_shuffle_epi8
+        // zeroes containing lanes, as 0×80’s top bit is one.
+        // <3 https://en.algorithmica.org/hpc/simd/shuffling/
+        assert!(
+            byte < 64 || byte == 0x80,
+            "Got invalid byte for square index: {byte}"
+        );
+    }
+}
+
 #[cfg(target_feature = "avx512vbmi")]
 mod vbmi {
     use std::arch::x86_64::{
@@ -67,14 +106,23 @@ mod vbmi {
         },
     };
 
-    pub fn push_focus<Op: AddSub, Dir: Direction>(
+    /// Add threats directly related to a piece’s presence
+    /// on some square. These updates could be additive or
+    /// subtractive, and the threats are either inbound or
+    /// outbound from the piece. Also see `push_discovered`.
+    pub unsafe fn push_focus<Op: AddSub, Dir: Direction>(
         updates: &mut ThreatUpdateBuffer,
-        indices: geometry::Vector, // square indices
+        indexes: geometry::Vector, // square indexes
         rays: geometry::Vector,    // pieces on said squares
         br: geometry::BitRays,     // bitrays where set bit sees focus square
         piece: Piece,              // piece on the focus square
         sq: Square,                // the focus square
     ) {
+        #[cfg(debug_assertions)]
+        super::check_rays(rays);
+        #[cfg(debug_assertions)]
+        super::check_squares(indexes);
+
         // Safety: TODO
         unsafe {
             #[rustfmt::skip]
@@ -94,7 +142,7 @@ mod vbmi {
             let pair1 = _mm512_set1_epi16(piece as i16 | ((sq as i16) << 8));
 
             // non-focus:
-            let pair2_sq = _mm512_maskz_compress_epi8(br.inner(), indices.raw);
+            let pair2_sq = _mm512_maskz_compress_epi8(br.inner(), indexes.raw);
             let pair2_piece = _mm512_maskz_compress_epi8(br.inner(), rays.raw);
             let pair2 = _mm512_permutex2var_epi8(pair2_piece, pair2_shuffle, pair2_sq);
 
@@ -120,13 +168,21 @@ mod vbmi {
         }
     }
 
-    pub fn push_discovered<Op: AddSub>(
+    /// Add threats revealed by removal of some piece from
+    /// some square, or blocked by arrival of such a piece
+    /// on such a square. For direct threats → `push_focus`.
+    pub unsafe fn push_discovered<Op: AddSub>(
         updates: &mut ThreatUpdateBuffer,
         idxs: geometry::Vector,
         rays: geometry::Vector,
         sliders: geometry::BitRays,
         victims: geometry::BitRays,
     ) {
+        #[cfg(debug_assertions)]
+        super::check_rays(rays);
+        #[cfg(debug_assertions)]
+        super::check_squares(idxs);
+
         // Safety: TODO
         #[expect(clippy::cast_ptr_alignment)]
         unsafe {
@@ -179,23 +235,36 @@ mod generic {
         },
     };
 
-    pub fn push_focus<Op: AddSub, Dir: Direction>(
+    /// Add threats directly related to a piece’s presence
+    /// on some square. These updates could be additive or
+    /// subtractive, and the threats are either inbound or
+    /// outbound from the piece. Also see `push_discovered`.
+    pub unsafe fn push_focus<Op: AddSub, Dir: Direction>(
         updates: &mut ThreatUpdateBuffer,
-        indices: geometry::Vector, // square indices
+        indexes: geometry::Vector, // square indexes
         rays: geometry::Vector,    // pieces on said squares
         br: geometry::BitRays,     // bitrays where set bit sees focus square
         piece: Piece,              // piece on the focus square
         sq: Square,                // the focus square
     ) {
-        // Safety: ehhhhhhhh get back to me on that, geometry::Vector needs to be
-        // inconstructible w/out unsafe :(
+        #[cfg(debug_assertions)]
+        super::check_rays(rays);
+        #[cfg(debug_assertions)]
+        super::check_indexes(indexes);
+
+        // Safety: Caller must ensure that the contents of `rays`
+        // and `indexes` map to valid variants of `Option<Piece>`
+        // and `Square` (respectively), to license transmutation.
         unsafe {
-            let others = std::mem::transmute::<geometry::Vector, [Piece; 64]>(rays);
-            let other_sqs = std::mem::transmute::<geometry::Vector, [Square; 64]>(indices);
+            let others = std::mem::transmute::<geometry::Vector, [Option<Piece>; 64]>(rays);
+            let other_sqs = std::mem::transmute::<geometry::Vector, [u8; 64]>(indexes);
 
             for i in br {
-                let other = others[i];
-                let other_sq = other_sqs[i];
+                let other = others[i].unwrap_unchecked();
+                // Safety: `br` only has bits set for occupied slots,
+                // where the value is a valid square index in (0..64).
+                // The 0×80 sentinels in empty slots aren’t selected.
+                let other_sq = Square::new_unchecked(other_sqs[i]);
 
                 let attacker;
                 let from;
@@ -229,26 +298,38 @@ mod generic {
         }
     }
 
-    pub fn push_discovered<Op: AddSub>(
+    /// Add threats revealed by removal of some piece from
+    /// some square, or blocked by arrival of such a piece
+    /// on such a square. For direct threats → `push_focus`.
+    pub unsafe fn push_discovered<Op: AddSub>(
         updates: &mut ThreatUpdateBuffer,
         idxs: geometry::Vector,
         rays: geometry::Vector,
         sliders: geometry::BitRays,
         victims: geometry::BitRays,
     ) {
-        // Safety: ehhhhhhhh get back to me on that, geometry::Vector needs to be
-        // inconstructible w/out unsafe :(
+        #[cfg(debug_assertions)]
+        super::check_rays(rays);
+        #[cfg(debug_assertions)]
+        super::check_indexes(idxs);
+
+        // Safety: Caller must ensure that the contents of `rays`
+        // and `indexes` map to valid variants of `Option<Piece>`
+        // and `Square` (respectively), to license transmutation.
         unsafe {
             debug_assert_eq!(victims.count_ones(), sliders.count_ones());
 
-            let pieces = std::mem::transmute::<geometry::Vector, [Piece; 64]>(rays);
-            let squares = std::mem::transmute::<geometry::Vector, [Square; 64]>(idxs);
+            let pieces = std::mem::transmute::<geometry::Vector, [Option<Piece>; 64]>(rays);
+            let squares = std::mem::transmute::<geometry::Vector, [u8; 64]>(idxs);
 
             for (slider_idx, victim_idx) in sliders.into_iter().zip(victims) {
-                let attacker = pieces[slider_idx];
-                let from = squares[slider_idx];
-                let victim = pieces[(victim_idx + 32) % 64];
-                let to = squares[(victim_idx + 32) % 64];
+                let attacker = pieces[slider_idx].unwrap_unchecked();
+                // Safety: `br` only has bits set for occupied slots,
+                // where the value is a valid square index in (0..64).
+                // The 0×80 sentinels in empty slots aren’t selected.
+                let from = Square::new_unchecked(squares[slider_idx]);
+                let victim = pieces[(victim_idx + 32) % 64].unwrap_unchecked();
+                let to = Square::new_unchecked(squares[(victim_idx + 32) % 64]);
 
                 let feature = ThreatFeatureUpdate {
                     attacker,
@@ -299,8 +380,11 @@ pub fn on_change<Op: AddSub>(
 
     // push focus-square relative threats (kings are neither attackers nor victims)
     if piece.piece_type() != PieceType::King {
-        push_focus::<Op, Outgoing>(updates, perm.indices, rays, outgoing_threats, piece, sq);
-        push_focus::<Op, Incoming>(updates, perm.indices, rays, incoming_attackers, piece, sq);
+        // Safety: `perm.indexes` & rays have valid bit-patterns.
+        unsafe {
+            push_focus::<Op, Outgoing>(updates, perm.indexes, rays, outgoing_threats, piece, sq);
+            push_focus::<Op, Incoming>(updates, perm.indexes, rays, incoming_attackers, piece, sq);
+        }
     }
 
     // find discovered threats, from sliders looking through the focus square.
@@ -316,13 +400,16 @@ pub fn on_change<Op: AddSub>(
     // answer the question: do the sliders have a victim on the opposite ray?
     let valid = geometry::ray_fill(victim_mask) & geometry::ray_fill(incoming_sliders);
 
-    push_discovered::<Op>(
-        updates,
-        perm.indices,
-        rays,
-        incoming_sliders & valid,
-        victim_mask & valid,
-    );
+    // Safety: idxs & rays have valid bit-patterns.
+    unsafe {
+        push_discovered::<Op>(
+            updates,
+            perm.indexes,
+            rays,
+            incoming_sliders & valid,
+            victim_mask & valid,
+        );
+    }
 }
 
 /// Given the transformation of a piece from one type into another,
@@ -348,11 +435,14 @@ pub fn on_mutate(
     let incoming = geometry::incoming_attackers(bits, closest);
 
     debug_assert!(old_piece.piece_type() != PieceType::King);
-    push_focus::<Sub, Outgoing>(updates, perm.indices, rays, old_outgoing, old_piece, sq);
-    push_focus::<Sub, Incoming>(updates, perm.indices, rays, incoming, old_piece, sq);
-    if new_piece.piece_type() != PieceType::King {
-        push_focus::<Add, Outgoing>(updates, perm.indices, rays, new_outgoing, new_piece, sq);
-        push_focus::<Add, Incoming>(updates, perm.indices, rays, incoming, new_piece, sq);
+    // Safety: `perm.indexes` & rays have valid bit-patterns.
+    unsafe {
+        push_focus::<Sub, Outgoing>(updates, perm.indexes, rays, old_outgoing, old_piece, sq);
+        push_focus::<Sub, Incoming>(updates, perm.indexes, rays, incoming, old_piece, sq);
+        if new_piece.piece_type() != PieceType::King {
+            push_focus::<Add, Outgoing>(updates, perm.indexes, rays, new_outgoing, new_piece, sq);
+            push_focus::<Add, Incoming>(updates, perm.indexes, rays, incoming, new_piece, sq);
+        }
     }
 }
 
@@ -389,17 +479,20 @@ pub fn on_move(
     let src_sliders = geometry::incoming_sliders(src_bits, src_closest);
     let dst_sliders = geometry::incoming_sliders(dst_bits, dst_closest);
 
-    let src_idxs = src_perm.indices;
-    let dst_idxs = dst_perm.indices;
+    let src_idxs = src_perm.indexes;
+    let dst_idxs = dst_perm.indexes;
     debug_assert!(
         old_piece.piece_type() != PieceType::King || old_piece == new_piece,
         "cannot transmute to/from king"
     );
     if old_piece.piece_type() != PieceType::King {
-        push_focus::<Sub, Outgoing>(updates, src_idxs, src_rays, src_outgoing, old_piece, src);
-        push_focus::<Add, Outgoing>(updates, dst_idxs, dst_rays, dst_outgoing, new_piece, dst);
-        push_focus::<Sub, Incoming>(updates, src_idxs, src_rays, src_incoming, old_piece, src);
-        push_focus::<Add, Incoming>(updates, dst_idxs, dst_rays, dst_incoming, new_piece, dst);
+        // Safety: `perm.indexes` & rays have valid bit-patterns.
+        unsafe {
+            push_focus::<Sub, Outgoing>(updates, src_idxs, src_rays, src_outgoing, old_piece, src);
+            push_focus::<Add, Outgoing>(updates, dst_idxs, dst_rays, dst_outgoing, new_piece, dst);
+            push_focus::<Sub, Incoming>(updates, src_idxs, src_rays, src_incoming, old_piece, src);
+            push_focus::<Add, Incoming>(updates, dst_idxs, dst_rays, dst_incoming, new_piece, dst);
+        }
     }
 
     let src_victim_mask = (src_closest & src_non_king & BitRays::NON_KNIGHT).flip();
@@ -407,20 +500,23 @@ pub fn on_move(
     let src_valid = geometry::ray_fill(src_victim_mask) & geometry::ray_fill(src_sliders);
     let dst_valid = geometry::ray_fill(dst_victim_mask) & geometry::ray_fill(dst_sliders);
 
-    push_discovered::<Sub>(
-        updates,
-        src_idxs,
-        src_rays,
-        src_sliders & src_valid,
-        src_victim_mask & src_valid,
-    );
-    push_discovered::<Add>(
-        updates,
-        dst_idxs,
-        dst_rays,
-        dst_sliders & dst_valid,
-        dst_victim_mask & dst_valid,
-    );
+    // Safety: idxs & rays have valid bit-patterns.
+    unsafe {
+        push_discovered::<Sub>(
+            updates,
+            src_idxs,
+            src_rays,
+            src_sliders & src_valid,
+            src_victim_mask & src_valid,
+        );
+        push_discovered::<Add>(
+            updates,
+            dst_idxs,
+            dst_rays,
+            dst_sliders & dst_valid,
+            dst_victim_mask & dst_valid,
+        );
+    }
 }
 
 #[cfg(test)]
@@ -632,11 +728,13 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn startpos_all_moves() {
         check_all_moves(STARTPOS);
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn kiwipete_all_moves() {
         check_all_moves(KIWIPETE);
     }
@@ -649,23 +747,23 @@ mod tests {
         util::Align,
     };
 
-    /// Compute sorted threat feature indices for a given perspective.
-    fn threat_indices(board: &Board, colour: Colour) -> ArrayVec<usize, 128> {
+    /// Compute sorted threat feature indexes for a given perspective.
+    fn threat_indexes(board: &Board, colour: Colour) -> ArrayVec<usize, 128> {
         let king = board.state.bbs.king_sq(colour);
         let threats = collect_threats_simple(board);
-        let mut indices = threats
+        let mut indexes = threats
             .iter()
             .filter_map(|t| {
                 threat_index(colour, king, t.attacker, t.victim, t.from, t.to)
                     .map(ThreatFeatureIndex::index)
             })
             .collect::<ArrayVec<_, _>>();
-        indices.sort_unstable();
-        indices
+        indexes.sort_unstable();
+        indexes
     }
 
     #[test]
-    fn startpos_threat_indices() {
+    fn startpos_threat_indexes() {
         let board = Board::from_fen(STARTPOS).unwrap();
         let expected = [
             506, 525, 3878, 3879, 3899, 3900, 8351, 8449, 9240, 9344, 15603, 15604, 15605, 18512,
@@ -674,19 +772,19 @@ mod tests {
         ];
         // symmetric
         assert_eq!(
-            &threat_indices(&board, Colour::White),
+            &threat_indexes(&board, Colour::White),
             &expected[..],
             "white threats"
         );
         assert_eq!(
-            &threat_indices(&board, Colour::Black),
+            &threat_indexes(&board, Colour::Black),
             &expected[..],
             "black threats"
         );
     }
 
     #[test]
-    fn kiwipete_threat_indices() {
+    fn kiwipete_threat_indexes() {
         let board = Board::from_fen(KIWIPETE).unwrap();
 
         let white_expected = [
@@ -702,12 +800,12 @@ mod tests {
             53848, 55300, 56761,
         ];
         assert_eq!(
-            &threat_indices(&board, Colour::White),
+            &threat_indexes(&board, Colour::White),
             &white_expected[..],
             "white threats"
         );
         assert_eq!(
-            &threat_indices(&board, Colour::Black),
+            &threat_indexes(&board, Colour::Black),
             &black_expected[..],
             "black threats"
         );
@@ -723,9 +821,9 @@ mod tests {
 
         for colour in [Colour::White, Colour::Black] {
             // compute expected accumulator by summing weight rows
-            let indices = threat_indices(&board, colour);
+            let indexes = threat_indexes(&board, colour);
             let mut expected = Align([0i16; L1_SIZE]);
-            for &idx in &indices {
+            for &idx in &indexes {
                 let start = idx * L1_SIZE;
                 let row = &nnue_params.l0_threat[start..start + L1_SIZE];
                 for (e, &r) in expected.0.iter_mut().zip(row) {
@@ -747,11 +845,13 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn startpos_threat_accumulator() {
         check_threat_accumulator(STARTPOS);
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn kiwipete_threat_accumulator() {
         check_threat_accumulator(KIWIPETE);
     }

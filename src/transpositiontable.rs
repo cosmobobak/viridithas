@@ -8,7 +8,7 @@ use crate::{
     chess::chessmove::Move,
     evaluation::{MATE_SCORE, MINIMUM_MATE_SCORE, MINIMUM_TB_WIN_SCORE},
     threadpool::{self, ScopeExt},
-    util::{MEGABYTE, VALUE_NONE},
+    util::{MEGABYTE, SendPtr, VALUE_NONE},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,13 +57,13 @@ unsafe fn threaded_memset_zero(
                 // with many threads we can hit this
                 break;
             }
-            // launder address
-            // Safety: Resultant pointer is in-bounds.
-            let addr = unsafe { ptr.add(start) } as usize;
+            // Safety: Resultant pointer is in-bounds, and each worker
+            // thread receives a disjoint region, so transfer is sound.
+            let slice_ptr = unsafe { SendPtr::new(ptr.add(start).cast::<u8>()) };
             let work = move || {
-                let slice_ptr = addr as *mut u8;
-                // Safety: Slice is in-bounds and is disjoint with the other
-                // threads' slices.
+                let slice_ptr = slice_ptr.get();
+                // Safety: Slice is in-bounds, and the region
+                // is disjoint with the other threads’ slices.
                 unsafe { std::ptr::write_bytes(slice_ptr, 0, end.checked_sub(start).unwrap()) };
             };
             handles.push(s.spawn_into(work, thread));
@@ -527,6 +527,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn memset_correct() {
         #![allow(clippy::undocumented_unsafe_blocks)]
         let mut x = vec![1u8; 2048];
