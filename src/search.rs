@@ -1006,7 +1006,8 @@ pub fn alpha_beta<NT: NodeType>(
     });
 
     // value-difference based policy update.
-    if let Some(ss_prev) = t.ss.get(height.wrapping_sub(1))
+    if excluded.is_none()
+        && let Some(ss_prev) = t.ss.get(height.wrapping_sub(1))
         && let Some(mov) = ss_prev.searching
         && ss_prev.static_eval != VALUE_NONE
         && static_eval != VALUE_NONE
@@ -1296,8 +1297,10 @@ pub fn alpha_beta<NT: NodeType>(
     let killer = t.killer_move_table[height].filter(|m| !t.board.is_tactical(*m));
     let mut move_picker = MovePicker::new(tt_move, killer, t.info.conf.main_see_bound);
 
-    t.ss[height].quiets_tried.clear();
-    t.ss[height].tacticals_tried.clear();
+    if excluded.is_none() {
+        t.ss[height].quiets_tried.clear();
+        t.ss[height].tacticals_tried.clear();
+    }
 
     while let Some(m) = move_picker.next(t) {
         if excluded == Some(m) {
@@ -1614,7 +1617,7 @@ pub fn alpha_beta<NT: NodeType>(
         Bound::Upper
     };
 
-    if alpha != original_alpha {
+    if excluded.is_none() && alpha != original_alpha {
         // we raised alpha, so this is either a PV-node or a cut-node,
         // so we update history metrics.
         let best_move = best_move.expect("if alpha was raised, we should have a best move.");
@@ -1649,7 +1652,8 @@ pub fn alpha_beta<NT: NodeType>(
         );
     }
 
-    if let Some(ss_prev) = t.ss.get(height.wrapping_sub(1))
+    if excluded.is_none()
+        && let Some(ss_prev) = t.ss.get(height.wrapping_sub(1))
         && flag == Bound::Upper
         && (!t.ss[height].quiets_tried.is_empty() || depth > 3)
         && let Some(mov) = ss_prev.searching
