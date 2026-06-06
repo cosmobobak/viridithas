@@ -198,8 +198,8 @@ impl MovePicker {
     pub fn score_quiets(t: &ThreadData, ms: &mut [MoveListEntry]) {
         let height = t.board.height();
 
-        let cont_blocks =
-            [1, 2].map(|i| (height > i).then(|| &t.cont_hist[t.ss[height - i].ch_idx]));
+        let cont_blocks = [1, 2]
+            .map(|i| (height > i).then(|| &t.histories.continuation[t.ss[height - i].ch_idx]));
 
         let threats = t.board.state.threats.all;
         #[expect(clippy::cast_possible_truncation)]
@@ -214,13 +214,13 @@ impl MovePicker {
             let mut score = 0;
 
             score += i32::midpoint(
-                i32::from(t.piece_to_hist[from_threat][to_threat][piece][to]),
-                i32::from(t.from_to_hist[from_threat][to_threat][from][to]),
+                i32::from(t.histories.piece_to[from_threat][to_threat][piece][to]),
+                i32::from(t.histories.from_to[from_threat][to_threat][from][to]),
             );
             for block in cont_blocks {
                 score += block.map_or(0, |b| i32::from(b[piece][to]));
             }
-            score += i32::from(t.pawn_hist[pawn_index][piece][to]);
+            score += i32::from(t.histories.pawn[pawn_index][piece][to]);
 
             score += 10_000 * i32::from(t.board.gives_check(m.mov));
 
@@ -302,7 +302,7 @@ impl MovePicker {
             let mut score = WINNING_CAPTURE_BONUS;
 
             score += MVV_SCORE[capture];
-            score += i32::from(t.tactical_hist[usize::from(threat_to)][capture][piece][to]);
+            score += i32::from(t.histories.tactical[usize::from(threat_to)][capture][piece][to]);
 
             m.score = score;
         }
