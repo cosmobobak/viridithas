@@ -16,7 +16,7 @@ use crate::{
     nnue::{self, network::NNUEParams},
     search::pv::PVariation,
     searchinfo::{Control, SearchInfo},
-    stack::StackFrame,
+    stack::{MoveFrame, StackFrame},
     threadpool::{self, ScopeExt},
     transpositiontable::CacheView,
     util::{MAX_DEPTH, VALUE_NONE},
@@ -54,7 +54,10 @@ impl Histories {
 pub struct ThreadData<'a> {
     // stack array is right-padded by one because singular verification
     // will try to access the next ply in an edge case.
-    pub ss: [StackFrame; MAX_DEPTH + 1],
+    pub ss: Box<[StackFrame; MAX_DEPTH + 1]>,
+
+    pub movegen: [Box<[MoveFrame; MAX_DEPTH]>; 2],
+
     pub banned_nmp: u8,
     pub nnue: Box<nnue::network::NNUEState>,
     pub nnue_params: &'static NNUEParams,
@@ -109,8 +112,17 @@ impl<'a> ThreadData<'a> {
         tbhits: &'a AtomicU64,
         control: &'a Control,
     ) -> Self {
+        let make_mg = || {
+            (0..MAX_DEPTH)
+                .map(|_| MoveFrame::default())
+                .collect::<Vec<_>>()
+                .into_boxed_slice()
+                .try_into()
+                .unwrap()
+        };
         let mut td = Self {
-            ss: array::from_fn(|_| StackFrame::default()),
+            ss: Box::new(array::from_fn(|_| StackFrame::default())),
+            movegen: [make_mg(), make_mg()],
             banned_nmp: 0,
             nnue: nnue::network::NNUEState::new(&board, nnue_params),
             nnue_params,

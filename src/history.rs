@@ -149,7 +149,7 @@ impl Histories {
     pub fn update_cont_hist(
         &mut self,
         ctx: UpdateCtx,
-        ss: &[StackFrame],
+        ss: &[StackFrame; MAX_DEPTH + 1],
         moves: &[Move],
         best_move: Move,
         depth: i32,
@@ -167,7 +167,7 @@ impl Histories {
     pub fn update_cont_hist_single(
         &mut self,
         ctx: UpdateCtx,
-        ss: &[StackFrame],
+        ss: &[StackFrame; MAX_DEPTH + 1],
         to: Square,
         piece: Piece,
         depth: i32,
@@ -224,7 +224,7 @@ impl Histories {
     pub fn update_quiet_history(
         &mut self,
         ctx: UpdateCtx,
-        ss: &[StackFrame],
+        ss: &[StackFrame; MAX_DEPTH + 1],
         moves: &[Move],
         best_move: Move,
         depth: i32,
