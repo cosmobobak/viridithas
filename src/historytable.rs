@@ -12,8 +12,6 @@ pub fn history_malus(conf: &HistoryConfig, depth: i32) -> i32 {
     i32::min(conf.malus_mul * depth + conf.malus_offset, conf.malus_max)
 }
 
-/// The signed adjustment to apply to a history value -
-/// a bonus for good moves, a malus for bad ones.
 #[inline]
 pub fn history_delta(conf: &HistoryConfig, depth: i32, good: bool) -> i32 {
     if good {
