@@ -6,8 +6,8 @@ use crate::{
         types::Square,
     },
     historytable::{
-        CORRECTION_HISTORY_MAX, HASH_HISTORY_SIZE, history_bonus, history_malus,
-        update_cont_history, update_correction, update_history,
+        CORRECTION_HISTORY_MAX, HASH_HISTORY_SIZE, history_delta, update_cont_history,
+        update_correction, update_history,
     },
     lookups::PIECE_KEYS,
     searchinfo::SearchInfo,
@@ -35,90 +35,116 @@ macro_rules! ctx {
 pub(crate) use ctx;
 
 impl Histories {
-    /// Update the history counters of a batch of moves.
-    pub fn update_history(&mut self, ctx: UpdateCtx, moves: &[Move], best_move: Move, depth: i32) {
-        let threats = ctx.board.state.threats.all;
-        let bonus = history_bonus(&ctx.info.conf.main_history, depth);
-        let malus = -history_malus(&ctx.info.conf.main_history, depth);
-        for &m in moves {
-            let delta = if m == best_move { bonus } else { malus };
-            let from = m.from();
-            let piece_moved = ctx.board.state.mailbox[from].unwrap();
-            let to = m.history_to_square();
-            let ft = threats.contains_square(from);
-            let tt = threats.contains_square(to);
-            let piece_to = &mut self.piece_to.get_mut(ft, tt)[piece_moved][to];
-            let from_to = &mut self.from_to.get_mut(ft, tt)[from][to];
-            update_history(piece_to, delta);
-            update_history(from_to, delta);
-        }
-    }
-
-    /// Update the history counters for a single move.
-    pub fn update_history_single(
+    /// Apply a delta to the main history counters (piece-to & from-to) for a single move.
+    pub fn update_main_history_single(
         &mut self,
-        ctx: UpdateCtx,
         from: Square,
         to: Square,
         moved: Piece,
         threats: SquareSet,
-        depth: i32,
-        good: bool,
+        delta: i32,
     ) {
-        let delta = if good {
-            history_bonus(&ctx.info.conf.main_history, depth)
-        } else {
-            -history_malus(&ctx.info.conf.main_history, depth)
-        };
         let ft = threats.contains_square(from);
         let tt = threats.contains_square(to);
-        let val = &mut self.piece_to.get_mut(ft, tt)[moved][to];
-        let fact_val = &mut self.from_to.get_mut(ft, tt)[from][to];
-        update_history(val, delta);
-        update_history(fact_val, delta);
+        update_history(&mut self.piece_to.get_mut(ft, tt)[moved][to], delta);
+        update_history(&mut self.from_to.get_mut(ft, tt)[from][to], delta);
     }
 
-    /// Update the pawn-structure history counters of a batch of moves.
-    pub fn update_pawn_history(
-        &mut self,
-        ctx: UpdateCtx,
-        moves: &[Move],
-        best_move: Move,
-        depth: i32,
-    ) {
-        let pawn_index = ctx.board.state.keys.pawn % HASH_HISTORY_SIZE as u64;
-        for &m in moves {
-            let piece_moved = ctx.board.state.mailbox[m.from()].unwrap();
-            let to = m.history_to_square();
-            #[expect(clippy::cast_possible_truncation)]
-            let val = &mut self.pawn[pawn_index as usize][piece_moved][to];
-            let delta = if m == best_move {
-                history_bonus(&ctx.info.conf.pawn_history, depth)
-            } else {
-                -history_malus(&ctx.info.conf.pawn_history, depth)
-            };
-            update_history(val, delta);
-        }
-    }
-
-    /// Update the pawn-structure history counter for a single move.
+    /// Apply a delta to the pawn-structure history counter for a single move.
+    #[inline]
     pub fn update_pawn_history_single(
         &mut self,
         ctx: UpdateCtx,
         to: Square,
         moved: Piece,
+        delta: i32,
+    ) {
+        #[expect(clippy::cast_possible_truncation)]
+        let pawn_index = (ctx.board.state.keys.pawn % HASH_HISTORY_SIZE as u64) as usize;
+        update_history(&mut self.pawn[pawn_index][moved][to], delta);
+    }
+
+    /// Update the continuation history counters for a single move.
+    pub fn update_cont_hist_single(
+        &mut self,
+        ctx: UpdateCtx,
+        ss: &[StackFrame; MAX_DEPTH + 1],
+        to: Square,
+        piece: Piece,
         depth: i32,
+        height: usize,
         good: bool,
     ) {
-        let delta = if good {
-            history_bonus(&ctx.info.conf.pawn_history, depth)
-        } else {
-            -history_malus(&ctx.info.conf.pawn_history, depth)
-        };
-        let pawn_index = ctx.board.state.keys.pawn % HASH_HISTORY_SIZE as u64;
-        #[expect(clippy::cast_possible_truncation)]
-        let val = &mut self.pawn[pawn_index as usize][moved][to];
-        update_history(val, delta);
+        let conf = &ctx.info.conf;
+        let plies_back = [
+            (1, conf.cont1_stat_score_mul, &conf.cont1_history),
+            (2, conf.cont2_stat_score_mul, &conf.cont2_history),
+            // (3, conf.cont3_stat_score_mul, &conf.cont3_history),
+            (4, conf.cont4_stat_score_mul, &conf.cont4_history),
+            // (5, conf.cont5_stat_score_mul, &conf.cont5_history),
+            // (6, conf.cont6_stat_score_mul, &conf.cont6_history),
+        ];
+
+        let mut sum = 0;
+        for &(index, mul, _) in &plies_back {
+            if height < index {
+                break;
+            }
+            sum += mul * i32::from(self.continuation[ss[height - index].ch_idx][piece][to]);
+        }
+        sum /= 32;
+
+        for &(index, _, history_conf) in &plies_back {
+            if height < index {
+                break;
+            }
+            let val = &mut self.continuation[ss[height - index].ch_idx][piece][to];
+            update_cont_history(val, sum, history_delta(history_conf, depth, good));
+        }
+    }
+
+    /// Update the main, continuation, and pawn-structure history tables for a single quiet move.
+    #[expect(
+        clippy::inline_always,
+        reason = "called in a loop from which the prologue can be hoisted"
+    )]
+    #[inline(always)]
+    pub fn update_quiet_history_single(
+        &mut self,
+        ctx: UpdateCtx,
+        ss: &[StackFrame; MAX_DEPTH + 1],
+        m: Move,
+        depth: i32,
+        height: usize,
+        good: bool,
+    ) {
+        let conf = &ctx.info.conf;
+        let from = m.from();
+        let to = m.history_to_square();
+        let moved = ctx.board.state.mailbox[from].unwrap();
+        let threats = ctx.board.state.threats.all;
+
+        let main_delta = history_delta(&conf.main_history, depth, good);
+        let pawn_delta = history_delta(&conf.pawn_history, depth, good);
+
+        self.update_main_history_single(from, to, moved, threats, main_delta);
+        self.update_cont_hist_single(ctx, ss, to, moved, depth, height, good);
+        self.update_pawn_history_single(ctx, to, moved, pawn_delta);
+    }
+
+    /// Update the main, continuation, and pawn-structure history tables for a batch of quiet moves.
+    pub fn update_quiet_history(
+        &mut self,
+        ctx: UpdateCtx,
+        ss: &[StackFrame; MAX_DEPTH + 1],
+        moves: &[Move],
+        best_move: Move,
+        depth: i32,
+    ) {
+        let height = ctx.board.height();
+        for &m in moves {
+            self.update_quiet_history_single(ctx, ss, m, depth, height, m == best_move);
+        }
     }
 
     /// Update the tactical history counters of a batch of moves.
@@ -130,108 +156,16 @@ impl Histories {
         depth: i32,
     ) {
         let threats = ctx.board.state.threats.all;
+        let deltas =
+            [false, true].map(|good| history_delta(&ctx.info.conf.tactical_history, depth, good));
         for &m in moves {
             let piece_moved = ctx.board.state.mailbox[m.from()].unwrap();
             let capture = caphist_piece_type(ctx.board, m);
             let to = m.to();
             let to_threat = threats.contains_square(to);
             let val = &mut self.tactical[usize::from(to_threat)][capture][piece_moved][to];
-            let delta = if m == best_move {
-                history_bonus(&ctx.info.conf.tactical_history, depth)
-            } else {
-                -history_malus(&ctx.info.conf.tactical_history, depth)
-            };
-            update_history(val, delta);
+            update_history(val, deltas[usize::from(m == best_move)]);
         }
-    }
-
-    /// Update the continuation history counters of a batch of moves.
-    pub fn update_cont_hist(
-        &mut self,
-        ctx: UpdateCtx,
-        ss: &[StackFrame; MAX_DEPTH + 1],
-        moves: &[Move],
-        best_move: Move,
-        depth: i32,
-    ) {
-        let height = ctx.board.height();
-
-        for &m in moves {
-            let good = m == best_move;
-            let to = m.history_to_square();
-            let piece = ctx.board.state.mailbox[m.from()].unwrap();
-            self.update_cont_hist_single(ctx, ss, to, piece, depth, height, good);
-        }
-    }
-
-    pub fn update_cont_hist_single(
-        &mut self,
-        ctx: UpdateCtx,
-        ss: &[StackFrame; MAX_DEPTH + 1],
-        to: Square,
-        piece: Piece,
-        depth: i32,
-        height: usize,
-        good: bool,
-    ) {
-        let indexed_multipliers = [
-            (1, ctx.info.conf.cont1_stat_score_mul),
-            (2, ctx.info.conf.cont2_stat_score_mul),
-            // (3, ctx.info.conf.cont3_stat_score_mul),
-            (4, ctx.info.conf.cont4_stat_score_mul),
-            // (5, ctx.info.conf.cont5_stat_score_mul),
-            // (6, ctx.info.conf.cont6_stat_score_mul),
-        ];
-
-        let boni = [
-            history_bonus(&ctx.info.conf.cont1_history, depth),
-            history_bonus(&ctx.info.conf.cont2_history, depth),
-            // history_bonus(&ctx.info.conf.cont3_history, depth),
-            history_bonus(&ctx.info.conf.cont4_history, depth),
-            // history_bonus(&ctx.info.conf.cont5_history, depth),
-            // history_bonus(&ctx.info.conf.cont6_history, depth),
-        ];
-
-        let mali = [
-            -history_malus(&ctx.info.conf.cont1_history, depth),
-            -history_malus(&ctx.info.conf.cont2_history, depth),
-            // -history_malus(&ctx.info.conf.cont3_history, depth),
-            -history_malus(&ctx.info.conf.cont4_history, depth),
-            // -history_malus(&ctx.info.conf.cont5_history, depth),
-            // -history_malus(&ctx.info.conf.cont6_history, depth),
-        ];
-
-        let adjustments = if good { boni } else { mali };
-
-        let mut sum = 0;
-        for (index, mul) in indexed_multipliers {
-            if height < index {
-                break;
-            }
-            sum += mul * i32::from(self.continuation[ss[height - index].ch_idx][piece][to]);
-        }
-        sum /= 32;
-
-        for ((index, _), delta) in indexed_multipliers.into_iter().zip(adjustments) {
-            if height < index {
-                break;
-            }
-            let val = &mut self.continuation[ss[height - index].ch_idx][piece][to];
-            update_cont_history(val, sum, delta);
-        }
-    }
-    /// Update the main and continuation history tables for a batch of moves.
-    pub fn update_quiet_history(
-        &mut self,
-        ctx: UpdateCtx,
-        ss: &[StackFrame; MAX_DEPTH + 1],
-        moves: &[Move],
-        best_move: Move,
-        depth: i32,
-    ) {
-        self.update_history(ctx, moves, best_move, depth);
-        self.update_cont_hist(ctx, ss, moves, best_move, depth);
-        self.update_pawn_history(ctx, moves, best_move, depth);
     }
 }
 

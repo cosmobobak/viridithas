@@ -1,14 +1,9 @@
-use arrayvec::ArrayVec;
-
-use crate::{
-    chess::{board::movegen::MAX_POSITION_MOVES, chessmove::Move, types::ContHistIndex},
-    movepicker::MovePicker,
-};
+use crate::chess::{chessmove::Move, types::ContHistIndex};
 
 /// An out-of-line explicit stack frame, permitting the search
 /// to reach up and down the callstack for information on what
 /// parent and child nodes are doing.
-#[derive(Default)]
+#[derive(Default, Clone)]
 #[allow(clippy::module_name_repetitions)]
 pub struct StackFrame {
     pub static_eval: i32,
@@ -21,12 +16,4 @@ pub struct StackFrame {
     pub ttpv: bool,
     pub ch_idx: ContHistIndex,
     pub reduction: i32,
-}
-
-/// Out-of-line data for moves in a search stack frame.
-#[derive(Default, Debug)]
-pub struct MoveFrame {
-    pub generator: MovePicker,
-    pub quiets_tried: ArrayVec<Move, MAX_POSITION_MOVES>,
-    pub tacticals_tried: ArrayVec<Move, 32>,
 }

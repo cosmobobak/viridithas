@@ -13,36 +13,15 @@ use crate::{
     history,
     historytable::{HASH_HISTORY_SIZE, MAX_HISTORY},
     search::static_exchange_eval,
-    searchinfo::SearchInfo,
     stack::StackFrame,
-    threadlocal::Histories,
+    threadlocal::{Histories, ThreadData},
     util::MAX_DEPTH,
 };
 
 pub const WINNING_CAPTURE_BONUS: i32 = 10_000_000;
 pub const MIN_WINNING_SEE_SCORE: i32 = WINNING_CAPTURE_BONUS - MAX_HISTORY;
 
-#[derive(Clone, Copy)]
-pub struct MoveGenContext<'a> {
-    pub board: &'a Board,
-    pub info: &'a SearchInfo<'a>,
-    pub histories: &'a Histories,
-    pub ss: &'a [StackFrame; MAX_DEPTH + 1],
-}
-
-macro_rules! ctx {
-    ($t:ident) => {
-        $crate::movepicker::MoveGenContext {
-            board: &$t.board,
-            info: &$t.info,
-            histories: &$t.histories,
-            ss: &$t.ss,
-        }
-    };
-}
-pub(crate) use ctx;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Stage {
     TTMove,
     GenerateCaptures,
@@ -50,11 +29,10 @@ pub enum Stage {
     YieldKiller,
     GenerateQuiets,
     YieldRemaining,
-    #[default]
     Done,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct MovePicker {
     moves: MoveList,
     index: usize,
@@ -84,20 +62,21 @@ fn fast_select(entries: &[Cell<MoveListEntry>]) -> Option<&Cell<MoveListEntry>> 
 }
 
 impl MovePicker {
-    /// We use `init` instead of `new` because this is a large type that would be costly to summon ex nihilo.
-    pub fn init(&mut self, tt_move: Option<Move>, killer: Option<Move>, see_threshold: i32) {
-        self.moves.clear();
-        self.index = 0;
-        self.stage = Stage::TTMove;
-        self.tt_move = tt_move;
-        self.killer = killer;
-        self.skip_quiets = false;
-        self.see_threshold = see_threshold;
+    pub fn new(tt_move: Option<Move>, killer: Option<Move>, see_threshold: i32) -> Self {
+        Self {
+            moves: MoveList::new(),
+            index: 0,
+            stage: Stage::TTMove,
+            tt_move,
+            killer,
+            skip_quiets: false,
+            see_threshold,
+        }
     }
 
     /// Select the next move to try. Returns None if there are no more moves to try.
     #[allow(clippy::cognitive_complexity)]
-    pub fn next(&mut self, ctx: MoveGenContext) -> Option<Move> {
+    pub fn next(&mut self, t: &ThreadData) -> Option<Move> {
         if self.stage == Stage::Done {
             return None;
         }
@@ -116,14 +95,14 @@ impl MovePicker {
             );
             // when we're in check, we want to generate enough moves to prove we're not mated.
             if self.skip_quiets {
-                ctx.board.generate_captures::<SkipQuiets>(&mut self.moves);
+                t.board.generate_captures::<SkipQuiets>(&mut self.moves);
             } else {
-                ctx.board.generate_captures::<AllMoves>(&mut self.moves);
+                t.board.generate_captures::<AllMoves>(&mut self.moves);
             }
-            Self::score_captures(ctx.board, ctx.histories, &mut self.moves);
+            Self::score_captures(&t.board, &t.histories, &mut self.moves);
         }
         if self.stage == Stage::YieldGoodCaptures {
-            if let Some(m) = self.yield_once(ctx) {
+            if let Some(m) = self.yield_once(t) {
                 if m.score >= WINNING_CAPTURE_BONUS {
                     return Some(m.mov);
                 }
@@ -143,9 +122,9 @@ impl MovePicker {
             if !self.skip_quiets
                 && self.killer != self.tt_move
                 && let Some(killer) = self.killer
-                && ctx.board.is_pseudo_legal(killer)
+                && t.board.is_pseudo_legal(killer)
             {
-                debug_assert!(!ctx.board.is_tactical(killer));
+                debug_assert!(!t.board.is_tactical(killer));
                 return Some(killer);
             }
         }
@@ -153,13 +132,13 @@ impl MovePicker {
             self.stage = Stage::YieldRemaining;
             if !self.skip_quiets {
                 let start = self.moves.len();
-                ctx.board.generate_quiets(&mut self.moves);
+                t.board.generate_quiets(&mut self.moves);
                 let quiets = &mut self.moves[start..];
-                Self::score_quiets(ctx.board, ctx.histories, ctx.ss, quiets);
+                Self::score_quiets(&t.board, &t.histories, &t.ss, quiets);
             }
         }
         if self.stage == Stage::YieldRemaining {
-            if let Some(m) = self.yield_once(ctx) {
+            if let Some(m) = self.yield_once(t) {
                 return Some(m.mov);
             }
             self.stage = Stage::Done;
@@ -174,7 +153,7 @@ impl MovePicker {
     /// Usually only one iteration is performed, but in the case where
     /// the best move has already been tried or doesn't meet SEE requirements,
     /// we will continue to iterate until we find a move that is valid.
-    fn yield_once(&mut self, ctx: MoveGenContext) -> Option<MoveListEntry> {
+    fn yield_once(&mut self, t: &ThreadData) -> Option<MoveListEntry> {
         let remaining = &mut self.moves[self.index..];
         let mut remaining = Cell::as_slice_of_cells(Cell::from_mut(remaining));
         while let Some(best_entry_ref) = fast_select(remaining) {
@@ -188,7 +167,7 @@ impl MovePicker {
             );
             // test if this is a potentially-winning capture that's yet to be SEE-ed:
             if best.score >= MIN_WINNING_SEE_SCORE
-                && !static_exchange_eval(ctx.board, &ctx.info.conf, best.mov, self.see_threshold)
+                && !static_exchange_eval(&t.board, &t.info.conf, best.mov, self.see_threshold)
             {
                 // if it fails SEE, then we want to try the next best move, and de-mark this one.
                 best_entry_ref.set(MoveListEntry {

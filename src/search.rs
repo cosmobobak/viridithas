@@ -12,7 +12,7 @@ use crate::{
     chess::{
         board::{
             Board,
-            movegen::{self, RAY_FULL},
+            movegen::{self, MAX_POSITION_MOVES, RAY_FULL},
         },
         chessmove::Move,
         piece::{Colour, Piece, PieceType},
@@ -24,9 +24,9 @@ use crate::{
         tb_loss_in, tb_win_in,
     },
     history::{self, caphist_piece_type},
-    historytable::{history_bonus, update_history},
+    historytable::history_bonus,
     lookups::HM_CLOCK_KEYS,
-    movepicker::{self, MovePicker, Stage},
+    movepicker::{MovePicker, Stage},
     search::pv::PVariation,
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
@@ -486,10 +486,9 @@ fn default_move(t: &ThreadData) -> Move {
         .probe_move(t.board.state.keys.zobrist)
         .and_then(|e| e.0);
 
-    let mut mp = MovePicker::default();
-    mp.init(tt_move, t.killer_move_table[t.board.height()], 0);
+    let mut mp = MovePicker::new(tt_move, t.killer_move_table[t.board.height()], 0);
 
-    std::iter::from_fn(|| mp.next(movepicker::ctx!(t)))
+    std::iter::from_fn(|| mp.next(t))
         .find(|&m| t.board.is_legal(m))
         .expect("Board::default_move called on a position with no legal moves")
 }
@@ -627,16 +626,16 @@ pub fn quiescence<NT: NodeType>(t: &mut ThreadData, mut alpha: i32, beta: i32) -
     let mut best_score = stand_pat;
 
     let mut moves_made = 0;
-    t.movegen[0][height].generator.init(
+    let mut move_picker = MovePicker::new(
         cache_hit.and_then(|e| e.mov),
         None,
         t.info.conf.qs_see_bound,
     );
-    t.movegen[0][height].generator.skip_quiets = !in_check;
+    move_picker.skip_quiets = !in_check;
 
     let futility = stand_pat + t.info.conf.qs_futility;
 
-    while let Some(m) = t.movegen[0][height].generator.next(movepicker::ctx!(t)) {
+    while let Some(m) = move_picker.next(t) {
         t.cache.prefetch(t.board.key_after(m));
         if !t.board.is_legal(m) {
             continue;
@@ -668,7 +667,7 @@ pub fn quiescence<NT: NodeType>(t: &mut ThreadData, mut alpha: i32, beta: i32) -
         t.board.make_move(m, &mut t.nnue);
         // move found, we can start skipping quiets again:
         if best_score > -MINIMUM_TB_WIN_SCORE {
-            t.movegen[0][height].generator.skip_quiets = true;
+            move_picker.skip_quiets = true;
         }
         t.info.nodes.increment();
         moves_made += 1;
@@ -830,30 +829,12 @@ pub fn alpha_beta<NT: NodeType>(
                 && hit.value >= beta
                 && !t.board.is_tactical(m)
             {
-                // TODO: try inlining all of these.
-                t.histories.update_history_single(
-                    history::ctx!(t),
-                    m.from(),
-                    m.history_to_square(),
-                    t.board.state.mailbox[m.from()].unwrap(),
-                    t.board.state.threats.all,
-                    depth,
-                    true,
-                );
-                t.histories.update_cont_hist_single(
+                t.histories.update_quiet_history_single(
                     history::ctx!(t),
                     &t.ss,
-                    m.history_to_square(),
-                    t.board.state.mailbox[m.from()].unwrap(),
+                    m,
                     depth,
                     height,
-                    true,
-                );
-                t.histories.update_pawn_history_single(
-                    history::ctx!(t),
-                    m.history_to_square(),
-                    t.board.state.mailbox[m.from()].unwrap(),
-                    depth,
                     true,
                 );
             }
@@ -1013,6 +994,7 @@ pub fn alpha_beta<NT: NodeType>(
         && static_eval != VALUE_NONE
         && !ss_prev.searching_tactical
     {
+        // todo: consider moving into function wrapping update_main_history_single
         let from = mov.from();
         let to = mov.history_to_square();
         let moved = t.board.state.mailbox[to].expect("Cannot fail, move has been made.");
@@ -1024,16 +1006,8 @@ pub fn alpha_beta<NT: NodeType>(
             -t.info.conf.eval_policy_update_max,
             t.info.conf.eval_policy_update_max,
         );
-        let val = &mut t
-            .histories
-            .piece_to
-            .get_mut(threats.contains_square(from), threats.contains_square(to))[moved][to];
-        let fact_val = &mut t
-            .histories
-            .from_to
-            .get_mut(threats.contains_square(from), threats.contains_square(to))[from][to];
-        update_history(val, delta);
-        update_history(fact_val, delta);
+        t.histories
+            .update_main_history_single(from, to, moved, threats, delta);
     }
 
     // "improving" is true when the current position has a better static evaluation than the one from a fullmove ago.
@@ -1206,11 +1180,9 @@ pub fn alpha_beta<NT: NodeType>(
         // base reduced probcut depth
         let depth_base = depth - 3 - (static_eval - beta) / t.info.conf.probcut_eval_div;
         let see_pivot = (pc_beta - static_eval) * t.info.conf.probcut_see_scale / 256;
-        t.movegen[0][height]
-            .generator
-            .init(tt_capture, None, see_pivot);
-        t.movegen[0][height].generator.skip_quiets = true;
-        while let Some(m) = t.movegen[0][height].generator.next(movepicker::ctx!(t)) {
+        let mut move_picker = MovePicker::new(tt_capture, None, see_pivot);
+        move_picker.skip_quiets = true;
+        while let Some(m) = move_picker.next(t) {
             t.cache.prefetch(t.board.key_after(m));
             if !t.board.is_legal(m) {
                 continue;
@@ -1297,21 +1269,13 @@ pub fn alpha_beta<NT: NodeType>(
     let lmp_threshold = t.info.lm_table.lmp_movecount(depth, improving);
 
     let killer = t.killer_move_table[height].filter(|m| !t.board.is_tactical(*m));
-    t.movegen[usize::from(excluded.is_none())][height]
-        .generator
-        .init(tt_move, killer, t.info.conf.main_see_bound);
+    let mut move_picker = MovePicker::new(tt_move, killer, t.info.conf.main_see_bound);
 
-    t.movegen[usize::from(excluded.is_none())][height]
-        .quiets_tried
-        .clear();
-    t.movegen[usize::from(excluded.is_none())][height]
-        .tacticals_tried
-        .clear();
+    let mut quiets_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
+    // there are never more than 32 captures in a position.
+    let mut tacticals_tried = ArrayVec::<_, 32>::new();
 
-    while let Some(m) = t.movegen[usize::from(excluded.is_none())][height]
-        .generator
-        .next(movepicker::ctx!(t))
-    {
+    while let Some(m) = move_picker.next(t) {
         if excluded == Some(m) {
             continue;
         }
@@ -1343,9 +1307,7 @@ pub fn alpha_beta<NT: NodeType>(
             // late move pruning
             // if we have made too many moves, we start skipping moves.
             if lmr_depth < 9 && moves_made >= lmp_threshold {
-                t.movegen[usize::from(excluded.is_none())][height]
-                    .generator
-                    .skip_quiets = true;
+                move_picker.skip_quiets = true;
             }
 
             // history pruning
@@ -1355,9 +1317,7 @@ pub fn alpha_beta<NT: NodeType>(
                 && lmr_depth < 7
                 && stat_score < t.info.conf.history_pruning_margin * (depth - 1)
             {
-                t.movegen[usize::from(excluded.is_none())][height]
-                    .generator
-                    .skip_quiets = true;
+                move_picker.skip_quiets = true;
                 continue;
             }
 
@@ -1371,9 +1331,7 @@ pub fn alpha_beta<NT: NodeType>(
                 && static_eval + fp_margin <= alpha
                 && !t.board.gives_check(m)
             {
-                t.movegen[usize::from(excluded.is_none())][height]
-                    .generator
-                    .skip_quiets = true;
+                move_picker.skip_quiets = true;
             }
         }
 
@@ -1383,10 +1341,7 @@ pub fn alpha_beta<NT: NodeType>(
             && (!NT::PV || !cfg!(feature = "datagen"))
             && best_score > -MINIMUM_TB_WIN_SCORE
             && depth < 10
-            && t.movegen[usize::from(excluded.is_none())][height]
-                .generator
-                .stage
-                > Stage::YieldGoodCaptures
+            && move_picker.stage > Stage::YieldGoodCaptures
             && t.board.state.threats.all.contains_square(m.to())
             && t.ss[height - 1].searching.is_some()
             && !static_exchange_eval(
@@ -1400,11 +1355,10 @@ pub fn alpha_beta<NT: NodeType>(
             continue;
         }
 
-        let mg = &mut t.movegen[usize::from(excluded.is_none())][height];
         if is_quiet {
-            mg.quiets_tried.push(m);
+            quiets_tried.push(m);
         } else {
-            mg.tacticals_tried.push(m);
+            tacticals_tried.push(m);
         }
 
         let nodes_before_search = t.info.nodes.get_local();
@@ -1651,7 +1605,7 @@ pub fn alpha_beta<NT: NodeType>(
             t.histories.update_quiet_history(
                 history::ctx!(t),
                 &t.ss,
-                &t.movegen[usize::from(excluded.is_none())][height].quiets_tried,
+                &quiets_tried,
                 best_move,
                 depth + low + nmp,
             );
@@ -1661,35 +1615,27 @@ pub fn alpha_beta<NT: NodeType>(
         // because tactical moves ought to be good in any position,
         // so it's good to decrease tactical history scores even
         // when the best move was non-tactical.
-        t.histories.update_tactical_history(
-            history::ctx!(t),
-            &t.movegen[usize::from(excluded.is_none())][height].tacticals_tried,
-            best_move,
-            depth,
-        );
+        t.histories
+            .update_tactical_history(history::ctx!(t), &tacticals_tried, best_move, depth);
     }
 
     if let Some(ss_prev) = t.ss.get(height.wrapping_sub(1))
         && flag == Bound::Upper
-        && (!t.movegen[usize::from(excluded.is_none())][height]
-            .quiets_tried
-            .is_empty()
-            || depth > 3)
+        && (!quiets_tried.is_empty() || depth > 3)
         && let Some(mov) = ss_prev.searching
         && !ss_prev.searching_tactical
     {
         // the current node has failed low. this means that the inbound edge to this node
         // will fail high, so we can give a bonus to that edge.
+        // todo: consider moving into function wrapping update_main_history_single
         let from = mov.from();
         let to = mov.history_to_square();
         let moved = t.board.state.mailbox[to].expect("Cannot fail, move has been made.");
         debug_assert_eq!(moved.colour(), !t.board.turn());
         let threats = t.board.history().last().unwrap().threats.all;
         let delta = history_bonus(&t.info.conf.main_history, depth);
-        let ft = threats.contains_square(from);
-        let tt = threats.contains_square(to);
-        update_history(&mut t.histories.piece_to.get_mut(ft, tt)[moved][to], delta);
-        update_history(&mut t.histories.from_to.get_mut(ft, tt)[from][to], delta);
+        t.histories
+            .update_main_history_single(from, to, moved, threats, delta);
     }
 
     if excluded.is_none() {

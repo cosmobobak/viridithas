@@ -29,7 +29,7 @@ pub struct MoveListEntry {
     pub mov: Move,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct MoveList {
     inner: ArrayVec<MoveListEntry, MAX_POSITION_MOVES>,
 }

@@ -13,7 +13,7 @@ use crate::chess::{
 };
 
 #[cfg(test)]
-use crate::{movepicker, threadlocal::ThreadData};
+use crate::threadlocal::ThreadData;
 
 pub fn perft(pos: &mut Board, depth: usize) -> u64 {
     #[cfg(debug_assertions)]
@@ -85,10 +85,10 @@ pub fn movepicker_perft(t: &mut ThreadData, depth: usize) -> u64 {
         return 1;
     }
 
-    t.movegen[0][depth].generator.init(None, None, 0);
+    let mut ml = crate::movepicker::MovePicker::new(None, None, 0);
 
     let mut count = 0;
-    while let Some(m) = t.movegen[0][depth].generator.next(movepicker::ctx!(t)) {
+    while let Some(m) = ml.next(t) {
         if !t.board.is_legal(m) {
             continue;
         }
