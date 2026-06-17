@@ -3,7 +3,7 @@ use std::cell::Cell;
 use crate::{
     chess::{
         board::{
-            Rules,
+            Board, Rules,
             movegen::{AllMoves, MoveList, MoveListEntry, SkipQuiets, pawn_attacks_by},
         },
         chessmove::Move,
@@ -13,7 +13,9 @@ use crate::{
     history,
     historytable::{HASH_HISTORY_SIZE, MAX_HISTORY},
     search::static_exchange_eval,
-    threadlocal::ThreadData,
+    stack::StackFrame,
+    threadlocal::{Histories, ThreadData},
+    util::MAX_DEPTH,
 };
 
 pub const WINNING_CAPTURE_BONUS: i32 = 10_000_000;
@@ -30,8 +32,9 @@ pub enum Stage {
     Done,
 }
 
+#[derive(Debug)]
 pub struct MovePicker {
-    movelist: MoveList,
+    moves: MoveList,
     index: usize,
     pub stage: Stage,
     tt_move: Option<Move>,
@@ -61,7 +64,7 @@ fn fast_select(entries: &[Cell<MoveListEntry>]) -> Option<&Cell<MoveListEntry>> 
 impl MovePicker {
     pub fn new(tt_move: Option<Move>, killer: Option<Move>, see_threshold: i32) -> Self {
         Self {
-            movelist: MoveList::new(),
+            moves: MoveList::new(),
             index: 0,
             stage: Stage::TTMove,
             tt_move,
@@ -86,17 +89,17 @@ impl MovePicker {
         if self.stage == Stage::GenerateCaptures {
             self.stage = Stage::YieldGoodCaptures;
             debug_assert_eq!(
-                self.movelist.len(),
+                self.moves.len(),
                 0,
                 "movelist not empty before capture generation"
             );
             // when we're in check, we want to generate enough moves to prove we're not mated.
             if self.skip_quiets {
-                t.board.generate_captures::<SkipQuiets>(&mut self.movelist);
+                t.board.generate_captures::<SkipQuiets>(&mut self.moves);
             } else {
-                t.board.generate_captures::<AllMoves>(&mut self.movelist);
+                t.board.generate_captures::<AllMoves>(&mut self.moves);
             }
-            Self::score_captures(t, &mut self.movelist);
+            Self::score_captures(&t.board, &t.histories, &mut self.moves);
         }
         if self.stage == Stage::YieldGoodCaptures {
             if let Some(m) = self.yield_once(t) {
@@ -128,10 +131,10 @@ impl MovePicker {
         if self.stage == Stage::GenerateQuiets {
             self.stage = Stage::YieldRemaining;
             if !self.skip_quiets {
-                let start = self.movelist.len();
-                t.board.generate_quiets(&mut self.movelist);
-                let quiets = &mut self.movelist[start..];
-                Self::score_quiets(t, quiets);
+                let start = self.moves.len();
+                t.board.generate_quiets(&mut self.moves);
+                let quiets = &mut self.moves[start..];
+                Self::score_quiets(&t.board, &t.histories, &t.ss, quiets);
             }
         }
         if self.stage == Stage::YieldRemaining {
@@ -151,7 +154,7 @@ impl MovePicker {
     /// the best move has already been tried or doesn't meet SEE requirements,
     /// we will continue to iterate until we find a move that is valid.
     fn yield_once(&mut self, t: &ThreadData) -> Option<MoveListEntry> {
-        let remaining = &mut self.movelist[self.index..];
+        let remaining = &mut self.moves[self.index..];
         let mut remaining = Cell::as_slice_of_cells(Cell::from_mut(remaining));
         while let Some(best_entry_ref) = fast_select(remaining) {
             let best = best_entry_ref.get();
@@ -195,18 +198,36 @@ impl MovePicker {
         None
     }
 
-    pub fn score_quiets(t: &ThreadData, ms: &mut [MoveListEntry]) {
-        let height = t.board.height();
+    pub fn score_quiets(
+        board: &Board,
+        histories: &Histories,
+        ss: &[StackFrame; MAX_DEPTH + 1],
+        ms: &mut [MoveListEntry],
+    ) {
+        let height = board.height();
 
         let cont_blocks =
-            [1, 2].map(|i| (height > i).then(|| &t.cont_hist[t.ss[height - i].ch_idx]));
+            [1, 2].map(|i| (height > i).then(|| &histories.continuation[ss[height - i].ch_idx]));
 
-        let threats = t.board.state.threats.all;
+        let threats = board.state.threats.all;
         #[expect(clippy::cast_possible_truncation)]
-        let pawn_index = (t.board.state.keys.pawn % HASH_HISTORY_SIZE as u64) as usize;
+        let pawn_index = (board.state.keys.pawn % HASH_HISTORY_SIZE as u64) as usize;
+
+        let turn = board.turn();
+        let us = board.state.bbs.colours[turn];
+        let them = board.state.bbs.colours[!turn];
+        let our_pawns = board.state.bbs.pieces[PieceType::Pawn] & us;
+        let their_king = board.state.bbs.pieces[PieceType::King] & them;
+        let their_queens = board.state.bbs.pieces[PieceType::Queen] & them;
+        let their_rooks = board.state.bbs.pieces[PieceType::Rook] & them;
+        let their_minors = (board.state.bbs.pieces[PieceType::Bishop]
+            | board.state.bbs.pieces[PieceType::Knight])
+            & them;
+        let their_pawns = board.state.bbs.pieces[PieceType::Pawn] & them;
+
         for m in ms {
             let from = m.mov.from();
-            let piece = t.board.state.mailbox[from].unwrap();
+            let piece = board.state.mailbox[from].unwrap();
             let to = m.mov.history_to_square();
             let from_threat = usize::from(threats.contains_square(from));
             let to_threat = usize::from(threats.contains_square(to));
@@ -214,31 +235,18 @@ impl MovePicker {
             let mut score = 0;
 
             score += i32::midpoint(
-                i32::from(t.piece_to_hist[from_threat][to_threat][piece][to]),
-                i32::from(t.from_to_hist[from_threat][to_threat][from][to]),
+                i32::from(histories.piece_to[from_threat][to_threat][piece][to]),
+                i32::from(histories.from_to[from_threat][to_threat][from][to]),
             );
             for block in cont_blocks {
                 score += block.map_or(0, |b| i32::from(b[piece][to]));
             }
-            score += i32::from(t.pawn_hist[pawn_index][piece][to]);
+            score += i32::from(histories.pawn[pawn_index][piece][to]);
 
-            score += 10_000 * i32::from(t.board.gives_check(m.mov));
+            score += 10_000 * i32::from(board.gives_check(m.mov));
 
             match piece.piece_type() {
                 PieceType::Pawn => {
-                    let turn = t.board.turn();
-                    let us = t.board.state.bbs.colours[turn];
-                    let them = t.board.state.bbs.colours[!turn];
-
-                    let our_pawns = t.board.state.bbs.pieces[PieceType::Pawn] & us;
-                    let their_king = t.board.state.bbs.pieces[PieceType::King] & them;
-                    let their_queens = t.board.state.bbs.pieces[PieceType::Queen] & them;
-                    let their_rooks = t.board.state.bbs.pieces[PieceType::Rook] & them;
-                    let their_minors = (t.board.state.bbs.pieces[PieceType::Bishop]
-                        | t.board.state.bbs.pieces[PieceType::Knight])
-                        & them;
-                    let their_pawns = t.board.state.bbs.pieces[PieceType::Pawn] & them;
-
                     if pawn_attacks_by(to.as_set(), !turn) & our_pawns != SquareSet::EMPTY {
                         // bonus for creating threats
                         let pawn_attacks = pawn_attacks_by(to.as_set(), turn);
@@ -256,26 +264,26 @@ impl MovePicker {
                     }
                 }
                 PieceType::Knight | PieceType::Bishop => {
-                    if t.board.state.threats.leq_pawn.contains_square(from) {
+                    if board.state.threats.leq_pawn.contains_square(from) {
                         score += 4000;
                     }
-                    if t.board.state.threats.leq_pawn.contains_square(to) {
+                    if board.state.threats.leq_pawn.contains_square(to) {
                         score -= 4000;
                     }
                 }
                 PieceType::Rook => {
-                    if t.board.state.threats.leq_minor.contains_square(from) {
+                    if board.state.threats.leq_minor.contains_square(from) {
                         score += 8000;
                     }
-                    if t.board.state.threats.leq_minor.contains_square(to) {
+                    if board.state.threats.leq_minor.contains_square(to) {
                         score -= 8000;
                     }
                 }
                 PieceType::Queen => {
-                    if t.board.state.threats.leq_rook.contains_square(from) {
+                    if board.state.threats.leq_rook.contains_square(from) {
                         score += 12000;
                     }
-                    if t.board.state.threats.leq_rook.contains_square(to) {
+                    if board.state.threats.leq_rook.contains_square(to) {
                         score -= 12000;
                     }
                 }
@@ -286,23 +294,23 @@ impl MovePicker {
         }
     }
 
-    pub fn score_captures(t: &ThreadData, moves: &mut [MoveListEntry]) {
+    pub fn score_captures(board: &Board, histories: &Histories, moves: &mut [MoveListEntry]) {
         const MVV_SCORE: [i32; 6] = [0, 2400, 2400, 4800, 9600, 0];
 
-        let threats = t.board.state.threats.all;
+        let threats = board.state.threats.all;
         for m in moves {
             let from = m.mov.from();
             let to = m.mov.to();
             let threat_to = threats.contains_square(to);
-            let piece = t.board.state.mailbox[from].unwrap();
-            let capture = history::caphist_piece_type(&t.board, m.mov);
+            let piece = board.state.mailbox[from].unwrap();
+            let capture = history::caphist_piece_type(board, m.mov);
 
             // optimistically initialised with the winning-SEE score.
             // lazily checked during yield_once.
             let mut score = WINNING_CAPTURE_BONUS;
 
             score += MVV_SCORE[capture];
-            score += i32::from(t.tactical_hist[usize::from(threat_to)][capture][piece][to]);
+            score += i32::from(histories.tactical[usize::from(threat_to)][capture][piece][to]);
 
             m.score = score;
         }

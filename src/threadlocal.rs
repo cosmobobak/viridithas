@@ -22,6 +22,34 @@ use crate::{
     util::{MAX_DEPTH, VALUE_NONE},
 };
 
+pub struct Histories {
+    pub piece_to: Box<ThreatsHistoryTable<PieceToTable>>,
+    pub from_to: Box<ThreatsHistoryTable<FromToTable>>,
+    pub tactical: Box<CaptureHistoryTable>,
+    pub continuation: Box<DoubleHistoryTable>,
+    pub pawn: Box<HashHistoryTable>,
+}
+
+impl Histories {
+    pub fn new() -> Self {
+        Self {
+            piece_to: ThreatsHistoryTable::boxed(),
+            from_to: ThreatsHistoryTable::boxed(),
+            tactical: CaptureHistoryTable::boxed(),
+            continuation: DoubleHistoryTable::boxed(),
+            pawn: HashHistoryTable::boxed(),
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.piece_to.clear();
+        self.from_to.clear();
+        self.tactical.clear();
+        self.continuation.clear();
+        self.pawn.clear();
+    }
+}
+
 #[repr(align(64))]
 pub struct ThreadData<'a> {
     // stack array is right-padded by one because singular verification
@@ -31,11 +59,7 @@ pub struct ThreadData<'a> {
     pub nnue: Box<nnue::network::NNUEState>,
     pub nnue_params: &'static NNUEParams,
 
-    pub piece_to_hist: Box<ThreatsHistoryTable<PieceToTable>>,
-    pub from_to_hist: Box<ThreatsHistoryTable<FromToTable>>,
-    pub tactical_hist: Box<CaptureHistoryTable>,
-    pub cont_hist: Box<DoubleHistoryTable>,
-    pub pawn_hist: Box<HashHistoryTable>,
+    pub histories: Histories,
     pub killer_move_table: [Option<Move>; MAX_DEPTH + 1],
     pub pawn_corrhist: Box<CorrectionHistoryTable>,
     pub nonpawn_corrhist: [Box<CorrectionHistoryTable>; 2],
@@ -90,11 +114,7 @@ impl<'a> ThreadData<'a> {
             banned_nmp: 0,
             nnue: nnue::network::NNUEState::new(&board, nnue_params),
             nnue_params,
-            piece_to_hist: ThreatsHistoryTable::boxed(),
-            from_to_hist: ThreatsHistoryTable::boxed(),
-            tactical_hist: CaptureHistoryTable::boxed(),
-            cont_hist: DoubleHistoryTable::boxed(),
-            pawn_hist: HashHistoryTable::boxed(),
+            histories: Histories::new(),
             killer_move_table: [None; MAX_DEPTH + 1],
             pawn_corrhist: CorrectionHistoryTable::boxed(),
             nonpawn_corrhist: [
@@ -161,11 +181,7 @@ impl<'a> ThreadData<'a> {
     }
 
     pub fn clear_tables(&mut self) {
-        self.piece_to_hist.clear();
-        self.from_to_hist.clear();
-        self.tactical_hist.clear();
-        self.cont_hist.clear();
-        self.pawn_hist.clear();
+        self.histories.clear();
         self.pawn_corrhist.clear();
         self.nonpawn_corrhist[Colour::White].clear();
         self.nonpawn_corrhist[Colour::Black].clear();

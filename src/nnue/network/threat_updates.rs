@@ -121,7 +121,7 @@ mod vbmi {
         #[cfg(debug_assertions)]
         super::check_rays(rays);
         #[cfg(debug_assertions)]
-        super::check_squares(indexes);
+        super::check_indexes(indexes);
 
         // Safety: TODO
         unsafe {
@@ -181,7 +181,7 @@ mod vbmi {
         #[cfg(debug_assertions)]
         super::check_rays(rays);
         #[cfg(debug_assertions)]
-        super::check_squares(idxs);
+        super::check_indexes(idxs);
 
         // Safety: TODO
         #[expect(clippy::cast_ptr_alignment)]

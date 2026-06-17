@@ -77,8 +77,6 @@ pub fn nnue_perft(t: &mut ThreadData, depth: usize) -> u64 {
 
 #[cfg(test)]
 pub fn movepicker_perft(t: &mut ThreadData, depth: usize) -> u64 {
-    use crate::movepicker::MovePicker;
-
     #[cfg(debug_assertions)]
     t.board.check_validity();
     // debug_assert!(t.board.check_nnue_coherency(&t.nnue));
@@ -87,7 +85,7 @@ pub fn movepicker_perft(t: &mut ThreadData, depth: usize) -> u64 {
         return 1;
     }
 
-    let mut ml = MovePicker::new(None, None, 0);
+    let mut ml = crate::movepicker::MovePicker::new(None, None, 0);
 
     let mut count = 0;
     while let Some(m) = ml.next(t) {

@@ -1,10 +1,9 @@
-use std::{env, error::Error};
+use std::env;
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() {
     prep_net();
     build_dependencies();
     generate_bindings();
-    Ok(())
 }
 
 fn prep_net() {
