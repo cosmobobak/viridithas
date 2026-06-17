@@ -212,6 +212,19 @@ impl MovePicker {
         let threats = board.state.threats.all;
         #[expect(clippy::cast_possible_truncation)]
         let pawn_index = (board.state.keys.pawn % HASH_HISTORY_SIZE as u64) as usize;
+
+        let turn = board.turn();
+        let us = board.state.bbs.colours[turn];
+        let them = board.state.bbs.colours[!turn];
+        let our_pawns = board.state.bbs.pieces[PieceType::Pawn] & us;
+        let their_king = board.state.bbs.pieces[PieceType::King] & them;
+        let their_queens = board.state.bbs.pieces[PieceType::Queen] & them;
+        let their_rooks = board.state.bbs.pieces[PieceType::Rook] & them;
+        let their_minors = (board.state.bbs.pieces[PieceType::Bishop]
+            | board.state.bbs.pieces[PieceType::Knight])
+            & them;
+        let their_pawns = board.state.bbs.pieces[PieceType::Pawn] & them;
+
         for m in ms {
             let from = m.mov.from();
             let piece = board.state.mailbox[from].unwrap();
@@ -234,19 +247,6 @@ impl MovePicker {
 
             match piece.piece_type() {
                 PieceType::Pawn => {
-                    let turn = board.turn();
-                    let us = board.state.bbs.colours[turn];
-                    let them = board.state.bbs.colours[!turn];
-
-                    let our_pawns = board.state.bbs.pieces[PieceType::Pawn] & us;
-                    let their_king = board.state.bbs.pieces[PieceType::King] & them;
-                    let their_queens = board.state.bbs.pieces[PieceType::Queen] & them;
-                    let their_rooks = board.state.bbs.pieces[PieceType::Rook] & them;
-                    let their_minors = (board.state.bbs.pieces[PieceType::Bishop]
-                        | board.state.bbs.pieces[PieceType::Knight])
-                        & them;
-                    let their_pawns = board.state.bbs.pieces[PieceType::Pawn] & them;
-
                     if pawn_attacks_by(to.as_set(), !turn) & our_pawns != SquareSet::EMPTY {
                         // bonus for creating threats
                         let pawn_attacks = pawn_attacks_by(to.as_set(), turn);
