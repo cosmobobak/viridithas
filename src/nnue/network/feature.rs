@@ -71,22 +71,6 @@ pub fn psqt_index_full(colour: Colour, king: Square, f: PsqtFeatureUpdate) -> us
     idx
 }
 
-/// wrapper to enforce bounds.
-#[allow(clippy::module_name_repetitions)]
-#[derive(Clone, Copy, Debug)]
-pub struct ThreatFeatureIndex(u32);
-
-impl ThreatFeatureIndex {
-    /// Invariant: the result of this function is less than the number of NNUE threat features (60144),
-    /// so it can be used to index a row of the feature-transformer matrix without bounds checking.
-    #[allow(clippy::inline_always)]
-    #[must_use]
-    #[inline(always)]
-    pub const fn index(self) -> usize {
-        self.0 as usize
-    }
-}
-
 /// `PIECE_TARGET_MAP[i][j]` is –1 if the interaction between piece-types
 /// `i` and `j` is fully excluded from the feature-set. At time of writing,
 /// all interactions involving kings are fully-excluded, as are
@@ -325,8 +309,10 @@ static ATTACK_INDEX: [[[u32; 2]; 12]; 12] = {
 };
 
 /// Compute an index from 0 to `THREAT_FEATURES` representing the given threat,
-/// for use in the NNUE feature transformer. Returns `None` if the threat isn’t
-/// part of the feature-set.
+/// for use in the NNUE feature transformer. Also returns a flag, `false` when
+/// the index is excluded from the feature-set. It is erroneous to use the idx
+/// when the first value of the tuple is `false`. This is done in spite of the
+/// availability of `Option<T>` for the sake of branchless serialisation.
 pub fn threat_index(
     colour: Colour,
     // The king’s position is relevant for horizontal mirroring, but is not part of the feature index itself.
@@ -339,7 +325,7 @@ pub fn threat_index(
     mut from: Square,
     // The square being attacked (i.e. the victim’s square).
     mut to: Square,
-) -> Option<ThreatFeatureIndex> {
+) -> (bool, u32) {
     // All threat indices are reversed for black.
     if colour == Colour::Black {
         attacker = attacker.flip_colour();
@@ -366,9 +352,6 @@ pub fn threat_index(
     // `(attacker, victim, direction)` combination
     // (or signals exclusion if index = THREAT_FEATURES)
     let attack_index = ATTACK_INDEX[attacker][victim][usize::from(forwards)];
-    if attack_index as usize == THREAT_FEATURES {
-        return None;
-    }
     // `OFFSET.offsets` selects the sub-block for the attacker’s
     // from-square within that attacker’s feature space.
     let offset = OFFSET.offsets[attacker][from];
@@ -378,10 +361,8 @@ pub fn threat_index(
     // to 0..<relevant number of distinct victim squares>
     let piece_index = u32::from(PIECE_INDEX[attacker][from][to]);
 
-    // SAFETY: important invariant being upheld here!!
-    assert!(
-        attack_index + offset + piece_index < 60144,
-        "attempt to construct illegal ThreatFeatureIndex."
-    );
-    Some(ThreatFeatureIndex(attack_index + offset + piece_index))
+    (
+        attack_index as usize != THREAT_FEATURES,
+        attack_index + offset + piece_index,
+    )
 }
