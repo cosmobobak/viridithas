@@ -50,6 +50,17 @@ impl Histories {
         update_history(&mut self.from_to.get_mut(ft, tt)[from][to], delta);
     }
 
+    /// Apply a delta to the main history for the inbound edge into a node,
+    /// i.e. a move that has already been made on `board`.
+    pub fn update_inbound_edge(&mut self, board: &Board, mov: Move, delta: i32) {
+        let from = mov.from();
+        let to = mov.history_to_square();
+        let moved = board.state.mailbox[to].expect("Cannot fail, move has been made.");
+        debug_assert_eq!(moved.colour(), !board.turn());
+        let threats = board.history().last().unwrap().threats.all;
+        self.update_main_history_single(from, to, moved, threats, delta);
+    }
+
     /// Apply a delta to the pawn-structure history counter for a single move.
     #[inline]
     pub fn update_pawn_history_single(
@@ -216,20 +227,12 @@ impl ThreadData<'_> {
         update(major);
 
         if height > 2 {
-            let ch1 = self.ss[height - 1].ch_idx;
-            let ch2 = self.ss[height - 2].ch_idx;
-            let mut index = 0;
-            index ^= PIECE_KEYS[ch1.piece][ch1.to];
-            index ^= PIECE_KEYS[ch2.piece][ch2.to];
+            let index = cont_corrhist_index(&self.ss, height, 2);
             update(self.cont_corrhist.get_mut(us, index));
         }
 
         if height > 4 {
-            let ch1 = self.ss[height - 1].ch_idx;
-            let ch2 = self.ss[height - 4].ch_idx;
-            let mut index = 0;
-            index ^= PIECE_KEYS[ch1.piece][ch1.to];
-            index ^= PIECE_KEYS[ch2.piece][ch2.to];
+            let index = cont_corrhist_index(&self.ss, height, 4);
             update(self.cont_corrhist.get_mut(us, index));
         }
     }
@@ -251,23 +254,15 @@ impl ThreadData<'_> {
         let major = self.major_corrhist.get(us, keys.major);
 
         let cont12 = if height > 2 {
-            let ch1 = self.ss[height - 1].ch_idx;
-            let ch2 = self.ss[height - 2].ch_idx;
-            let mut index = 0;
-            index ^= PIECE_KEYS[ch1.piece][ch1.to];
-            index ^= PIECE_KEYS[ch2.piece][ch2.to];
-            self.cont_corrhist.get(us, index)
+            self.cont_corrhist
+                .get(us, cont_corrhist_index(&self.ss, height, 2))
         } else {
             0
         };
 
         let cont14 = if height > 4 {
-            let ch1 = self.ss[height - 1].ch_idx;
-            let ch2 = self.ss[height - 4].ch_idx;
-            let mut index = 0;
-            index ^= PIECE_KEYS[ch1.piece][ch1.to];
-            index ^= PIECE_KEYS[ch2.piece][ch2.to];
-            self.cont_corrhist.get(us, index)
+            self.cont_corrhist
+                .get(us, cont_corrhist_index(&self.ss, height, 4))
         } else {
             0
         };
@@ -281,6 +276,14 @@ impl ThreadData<'_> {
 
         (adjustment * 12 / 0x40000) as i32
     }
+}
+
+/// Compute the continuation-correction-history key from
+/// the move `1` ply back and the move `back` plies back.
+fn cont_corrhist_index(ss: &[StackFrame; MAX_DEPTH + 1], height: usize, back: usize) -> u64 {
+    let ch1 = ss[height - 1].ch_idx;
+    let ch2 = ss[height - back].ch_idx;
+    PIECE_KEYS[ch1.piece][ch1.to] ^ PIECE_KEYS[ch2.piece][ch2.to]
 }
 
 pub fn caphist_piece_type(pos: &Board, mv: Move) -> PieceType {

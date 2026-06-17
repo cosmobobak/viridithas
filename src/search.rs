@@ -994,20 +994,13 @@ pub fn alpha_beta<NT: NodeType>(
         && static_eval != VALUE_NONE
         && !ss_prev.searching_tactical
     {
-        // todo: consider moving into function wrapping update_main_history_single
-        let from = mov.from();
-        let to = mov.history_to_square();
-        let moved = t.board.state.mailbox[to].expect("Cannot fail, move has been made.");
-        debug_assert_eq!(moved.colour(), !t.board.turn());
-        let threats = t.board.history().last().unwrap().threats.all;
         let improvement = -(ss_prev.static_eval + static_eval) + t.info.conf.eval_policy_offset;
         let delta = i32::clamp(
             improvement * t.info.conf.eval_policy_improvement_scale / 32,
             -t.info.conf.eval_policy_update_max,
             t.info.conf.eval_policy_update_max,
         );
-        t.histories
-            .update_main_history_single(from, to, moved, threats, delta);
+        t.histories.update_inbound_edge(&t.board, mov, delta);
     }
 
     // "improving" is true when the current position has a better static evaluation than the one from a fullmove ago.
@@ -1627,15 +1620,8 @@ pub fn alpha_beta<NT: NodeType>(
     {
         // the current node has failed low. this means that the inbound edge to this node
         // will fail high, so we can give a bonus to that edge.
-        // todo: consider moving into function wrapping update_main_history_single
-        let from = mov.from();
-        let to = mov.history_to_square();
-        let moved = t.board.state.mailbox[to].expect("Cannot fail, move has been made.");
-        debug_assert_eq!(moved.colour(), !t.board.turn());
-        let threats = t.board.history().last().unwrap().threats.all;
         let delta = history_bonus(&t.info.conf.main_history, depth);
-        t.histories
-            .update_main_history_single(from, to, moved, threats, delta);
+        t.histories.update_inbound_edge(&t.board, mov, delta);
     }
 
     if excluded.is_none() {
