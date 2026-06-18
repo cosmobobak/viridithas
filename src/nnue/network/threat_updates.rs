@@ -530,7 +530,7 @@ mod tests {
             board::{Board, movegen::attacks_by_type},
             piece::PieceType,
         },
-        nnue::network::{UpdateBuffer, feature::ThreatFeatureIndex},
+        nnue::{accumulator, network::UpdateBuffer},
     };
 
     use super::*;
@@ -625,11 +625,11 @@ mod tests {
 
         // Apply diff: remove subs, add adds, filtering king threats
         let mut result = threats_before;
-        for &sub in buf.subs() {
+        for &sub in &buf.sub {
             let idx = result.binary_search(&sub).unwrap();
             result.remove(idx);
         }
-        for &add in buf.adds() {
+        for &add in &buf.add {
             let idx = result.binary_search(&add).unwrap_err();
             result.insert(idx, add);
         }
@@ -709,8 +709,7 @@ mod tests {
 
         let simple = collect_threats_simple(&board_after);
 
-        let incremental =
-            apply_threat_diff(threats_before, buffer.threat.subs(), buffer.threat.adds());
+        let incremental = apply_threat_diff(threats_before, &buffer.threat.sub, &buffer.threat.add);
         assert_threats_eq(
             &simple,
             &incremental,
@@ -743,19 +742,19 @@ mod tests {
 
     use crate::{
         chess::piece::Colour,
-        nnue::network::{L1_SIZE, NNUEParams, NNUEState, feature::threat_index},
+        nnue::network::{L1_SIZE, NNUEParams, feature::threat_index},
         util::Align,
     };
 
     /// Compute sorted threat feature indexes for a given perspective.
-    fn threat_indexes(board: &Board, colour: Colour) -> ArrayVec<usize, 128> {
+    fn threat_indexes(board: &Board, colour: Colour) -> ArrayVec<u32, 128> {
         let king = board.state.bbs.king_sq(colour);
         let threats = collect_threats_simple(board);
         let mut indexes = threats
             .iter()
             .filter_map(|t| {
-                threat_index(colour, king, t.attacker, t.victim, t.from, t.to)
-                    .map(ThreatFeatureIndex::index)
+                let (good, idx) = threat_index(colour, king, t.attacker, t.victim, t.from, t.to);
+                good.then_some(idx)
             })
             .collect::<ArrayVec<_, _>>();
         indexes.sort_unstable();
@@ -824,7 +823,7 @@ mod tests {
             let indexes = threat_indexes(&board, colour);
             let mut expected = Align([0i16; L1_SIZE]);
             for &idx in &indexes {
-                let start = idx * L1_SIZE;
+                let start = idx as usize * L1_SIZE;
                 let row = &nnue_params.l0_threat[start..start + L1_SIZE];
                 for (e, &r) in expected.0.iter_mut().zip(row) {
                     *e += i16::from(r);
@@ -835,7 +834,12 @@ mod tests {
             let mut acc = crate::nnue::accumulator::Accumulator {
                 halves: [Align([0i16; L1_SIZE]), Align([0i16; L1_SIZE])],
             };
-            NNUEState::refresh_threats(nnue_params, &board, colour, &mut acc);
+            accumulator::refresh_threats(
+                &nnue_params.l0_threat,
+                &mut acc.halves[colour],
+                &board,
+                colour,
+            );
 
             assert_eq!(
                 acc.halves[colour].0, expected.0,

@@ -16,16 +16,13 @@ use memmap2::Mmap;
 
 use crate::{
     chess::{
-        board::{Board, movegen::attacks_by_type},
+        board::Board,
         piece::{Black, Col, Colour, Piece, PieceType, White},
         piecelayout::PieceLayout,
         types::Square,
     },
     image::{self, Image},
-    nnue::{
-        self,
-        network::feature::{ThreatFeatureIndex, threat_index},
-    },
+    nnue,
     util::{Align, MAX_DEPTH},
 };
 
@@ -1194,7 +1191,7 @@ pub struct ThreatFeatureUpdate {
 }
 
 impl ThreatFeatureUpdate {
-    pub fn index(self, colour: Colour, king: Square) -> Option<ThreatFeatureIndex> {
+    pub fn index(self, colour: Colour, king: Square) -> (bool, u32) {
         feature::threat_index(colour, king, self.attacker, self.victim, self.from, self.to)
     }
 }
@@ -1246,14 +1243,6 @@ pub struct ThreatUpdateBuffer {
 }
 
 impl ThreatUpdateBuffer {
-    pub fn adds(&self) -> &[ThreatFeatureUpdate] {
-        &self.add[..]
-    }
-
-    pub fn subs(&self) -> &[ThreatFeatureUpdate] {
-        &self.sub[..]
-    }
-
     pub fn clear(&mut self) {
         self.add.clear();
         self.sub.clear();
@@ -1416,44 +1405,13 @@ impl NNUEState {
             self.psqt_correct[0][colour] = true;
 
             // threat half:
-            Self::refresh_threats(nnue_params, board, colour, &mut self.threat_accumulators[0]);
+            accumulator::refresh_threats(
+                &nnue_params.l0_threat,
+                &mut self.threat_accumulators[0].halves[colour],
+                board,
+                colour,
+            );
             self.threat_correct[0][colour] = true;
-        }
-    }
-
-    pub fn refresh_threats(
-        nnue_params: &NNUEParams,
-        board: &Board,
-        colour: Colour,
-        acc: &mut Accumulator,
-    ) {
-        let acc = &mut acc.halves[colour];
-
-        acc.fill(0); // clear the accumulator, we'll rebuild it from scratch
-
-        let bbs = &board.state.bbs;
-        let occ = bbs.occupied();
-        let king = board.state.bbs.king_sq(colour);
-        let bb = occ & !bbs.pieces[PieceType::King];
-
-        // todo: think about whether this would be better as
-        // a per-type loop — we might do better if we knew
-        // what sort of piece we were moving, or we could merge
-        // queen directions with ortho/diagonal moves, &c &c
-        for from in bb {
-            let attacker = board.state.mailbox[from].unwrap();
-            let threats = occ & attacks_by_type(attacker, from, occ) & !bbs.pieces[PieceType::King];
-            for to in threats {
-                let victim = board.state.mailbox[to].unwrap();
-                let Some(feature) = threat_index(colour, king, attacker, victim, from, to) else {
-                    continue;
-                };
-                let start = feature.index() * L1_SIZE;
-                let row = &nnue_params.l0_threat[start..start + L1_SIZE];
-                for i in 0..L1_SIZE {
-                    acc[i] += i16::from(row[i]);
-                }
-            }
         }
     }
 
@@ -1584,11 +1542,11 @@ impl NNUEState {
                 if self.can_efficiently_update::<ThreatUpdate>(colour) {
                     self.apply_lazy_updates::<ThreatUpdate>(nnue_params, board, colour);
                 } else {
-                    Self::refresh_threats(
-                        nnue_params,
+                    accumulator::refresh_threats(
+                        &nnue_params.l0_threat,
+                        &mut self.threat_accumulators[self.current_acc].halves[colour],
                         board,
                         colour,
-                        &mut self.threat_accumulators[self.current_acc],
                     );
                     self.threat_correct[self.current_acc][colour] = true;
                 }
@@ -1747,22 +1705,7 @@ impl NNUEState {
         let src = &src_acc.halves[colour];
         let tgt = &mut tgt_acc.halves[colour];
 
-        // todo: don’t double-buffer.
-        let mut adds = ArrayVec::<ThreatFeatureIndex, 128>::new();
-        let mut subs = ArrayVec::<ThreatFeatureIndex, 128>::new();
-
-        for &add in updates.adds() {
-            if let Some(index) = add.index(colour, king) {
-                adds.push(index);
-            }
-        }
-        for &sub in updates.subs() {
-            if let Some(index) = sub.index(colour, king) {
-                subs.push(index);
-            }
-        }
-
-        accumulator::vector_update_threats(src, tgt, &nnue_params.l0_threat, &adds, &subs);
+        accumulator::vector_update_threats(src, tgt, &nnue_params.l0_threat, updates, king, colour);
     }
 
     /// Evaluate the final layer on the partial activations.

@@ -26,9 +26,16 @@ mod simd {
     use arrayvec::ArrayVec;
 
     use super::{Align, L1_SIZE, PSQT_FEATURES, PsqtFeatureIndex, slice_to_aligned};
-    use crate::nnue::{
-        network::{THREAT_FEATURES, feature::ThreatFeatureIndex},
-        simd::{self, I16_CHUNK},
+    use crate::{
+        chess::{
+            board::{Board, movegen::attacks_by_type},
+            piece::{Colour, PieceType},
+            types::Square,
+        },
+        nnue::{
+            network::{THREAT_FEATURES, ThreatUpdateBuffer, feature::threat_index},
+            simd::{self, I16_CHUNK},
+        },
     };
 
     /// Apply add/subtract PSQT updates in place.
@@ -88,9 +95,10 @@ mod simd {
     pub fn vector_update_threats(
         src_acc: &Align<[i16; L1_SIZE]>,
         dst_acc: &mut Align<[i16; L1_SIZE]>,
-        bucket: &Align<[i8; THREAT_FEATURES * L1_SIZE]>,
-        adds: &[ThreatFeatureIndex],
-        subs: &[ThreatFeatureIndex],
+        weights: &Align<[i8; THREAT_FEATURES * L1_SIZE]>,
+        updates: &ThreatUpdateBuffer,
+        king: Square,
+        colour: Colour,
     ) {
         #[cfg(target_arch = "x86_64")]
         use std::arch::x86_64::{_MM_HINT_T0, _mm_prefetch};
@@ -98,7 +106,7 @@ mod simd {
         const REGISTERS: usize = 16;
         const UNROLL: usize = I16_CHUNK * REGISTERS;
 
-        if adds.is_empty() && subs.is_empty() {
+        if updates.add.is_empty() && updates.sub.is_empty() {
             dst_acc.copy_from_slice(&**src_acc);
             return;
         }
@@ -106,21 +114,38 @@ mod simd {
         // SAFETY: we never hold multiple mutable references, we never mutate immutable memory,
         // we use iterators to ensure that we're staying in-bounds, etc.
         unsafe {
-            let mut add_blocks = ArrayVec::<_, 128>::new();
-            let mut sub_blocks = ArrayVec::<_, 128>::new();
-            for &add_index in adds {
-                let add_index = add_index.index() * L1_SIZE;
-                let slice = slice_to_aligned(bucket.get_unchecked(add_index..add_index + L1_SIZE));
-                #[cfg(target_arch = "x86_64")]
-                _mm_prefetch(std::ptr::from_ref(slice).cast::<i8>(), _MM_HINT_T0);
-                add_blocks.push(slice);
+            #![allow(clippy::cast_possible_truncation)]
+            let mut add_blocks = ArrayVec::<u32, 128>::new();
+            let mut sub_blocks = ArrayVec::<u32, 128>::new();
+            for &idx in &updates.add {
+                let (good, idx) = idx.index(colour, king);
+                let len = add_blocks.len();
+                debug_assert!(len < add_blocks.capacity(), "OOB write");
+                let loc = add_blocks.as_mut_ptr().add(len);
+                *loc = idx * const { L1_SIZE as u32 };
+                add_blocks.set_len(len + usize::from(good));
             }
-            for &sub_index in subs {
-                let sub_index = sub_index.index() * L1_SIZE;
-                let slice = slice_to_aligned(bucket.get_unchecked(sub_index..sub_index + L1_SIZE));
+            for &idx in &updates.sub {
+                let (good, idx) = idx.index(colour, king);
+                let len = sub_blocks.len();
+                debug_assert!(len < sub_blocks.capacity(), "OOB write");
+                let loc = sub_blocks.as_mut_ptr().add(len);
+                *loc = idx * const { L1_SIZE as u32 };
+                sub_blocks.set_len(len + usize::from(good));
+            }
+            for &offset in &add_blocks {
                 #[cfg(target_arch = "x86_64")]
-                _mm_prefetch(std::ptr::from_ref(slice).cast::<i8>(), _MM_HINT_T0);
-                sub_blocks.push(slice);
+                _mm_prefetch(
+                    (*weights).as_ptr().add(offset as usize).cast::<i8>(),
+                    _MM_HINT_T0,
+                );
+            }
+            for &offset in &sub_blocks {
+                #[cfg(target_arch = "x86_64")]
+                _mm_prefetch(
+                    (*weights).as_ptr().add(offset as usize).cast::<i8>(),
+                    _MM_HINT_T0,
+                );
             }
             let mut registers = [simd::zero_i16(); REGISTERS];
             for i in 0..L1_SIZE / UNROLL {
@@ -133,18 +158,89 @@ mod simd {
                 // check if the compiler is smart enough to load in a sensible way.
                 for &sub_block in &sub_blocks {
                     for (r_idx, reg) in registers.iter_mut().enumerate() {
-                        let src = sub_block.as_ptr().add(unroll_offset + r_idx * I16_CHUNK);
+                        let src = (*weights)
+                            .as_ptr()
+                            .add(sub_block as usize + unroll_offset + r_idx * I16_CHUNK);
                         *reg = simd::sub_i16(*reg, simd::load_extend_i8(src));
                     }
                 }
                 for &add_block in &add_blocks {
                     for (r_idx, reg) in registers.iter_mut().enumerate() {
-                        let src = add_block.as_ptr().add(unroll_offset + r_idx * I16_CHUNK);
+                        let src = (*weights)
+                            .as_ptr()
+                            .add(add_block as usize + unroll_offset + r_idx * I16_CHUNK);
                         *reg = simd::add_i16(*reg, simd::load_extend_i8(src));
                     }
                 }
                 for (r_idx, reg) in registers.iter().enumerate() {
                     let dst = dst_acc.as_mut_ptr().add(unroll_offset + r_idx * I16_CHUNK);
+                    simd::store_i16(dst, *reg);
+                }
+            }
+        }
+    }
+
+    pub fn refresh_threats(
+        weights: &Align<[i8; THREAT_FEATURES * L1_SIZE]>,
+        acc: &mut Align<[i16; L1_SIZE]>,
+        board: &Board,
+        colour: Colour,
+    ) {
+        #[cfg(target_arch = "x86_64")]
+        use std::arch::x86_64::{_MM_HINT_T0, _mm_prefetch};
+
+        const REGISTERS: usize = 16;
+        const UNROLL: usize = I16_CHUNK * REGISTERS;
+
+        let bbs = &board.state.bbs;
+        let occ = bbs.occupied();
+        let king = board.state.bbs.king_sq(colour);
+        let bb = occ & !bbs.pieces[PieceType::King];
+
+        let mut indexes = ArrayVec::<u32, 128>::new();
+
+        // Safety: We know this routine never produces more than 128 features.
+        unsafe {
+            #![allow(clippy::cast_possible_truncation)]
+            for from in bb {
+                let attacker = board.state.mailbox[from].unwrap();
+                let threats =
+                    occ & attacks_by_type(attacker, from, occ) & !bbs.pieces[PieceType::King];
+                for to in threats {
+                    let victim = board.state.mailbox[to].unwrap();
+                    let (good, feature) = threat_index(colour, king, attacker, victim, from, to);
+                    let len = indexes.len();
+                    debug_assert!(len < indexes.capacity(), "OOB write");
+                    let loc = indexes.as_mut_ptr().add(len);
+                    *loc = feature * const { L1_SIZE as u32 };
+                    indexes.set_len(len + usize::from(good));
+                }
+            }
+
+            for &offset in &indexes {
+                #[cfg(target_arch = "x86_64")]
+                _mm_prefetch(
+                    (*weights).as_ptr().add(offset as usize).cast::<i8>(),
+                    _MM_HINT_T0,
+                );
+            }
+
+            let mut registers = [simd::zero_i16(); REGISTERS];
+            for i in 0..L1_SIZE / UNROLL {
+                let unroll_offset = i * UNROLL;
+                for reg in &mut registers {
+                    *reg = simd::zero_i16();
+                }
+                for &block in &indexes {
+                    for (r_idx, reg) in registers.iter_mut().enumerate() {
+                        let src = (*weights)
+                            .as_ptr()
+                            .add(block as usize + unroll_offset + r_idx * I16_CHUNK);
+                        *reg = simd::add_i16(*reg, simd::load_extend_i8(src));
+                    }
+                }
+                for (r_idx, reg) in registers.iter().enumerate() {
+                    let dst = acc.as_mut_ptr().add(unroll_offset + r_idx * I16_CHUNK);
                     simd::store_i16(dst, *reg);
                 }
             }
