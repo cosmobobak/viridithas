@@ -50,7 +50,7 @@ pub const PSQT_FEATURES: usize = (12 - MERGE_KING_PLANES as usize) * 64;
 /// The number of features for pawn-pawn relations.
 pub const PAWN_TUPLE_FEATURES: usize = 96 * 95 / 2;
 /// The number of features for threats.
-pub const THREAT_FEATURES: usize = 59808;
+pub const THREAT_FEATURES: usize = 60144; // todo: no!
 /// The number of features present in the non-psqt part of the input.
 pub const AUX_FEATURES: usize = THREAT_FEATURES + PAWN_TUPLE_FEATURES;
 /// The amount to scale the output of the network by.
