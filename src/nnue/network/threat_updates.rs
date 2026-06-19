@@ -8,7 +8,7 @@ use crate::{
     },
     nnue::{
         geometry::{self, BitRays},
-        network::{ThreatFeatureUpdate, ThreatUpdateBuffer},
+        network::{AuxUpdateBuffer, ThreatFeatureUpdate},
     },
 };
 
@@ -100,7 +100,7 @@ mod vbmi {
         nnue::{
             geometry,
             network::{
-                ThreatUpdateBuffer,
+                AuxUpdateBuffer,
                 threat_updates::{AddSub, Direction},
             },
         },
@@ -111,7 +111,7 @@ mod vbmi {
     /// subtractive, and the threats are either inbound or
     /// outbound from the piece. Also see `push_discovered`.
     pub unsafe fn push_focus<Op: AddSub, Dir: Direction>(
-        updates: &mut ThreatUpdateBuffer,
+        updates: &mut AuxUpdateBuffer,
         indexes: geometry::Vector, // square indexes
         rays: geometry::Vector,    // pieces on said squares
         br: geometry::BitRays,     // bitrays where set bit sees focus square
@@ -172,7 +172,7 @@ mod vbmi {
     /// some square, or blocked by arrival of such a piece
     /// on such a square. For direct threats → `push_focus`.
     pub unsafe fn push_discovered<Op: AddSub>(
-        updates: &mut ThreatUpdateBuffer,
+        updates: &mut AuxUpdateBuffer,
         idxs: geometry::Vector,
         rays: geometry::Vector,
         sliders: geometry::BitRays,
@@ -229,7 +229,7 @@ mod generic {
         nnue::{
             geometry,
             network::{
-                ThreatFeatureUpdate, ThreatUpdateBuffer,
+                AuxUpdateBuffer, ThreatFeatureUpdate,
                 threat_updates::{AddSub, Direction},
             },
         },
@@ -240,7 +240,7 @@ mod generic {
     /// subtractive, and the threats are either inbound or
     /// outbound from the piece. Also see `push_discovered`.
     pub unsafe fn push_focus<Op: AddSub, Dir: Direction>(
-        updates: &mut ThreatUpdateBuffer,
+        updates: &mut AuxUpdateBuffer,
         indexes: geometry::Vector, // square indexes
         rays: geometry::Vector,    // pieces on said squares
         br: geometry::BitRays,     // bitrays where set bit sees focus square
@@ -302,7 +302,7 @@ mod generic {
     /// some square, or blocked by arrival of such a piece
     /// on such a square. For direct threats → `push_focus`.
     pub unsafe fn push_discovered<Op: AddSub>(
-        updates: &mut ThreatUpdateBuffer,
+        updates: &mut AuxUpdateBuffer,
         idxs: geometry::Vector,
         rays: geometry::Vector,
         sliders: geometry::BitRays,
@@ -362,7 +362,7 @@ pub use generic::*;
 /// This includes threats directly emitted by or inbound to the piece,
 /// and discovered/blocked threats from sliders through the piece.
 pub fn on_change<Op: AddSub>(
-    updates: &mut ThreatUpdateBuffer,
+    updates: &mut AuxUpdateBuffer,
     board: &Board,
     piece: Piece,
     sq: Square,
@@ -417,7 +417,7 @@ pub fn on_change<Op: AddSub>(
 ///
 /// Because the piece is not moving, no threats are discovered or blocked.
 pub fn on_mutate(
-    updates: &mut ThreatUpdateBuffer,
+    updates: &mut AuxUpdateBuffer,
     board: &Board,
     old_piece: Piece,
     new_piece: Piece,
@@ -455,7 +455,7 @@ pub fn on_mutate(
 /// This function takes piece-types for old & new, in case you wish to
 /// transform the type of the piece as it moves (e.g. in case of promotion).
 pub fn on_move(
-    updates: &mut ThreatUpdateBuffer,
+    updates: &mut AuxUpdateBuffer,
     board: &Board,
     old_piece: Piece,
     src: Square,
@@ -611,7 +611,7 @@ mod tests {
 
         let threats_before = collect_threats_simple(&board_before);
 
-        let mut buf = ThreatUpdateBuffer::default();
+        let mut buf = AuxUpdateBuffer::default();
         let piece = board_before.state.mailbox[m.from()].unwrap();
 
         // Remove threats before the move
@@ -709,7 +709,7 @@ mod tests {
 
         let simple = collect_threats_simple(&board_after);
 
-        let incremental = apply_threat_diff(threats_before, &buffer.threat.sub, &buffer.threat.add);
+        let incremental = apply_threat_diff(threats_before, &buffer.aux.sub, &buffer.aux.add);
         assert_threats_eq(
             &simple,
             &incremental,
@@ -824,7 +824,7 @@ mod tests {
             let mut expected = Align([0i16; L1_SIZE]);
             for &idx in &indexes {
                 let start = idx as usize * L1_SIZE;
-                let row = &nnue_params.l0_threat[start..start + L1_SIZE];
+                let row = &nnue_params.l0_aux[start..start + L1_SIZE];
                 for (e, &r) in expected.0.iter_mut().zip(row) {
                     *e += i16::from(r);
                 }
@@ -834,12 +834,7 @@ mod tests {
             let mut acc = crate::nnue::accumulator::Accumulator {
                 halves: [Align([0i16; L1_SIZE]), Align([0i16; L1_SIZE])],
             };
-            accumulator::refresh_threats(
-                &nnue_params.l0_threat,
-                &mut acc.halves[colour],
-                &board,
-                colour,
-            );
+            accumulator::refresh_aux(&nnue_params.l0_aux, &mut acc.halves[colour], &board, colour);
 
             assert_eq!(
                 acc.halves[colour].0, expected.0,

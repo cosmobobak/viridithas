@@ -19,6 +19,7 @@ use crate::{
         board::Board,
         piece::{Black, Col, Colour, Piece, PieceType, White},
         piecelayout::PieceLayout,
+        squareset::SquareSet,
         types::Square,
     },
     image::{self, Image},
@@ -30,6 +31,7 @@ use super::accumulator::{self, Accumulator};
 
 pub mod feature;
 pub mod layers;
+pub mod pawn_updates;
 pub mod threat_updates;
 
 /// The embedded neural network parameters.
@@ -45,8 +47,12 @@ pub const MERGE_KING_PLANES: bool = true;
 pub const UNQUANTISED_HAS_FACTORISER: bool = true;
 /// The number of features present in PSQT part of the input.
 pub const PSQT_FEATURES: usize = (12 - MERGE_KING_PLANES as usize) * 64;
-/// The number of features present in the threat part of the input.
-pub const THREAT_FEATURES: usize = 60144;
+/// The number of features for pawn-pawn relations.
+pub const PAWN_TUPLE_FEATURES: usize = 96 * 95 / 2;
+/// The number of features for threats.
+pub const THREAT_FEATURES: usize = 59808;
+/// The number of features present in the non-psqt part of the input.
+pub const AUX_FEATURES: usize = THREAT_FEATURES + PAWN_TUPLE_FEATURES;
 /// The amount to scale the output of the network by.
 /// This is to allow for the sigmoid activation to differentiate positions with
 /// a small difference in evaluation.
@@ -118,7 +124,7 @@ pub fn nnue_checksum() -> u64 {
 #[rustfmt::skip]
 #[repr(C)]
 struct UnquantisedNetwork {
-    l0_threat:     [f32; THREAT_FEATURES * L1_SIZE],
+    l0_aux:        [f32; AUX_FEATURES * L1_SIZE],
     // extra bucket for the feature-factoriser.
     l0_weights:    [f32; 12 * 64 * L1_SIZE * (BUCKETS + UNQUANTISED_HAS_FACTORISER as usize)],
     l0_biases:     [f32; L1_SIZE],
@@ -138,7 +144,7 @@ struct UnquantisedNetwork {
 #[rustfmt::skip]
 #[repr(C)]
 struct MergedNetwork {
-    l0_threat:    [f32; THREAT_FEATURES * L1_SIZE],
+    l0_aux:       [f32; AUX_FEATURES * L1_SIZE],
     l0_weights:   [f32; 12 * 64 * L1_SIZE * BUCKETS],
     l0_biases:    [f32; L1_SIZE],
     l1_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
@@ -154,7 +160,7 @@ struct MergedNetwork {
 #[repr(C)]
 #[derive(PartialEq, Debug)]
 struct QuantisedNetwork {
-    l0_threat:    [ i8; THREAT_FEATURES * L1_SIZE],
+    l0_aux:       [ i8; AUX_FEATURES * L1_SIZE],
     l0_weights:   [i16; PSQT_FEATURES * L1_SIZE * BUCKETS],
     l0_biases:    [i16; L1_SIZE],
     l1_weights: [[[ i8; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
@@ -170,7 +176,7 @@ struct QuantisedNetwork {
 #[rustfmt::skip]
 #[repr(C)]
 pub struct NNUEParams {
-    pub l0_threat:    Align<[ i8; THREAT_FEATURES * L1_SIZE]>,
+    pub l0_aux:       Align<[ i8; AUX_FEATURES * L1_SIZE]>,
     pub l0_weights:   Align<[i16; PSQT_FEATURES * L1_SIZE * BUCKETS]>,
     pub l0_biases:    Align<[i16; L1_SIZE]>,
     pub l1_weights:  [Align<[ i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
@@ -263,8 +269,8 @@ impl UnquantisedNetwork {
         }
 
         // copy the threat weights
-        for i in 0..THREAT_FEATURES * L1_SIZE {
-            net.l0_threat[i] = self.l0_threat[i];
+        for i in 0..AUX_FEATURES * L1_SIZE {
+            net.l0_aux[i] = self.l0_aux[i];
         }
 
         // copy the biases
@@ -475,7 +481,7 @@ impl MergedNetwork {
         }
 
         // transfer the threat plane weights:
-        for (src, tgt) in self.l0_threat.iter().zip(net.l0_threat.iter_mut()) {
+        for (src, tgt) in self.l0_aux.iter().zip(net.l0_aux.iter_mut()) {
             let scaled = *src * f32::from(QA);
             if scaled.abs() > QA_BOUND {
                 eprintln!("threat plane weight {scaled} is too large (max = {QA_BOUND})");
@@ -538,7 +544,7 @@ impl QuantisedNetwork {
         repermute_ft_bias(&mut net.l0_biases, &self.l0_biases);
 
         // repermute the threat plane weights
-        repermute_threat_weights(&mut net.l0_threat, &self.l0_threat);
+        repermute_threat_weights(&mut net.l0_aux, &self.l0_aux);
 
         // transpose FT weights and biases so that packus transposes it back to the intended order
         if use_simd {
@@ -613,8 +619,8 @@ impl QuantisedNetwork {
 
             // now the same for the threat plane weights
             let mut threat_weights: Vec<&mut PermChunk<i8>> =
-                net.l0_threat.as_chunks_mut::<8>().0.iter_mut().collect();
-            for i in (0..THREAT_FEATURES * L1_SIZE / num_chunks).step_by(num_regs) {
+                net.l0_aux.as_chunks_mut::<8>().0.iter_mut().collect();
+            for i in (0..AUX_FEATURES * L1_SIZE / num_chunks).step_by(num_regs) {
                 for j in 0..num_regs {
                     i8_regs[j] = *threat_weights[i + j];
                 }
@@ -743,10 +749,10 @@ fn repermute_ft_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
 }
 
 fn repermute_threat_weights(
-    tgt: &mut Align<[i8; THREAT_FEATURES * L1_SIZE]>,
-    unsorted: &[i8; THREAT_FEATURES * L1_SIZE],
+    tgt: &mut Align<[i8; AUX_FEATURES * L1_SIZE]>,
+    unsorted: &[i8; AUX_FEATURES * L1_SIZE],
 ) {
-    for i in 0..THREAT_FEATURES {
+    for i in 0..AUX_FEATURES {
         for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
             let feature = i * L1_SIZE;
             tgt[feature + tgt_index] = unsorted[feature + src_index];
@@ -1237,15 +1243,22 @@ impl PsqtUpdateBuffer {
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, Default)]
-pub struct ThreatUpdateBuffer {
+pub struct AuxUpdateBuffer {
     pub add: ArrayVec<ThreatFeatureUpdate, 128>,
     pub sub: ArrayVec<ThreatFeatureUpdate, 128>,
+    pub afore: [SquareSet; 2],
+    pub after: [SquareSet; 2],
 }
 
-impl ThreatUpdateBuffer {
+impl AuxUpdateBuffer {
     pub fn clear(&mut self) {
         self.add.clear();
         self.sub.clear();
+        #[cfg(debug_assertions)]
+        {
+            self.afore = [SquareSet::FULL; 2];
+            self.after = [SquareSet::FULL; 2];
+        }
     }
 }
 
@@ -1253,13 +1266,13 @@ impl ThreatUpdateBuffer {
 #[derive(PartialEq, Eq, Clone, Debug, Default)]
 pub struct UpdateBuffer {
     pub psqt: PsqtUpdateBuffer,
-    pub threat: ThreatUpdateBuffer,
+    pub aux: AuxUpdateBuffer,
 }
 
 impl UpdateBuffer {
     pub fn clear(&mut self) {
         self.psqt.clear();
-        self.threat.clear();
+        self.aux.clear();
     }
 }
 
@@ -1405,8 +1418,8 @@ impl NNUEState {
             self.psqt_correct[0][colour] = true;
 
             // threat half:
-            accumulator::refresh_threats(
-                &nnue_params.l0_threat,
+            accumulator::refresh_aux(
+                &nnue_params.l0_aux,
                 &mut self.threat_accumulators[0].halves[colour],
                 board,
                 colour,
@@ -1498,10 +1511,10 @@ impl NNUEState {
                     nnue_params,
                 );
             } else {
-                Self::materialise_new_threat_acc_from(
+                Self::materialise_new_aux_acc_from(
                     src_acc,
                     tgt_acc,
-                    &self.updates[curr_index].threat,
+                    &self.updates[curr_index].aux,
                     king,
                     colour,
                     nnue_params,
@@ -1542,8 +1555,8 @@ impl NNUEState {
                 if self.can_efficiently_update::<ThreatUpdate>(colour) {
                     self.apply_lazy_updates::<ThreatUpdate>(nnue_params, board, colour);
                 } else {
-                    accumulator::refresh_threats(
-                        &nnue_params.l0_threat,
+                    accumulator::refresh_aux(
+                        &nnue_params.l0_aux,
                         &mut self.threat_accumulators[self.current_acc].halves[colour],
                         board,
                         colour,
@@ -1694,10 +1707,10 @@ impl NNUEState {
         }
     }
 
-    pub fn materialise_new_threat_acc_from(
+    pub fn materialise_new_aux_acc_from(
         src_acc: &Accumulator,
         tgt_acc: &mut Accumulator,
-        updates: &ThreatUpdateBuffer,
+        updates: &AuxUpdateBuffer,
         king: Square,
         colour: Colour,
         nnue_params: &NNUEParams,
@@ -1705,7 +1718,7 @@ impl NNUEState {
         let src = &src_acc.halves[colour];
         let tgt = &mut tgt_acc.halves[colour];
 
-        accumulator::vector_update_threats(src, tgt, &nnue_params.l0_threat, updates, king, colour);
+        accumulator::vector_update_aux(src, tgt, &nnue_params.l0_aux, updates, king, colour);
     }
 
     /// Evaluate the final layer on the partial activations.
