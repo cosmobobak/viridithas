@@ -58,7 +58,7 @@ const DELTA_INITIAL: i32 = 12;
 const ASPIRATION_EVAL_DIVISOR: i32 = 30155;
 const DELTA_BASE_MUL: i32 = 43;
 const DELTA_REDUCTION_MUL: i32 = 19;
-const RFP_MARGIN: i32 = 73;
+const RFP_MARGIN: i32 = 65;
 const RFP_IMPROVING_MARGIN: i32 = 76;
 const NMP_IMPROVING_MARGIN: i32 = 132;
 const NMP_DEPTH_MUL: i32 = -8;
@@ -1435,6 +1435,9 @@ pub fn alpha_beta<NT: NodeType>(
             let new_depth = depth + extension - 1;
             score = -alpha_beta::<NT::Next>(t, new_depth, -beta, -alpha, !NT::PV && !cut_node);
         } else {
+            if NT::PV {
+                t.pv_scratch[height + 1].moves.clear();
+            }
             // calculation of LMR stuff
             let r = if depth > 2 && moves_made > (1 + usize::from(NT::ROOT)) {
                 let mut r = t.info.lm_table.lm_reduction(depth, moves_made);
