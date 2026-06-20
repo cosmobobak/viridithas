@@ -1,5 +1,8 @@
+use std::ops::{BitAnd, Not};
+
 #[cfg(target_feature = "avx512vbmi")]
 mod vbmi;
+
 #[cfg(target_feature = "avx512vbmi")]
 pub use vbmi::*;
 
@@ -31,7 +34,67 @@ impl Bit {
     pub const KING   : Self = Self(0x40);
 }
 
-pub type BitRays = u64;
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
+#[repr(transparent)]
+pub struct BitRays(u64);
+
+impl BitRays {
+    pub const NON_KNIGHT: Self = Self(0xFEFE_FEFE_FEFE_FEFE);
+
+    #[allow(dead_code)]
+    pub fn inner(self) -> u64 {
+        self.0
+    }
+
+    pub fn count_ones(self) -> u32 {
+        self.0.count_ones()
+    }
+
+    pub fn flip(self) -> Self {
+        Self(self.0.rotate_right(32))
+    }
+}
+
+impl BitAnd for BitRays {
+    type Output = Self;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        Self(self.0 & rhs.0)
+    }
+}
+
+impl Not for BitRays {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        Self(!self.0)
+    }
+}
+
+impl IntoIterator for BitRays {
+    type Item = usize;
+    type IntoIter = BitRaysIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        BitRaysIter(self.0)
+    }
+}
+
+pub struct BitRaysIter(u64);
+
+impl Iterator for BitRaysIter {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.0 == 0 {
+            None
+        } else {
+            let lsb = self.0.trailing_zeros();
+            self.0 &= self.0 - 1;
+            Some(lsb as usize)
+        }
+    }
+}
 
 /// Given a square, return a permutation that allows the transformation
 /// of a mailbox into a ray-vector, as specified in
@@ -113,19 +176,19 @@ pub const PIECE_TO_BIT: [Bit; 16] = {
 /// feature-set we use, which fully excludes king threats
 /// – ordinarily, they’d be `0x02_02_02_02_02_02_02_02`.
 const OUTGOING_THREATS: [BitRays; 12] = {
-    let mut lut = [0; 12];
-    lut[Piece::WP as usize] = 0x02_00_00_00_00_00_02_00;
-    lut[Piece::BP as usize] = 0x00_00_02_00_02_00_00_00;
-    lut[Piece::WN as usize] = 0x01_01_01_01_01_01_01_01;
-    lut[Piece::BN as usize] = 0x01_01_01_01_01_01_01_01;
-    lut[Piece::WB as usize] = 0xFE_00_FE_00_FE_00_FE_00;
-    lut[Piece::BB as usize] = 0xFE_00_FE_00_FE_00_FE_00;
-    lut[Piece::WR as usize] = 0x00_FE_00_FE_00_FE_00_FE;
-    lut[Piece::BR as usize] = 0x00_FE_00_FE_00_FE_00_FE;
-    lut[Piece::WQ as usize] = 0xFE_FE_FE_FE_FE_FE_FE_FE;
-    lut[Piece::BQ as usize] = 0xFE_FE_FE_FE_FE_FE_FE_FE;
-    lut[Piece::WK as usize] = 0; // ignore king threats
-    lut[Piece::BK as usize] = 0; // ignore king threats
+    let mut lut = [BitRays(0); 12];
+    lut[Piece::WP as usize] = BitRays(0x02_00_00_00_00_00_02_00);
+    lut[Piece::BP as usize] = BitRays(0x00_00_02_00_02_00_00_00);
+    lut[Piece::WN as usize] = BitRays(0x01_01_01_01_01_01_01_01);
+    lut[Piece::BN as usize] = BitRays(0x01_01_01_01_01_01_01_01);
+    lut[Piece::WB as usize] = BitRays(0xFE_00_FE_00_FE_00_FE_00);
+    lut[Piece::BB as usize] = BitRays(0xFE_00_FE_00_FE_00_FE_00);
+    lut[Piece::WR as usize] = BitRays(0x00_FE_00_FE_00_FE_00_FE);
+    lut[Piece::BR as usize] = BitRays(0x00_FE_00_FE_00_FE_00_FE);
+    lut[Piece::WQ as usize] = BitRays(0xFE_FE_FE_FE_FE_FE_FE_FE);
+    lut[Piece::BQ as usize] = BitRays(0xFE_FE_FE_FE_FE_FE_FE_FE);
+    lut[Piece::WK as usize] = BitRays(0); // ignore king threats
+    lut[Piece::BK as usize] = BitRays(0); // ignore king threats
     lut
 };
 
@@ -171,9 +234,9 @@ pub const INCOMING_SLIDERS_MASK: [Bit; 64] = {
 /// Given some bit-rays, selects every ray that has a nonzero
 /// element, and fills the whole ray.
 #[inline]
-pub fn ray_fill(mut br: BitRays) -> BitRays {
-    br = (br.wrapping_add(0x7E_7E_7E_7E_7E_7E_7E_7E)) & 0x80_80_80_80_80_80_80_80;
-    br.wrapping_sub(br >> 7)
+pub fn ray_fill(br: BitRays) -> BitRays {
+    let br = (br.0.wrapping_add(0x7E_7E_7E_7E_7E_7E_7E_7E)) & 0x80_80_80_80_80_80_80_80;
+    BitRays(br.wrapping_sub(br >> 7))
 }
 
 /// Determine which of `closest` are seen by this piece.

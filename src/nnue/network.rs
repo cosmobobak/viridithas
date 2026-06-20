@@ -6,7 +6,7 @@ use std::{
     mem::size_of,
     ops::Deref,
     path::Path,
-    sync::{Mutex, OnceLock},
+    sync::{LazyLock, Mutex, OnceLock},
     time::Duration,
 };
 
@@ -16,23 +16,22 @@ use memmap2::Mmap;
 
 use crate::{
     chess::{
-        board::{Board, movegen::attacks_by_type},
+        board::Board,
         piece::{Black, Col, Colour, Piece, PieceType, White},
         piecelayout::PieceLayout,
+        squareset::SquareSet,
         types::Square,
     },
     image::{self, Image},
-    nnue::{
-        self,
-        network::feature::{ThreatFeatureIndex, threat_index},
-    },
-    util::{self, Align64, MAX_DEPTH},
+    nnue,
+    util::{Align, MAX_DEPTH},
 };
 
 use super::accumulator::{self, Accumulator};
 
 pub mod feature;
 pub mod layers;
+pub mod pawn_updates;
 pub mod threat_updates;
 
 /// The embedded neural network parameters.
@@ -48,8 +47,12 @@ pub const MERGE_KING_PLANES: bool = true;
 pub const UNQUANTISED_HAS_FACTORISER: bool = true;
 /// The number of features present in PSQT part of the input.
 pub const PSQT_FEATURES: usize = (12 - MERGE_KING_PLANES as usize) * 64;
-/// The number of features present in the threat part of the input.
-pub const THREAT_FEATURES: usize = 60144;
+/// The number of features for pawn-pawn relations.
+pub const PAWN_TUPLE_FEATURES: usize = 96 * 95 / 2;
+/// The number of features for threats.
+pub const THREAT_FEATURES: usize = 59808;
+/// The number of features present in the non-psqt part of the input.
+pub const AUX_FEATURES: usize = THREAT_FEATURES + PAWN_TUPLE_FEATURES;
 /// The amount to scale the output of the network by.
 /// This is to allow for the sigmoid activation to differentiate positions with
 /// a small difference in evaluation.
@@ -121,7 +124,7 @@ pub fn nnue_checksum() -> u64 {
 #[rustfmt::skip]
 #[repr(C)]
 struct UnquantisedNetwork {
-    l0_threat:     [f32; THREAT_FEATURES * L1_SIZE],
+    l0_aux:        [f32; AUX_FEATURES * L1_SIZE],
     // extra bucket for the feature-factoriser.
     l0_weights:    [f32; 12 * 64 * L1_SIZE * (BUCKETS + UNQUANTISED_HAS_FACTORISER as usize)],
     l0_biases:     [f32; L1_SIZE],
@@ -141,7 +144,7 @@ struct UnquantisedNetwork {
 #[rustfmt::skip]
 #[repr(C)]
 struct MergedNetwork {
-    l0_threat:    [f32; THREAT_FEATURES * L1_SIZE],
+    l0_aux:       [f32; AUX_FEATURES * L1_SIZE],
     l0_weights:   [f32; 12 * 64 * L1_SIZE * BUCKETS],
     l0_biases:    [f32; L1_SIZE],
     l1_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
@@ -157,7 +160,7 @@ struct MergedNetwork {
 #[repr(C)]
 #[derive(PartialEq, Debug)]
 struct QuantisedNetwork {
-    l0_threat:    [ i8; THREAT_FEATURES * L1_SIZE],
+    l0_aux:       [ i8; AUX_FEATURES * L1_SIZE],
     l0_weights:   [i16; PSQT_FEATURES * L1_SIZE * BUCKETS],
     l0_biases:    [i16; L1_SIZE],
     l1_weights: [[[ i8; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
@@ -173,14 +176,14 @@ struct QuantisedNetwork {
 #[rustfmt::skip]
 #[repr(C)]
 pub struct NNUEParams {
-    pub l0_threat:    Align64<[ i8; THREAT_FEATURES * L1_SIZE]>,
-    pub l0_weights:   Align64<[i16; PSQT_FEATURES * L1_SIZE * BUCKETS]>,
-    pub l0_biases:    Align64<[i16; L1_SIZE]>,
-    pub l1_weights:  [Align64<[ i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
-    pub l1_bias:     [Align64<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
-    pub l2_weights:  [Align64<[f32; L2_SIZE * L3_SIZE * 2]>; OUTPUT_BUCKETS],
-    pub l2_bias:     [Align64<[f32; L3_SIZE * 2]>; OUTPUT_BUCKETS],
-    pub l3_weights: [[Align64<[f32; L3_SIZE]>; HEADS]; OUTPUT_BUCKETS],
+    pub l0_aux:       Align<[ i8; AUX_FEATURES * L1_SIZE]>,
+    pub l0_weights:   Align<[i16; PSQT_FEATURES * L1_SIZE * BUCKETS]>,
+    pub l0_biases:    Align<[i16; L1_SIZE]>,
+    pub l1_weights:  [Align<[ i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
+    pub l1_bias:     [Align<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
+    pub l2_weights:  [Align<[f32; L2_SIZE * L3_SIZE * 2]>; OUTPUT_BUCKETS],
+    pub l2_bias:     [Align<[f32; L3_SIZE * 2]>; OUTPUT_BUCKETS],
+    pub l3_weights: [[Align<[f32; L3_SIZE]>; HEADS]; OUTPUT_BUCKETS],
     pub l3_bias:             [[f32; HEADS]; OUTPUT_BUCKETS],
 }
 
@@ -195,32 +198,32 @@ pub struct NNUEParams {
 // };
 
 const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = [
-    154, 419, 117, 373, 57, 12, 446, 40, 505, 300, 476, 331, 428, 240, 268, 369, 41, 325, 313, 222,
-    94, 6, 308, 125, 132, 388, 205, 186, 381, 442, 129, 430, 385, 200, 262, 291, 35, 199, 413, 157,
-    139, 336, 206, 49, 250, 119, 252, 82, 318, 62, 367, 111, 483, 364, 169, 425, 108, 227, 195, 79,
-    18, 146, 431, 488, 382, 481, 352, 141, 50, 239, 21, 201, 55, 326, 311, 70, 114, 370, 179, 66,
-    435, 324, 292, 355, 255, 254, 456, 510, 174, 91, 259, 3, 193, 409, 153, 89, 345, 461, 151, 277,
-    407, 116, 400, 107, 289, 33, 20, 467, 273, 176, 90, 104, 130, 228, 103, 109, 471, 135, 436,
-    219, 264, 8, 112, 283, 485, 229, 339, 281, 25, 83, 118, 31, 22, 334, 427, 258, 164, 37, 295,
-    242, 226, 63, 28, 166, 77, 349, 246, 74, 322, 67, 4, 177, 315, 178, 34, 185, 187, 95, 127, 113,
-    297, 383, 80, 302, 46, 511, 478, 350, 69, 275, 172, 496, 75, 249, 296, 220, 272, 417, 375, 444,
-    44, 338, 188, 19, 354, 98, 190, 508, 76, 140, 396, 68, 332, 341, 85, 347, 270, 14, 86, 450, 99,
-    1, 245, 457, 406, 499, 390, 210, 466, 138, 150, 243, 5, 233, 72, 149, 52, 152, 399, 96, 506,
-    225, 212, 232, 274, 58, 126, 92, 395, 489, 455, 134, 405, 194, 257, 192, 328, 468, 261, 42, 87,
-    459, 59, 509, 279, 429, 445, 115, 310, 408, 319, 372, 298, 238, 122, 378, 294, 38, 386, 365,
-    155, 215, 448, 368, 180, 15, 490, 303, 342, 64, 434, 290, 495, 441, 501, 216, 415, 7, 30, 286,
-    423, 161, 263, 159, 16, 472, 36, 271, 121, 320, 47, 234, 475, 253, 173, 189, 371, 54, 235, 65,
-    491, 321, 453, 282, 26, 217, 183, 473, 348, 439, 265, 477, 301, 361, 61, 389, 380, 307, 440,
-    487, 458, 379, 247, 503, 327, 241, 454, 56, 424, 362, 81, 136, 32, 24, 337, 23, 280, 203, 288,
-    392, 197, 17, 432, 346, 360, 312, 498, 168, 497, 437, 218, 363, 414, 43, 244, 421, 165, 102,
-    358, 224, 480, 73, 162, 71, 329, 418, 317, 175, 397, 402, 181, 398, 182, 330, 391, 204, 460,
-    299, 110, 493, 84, 45, 156, 393, 256, 128, 377, 462, 27, 167, 394, 492, 142, 470, 438, 276,
-    211, 314, 29, 500, 494, 309, 251, 160, 209, 465, 416, 507, 267, 266, 469, 452, 10, 404, 353,
-    148, 97, 196, 106, 11, 213, 120, 198, 145, 131, 479, 230, 486, 223, 144, 401, 474, 376, 359,
-    484, 433, 387, 260, 158, 447, 366, 133, 143, 105, 124, 184, 51, 231, 123, 202, 53, 482, 285,
-    284, 422, 93, 333, 502, 411, 0, 344, 88, 384, 214, 323, 237, 412, 137, 340, 207, 306, 463, 191,
-    343, 60, 170, 356, 449, 464, 504, 403, 304, 269, 13, 147, 48, 248, 208, 221, 236, 426, 305,
-    100, 316, 443, 9, 374, 351, 293, 420, 39, 2, 171, 287, 335, 451, 78, 278, 410, 163, 101, 357,
+    83, 339, 84, 340, 292, 159, 283, 177, 433, 27, 415, 36, 356, 375, 307, 65, 1, 7, 349, 440, 362,
+    455, 402, 199, 151, 184, 172, 40, 213, 60, 164, 301, 394, 341, 263, 153, 409, 279, 102, 358,
+    291, 466, 210, 286, 30, 133, 165, 79, 139, 335, 141, 397, 460, 34, 387, 444, 180, 131, 188,
+    134, 353, 412, 416, 454, 185, 259, 505, 303, 6, 452, 18, 470, 218, 431, 310, 268, 447, 372,
+    451, 247, 227, 140, 504, 16, 250, 234, 11, 490, 15, 330, 313, 304, 381, 366, 392, 446, 89, 217,
+    391, 91, 69, 509, 26, 189, 411, 406, 435, 325, 363, 200, 422, 166, 314, 317, 94, 53, 449, 63,
+    315, 13, 137, 408, 430, 105, 202, 379, 148, 182, 85, 475, 438, 364, 442, 275, 90, 138, 264, 45,
+    477, 410, 346, 87, 337, 343, 403, 201, 331, 77, 230, 336, 266, 492, 287, 203, 384, 31, 80, 23,
+    10, 333, 181, 297, 183, 464, 272, 270, 14, 225, 316, 323, 481, 508, 443, 448, 496, 212, 260,
+    223, 370, 73, 178, 414, 459, 221, 158, 128, 96, 113, 232, 186, 219, 109, 19, 103, 8, 231, 154,
+    500, 17, 383, 251, 127, 209, 75, 114, 434, 479, 329, 4, 252, 192, 240, 187, 194, 468, 322, 488,
+    110, 288, 485, 424, 399, 242, 25, 289, 328, 72, 478, 281, 498, 461, 290, 143, 168, 229, 32,
+    104, 326, 351, 511, 425, 368, 207, 463, 76, 332, 39, 170, 426, 254, 510, 295, 233, 47, 121,
+    262, 214, 377, 497, 204, 101, 471, 55, 276, 502, 196, 243, 246, 163, 382, 215, 476, 367, 474,
+    12, 48, 54, 319, 348, 175, 396, 248, 274, 483, 3, 198, 249, 506, 162, 357, 267, 160, 97, 156,
+    373, 390, 145, 380, 374, 278, 124, 118, 413, 401, 157, 450, 305, 49, 441, 38, 22, 395, 421, 66,
+    117, 147, 24, 21, 116, 149, 86, 88, 92, 43, 265, 74, 57, 271, 244, 344, 277, 405, 507, 280,
+    365, 369, 352, 359, 487, 273, 324, 457, 342, 503, 125, 241, 62, 389, 171, 191, 311, 501, 245,
+    386, 398, 130, 417, 161, 46, 302, 37, 20, 293, 418, 220, 419, 82, 52, 35, 318, 491, 122, 0,
+    423, 334, 285, 299, 9, 465, 195, 308, 235, 439, 338, 208, 41, 5, 437, 261, 378, 78, 256, 167,
+    29, 68, 228, 150, 106, 486, 484, 236, 142, 345, 107, 135, 456, 58, 193, 61, 350, 205, 222, 136,
+    70, 197, 169, 255, 112, 95, 360, 472, 489, 294, 462, 206, 238, 298, 99, 42, 355, 494, 216, 499,
+    126, 33, 453, 111, 427, 327, 71, 407, 44, 211, 467, 67, 108, 300, 436, 179, 155, 445, 282, 253,
+    473, 347, 309, 393, 190, 59, 269, 174, 361, 152, 321, 458, 100, 320, 123, 119, 115, 239, 420,
+    2, 495, 226, 306, 376, 354, 432, 482, 120, 176, 98, 257, 50, 146, 428, 93, 129, 258, 51, 237,
+    28, 132, 493, 284, 388, 385, 64, 312, 371, 469, 429, 296, 81, 173, 404, 56, 480, 224, 144, 400,
 ];
 
 impl UnquantisedNetwork {
@@ -266,8 +269,8 @@ impl UnquantisedNetwork {
         }
 
         // copy the threat weights
-        for i in 0..THREAT_FEATURES * L1_SIZE {
-            net.l0_threat[i] = self.l0_threat[i];
+        for i in 0..AUX_FEATURES * L1_SIZE {
+            net.l0_aux[i] = self.l0_aux[i];
         }
 
         // copy the biases
@@ -371,7 +374,7 @@ impl UnquantisedNetwork {
         unsafe {
             let mut net = Self::zeroed();
             let mem = std::slice::from_raw_parts_mut(
-                util::from_mut(net.as_mut()).cast::<u8>(),
+                std::ptr::from_mut(net.as_mut()).cast::<u8>(),
                 size_of::<Self>(),
             );
             reader.read_exact(mem)?;
@@ -478,7 +481,7 @@ impl MergedNetwork {
         }
 
         // transfer the threat plane weights:
-        for (src, tgt) in self.l0_threat.iter().zip(net.l0_threat.iter_mut()) {
+        for (src, tgt) in self.l0_aux.iter().zip(net.l0_aux.iter_mut()) {
             let scaled = *src * f32::from(QA);
             if scaled.abs() > QA_BOUND {
                 eprintln!("threat plane weight {scaled} is too large (max = {QA_BOUND})");
@@ -541,7 +544,7 @@ impl QuantisedNetwork {
         repermute_ft_bias(&mut net.l0_biases, &self.l0_biases);
 
         // repermute the threat plane weights
-        repermute_threat_weights(&mut net.l0_threat, &self.l0_threat);
+        repermute_threat_weights(&mut net.l0_aux, &self.l0_aux);
 
         // transpose FT weights and biases so that packus transposes it back to the intended order
         if use_simd {
@@ -616,8 +619,8 @@ impl QuantisedNetwork {
 
             // now the same for the threat plane weights
             let mut threat_weights: Vec<&mut PermChunk<i8>> =
-                net.l0_threat.as_chunks_mut::<8>().0.iter_mut().collect();
-            for i in (0..THREAT_FEATURES * L1_SIZE / num_chunks).step_by(num_regs) {
+                net.l0_aux.as_chunks_mut::<8>().0.iter_mut().collect();
+            for i in (0..AUX_FEATURES * L1_SIZE / num_chunks).step_by(num_regs) {
                 for j in 0..num_regs {
                     i8_regs[j] = *threat_weights[i + j];
                 }
@@ -695,7 +698,7 @@ impl QuantisedNetwork {
     }
 
     fn write(&self, writer: &mut impl std::io::Write) -> anyhow::Result<()> {
-        let ptr = util::from_ref::<Self>(self).cast::<u8>();
+        let ptr = std::ptr::from_ref::<Self>(self).cast::<u8>();
         let len = size_of::<Self>();
         // SAFETY: We're writing a slice of bytes, and we know that the slice is valid.
         writer.write_all(unsafe { std::slice::from_raw_parts(ptr, len) })?;
@@ -746,10 +749,10 @@ fn repermute_ft_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
 }
 
 fn repermute_threat_weights(
-    tgt: &mut Align64<[i8; THREAT_FEATURES * L1_SIZE]>,
-    unsorted: &[i8; THREAT_FEATURES * L1_SIZE],
+    tgt: &mut Align<[i8; AUX_FEATURES * L1_SIZE]>,
+    unsorted: &[i8; AUX_FEATURES * L1_SIZE],
 ) {
-    for i in 0..THREAT_FEATURES {
+    for i in 0..AUX_FEATURES {
         for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
             let feature = i * L1_SIZE;
             tgt[feature + tgt_index] = unsorted[feature + src_index];
@@ -775,6 +778,15 @@ impl NNUEParams {
         static LOCK: Mutex<()> = Mutex::new(());
         // additionally, we'd quite like to cache the results of this function.
         static CACHED: OnceLock<Mmap> = OnceLock::new();
+
+        // If we’re under MIRI, this function is way too slow.
+        if cfg!(miri) {
+            static MIRI_NULL_NETWORK: LazyLock<Box<NNUEParams>> = LazyLock::new(|| {
+                // Safety: All bitpatterns of Self are valid.
+                unsafe { Box::new_zeroed().assume_init() }
+            });
+            return Ok(&*MIRI_NULL_NETWORK);
+        }
 
         if EMBEDDED_NNUE_VERBATIM {
             // if we're using the verbatim network, we don't need to decompress anything.
@@ -853,7 +865,7 @@ impl NNUEParams {
         // SAFETY: QN is POD and we only write to it.
         let mut mem = unsafe {
             std::slice::from_raw_parts_mut(
-                util::from_mut(net.as_mut()).cast::<u8>(),
+                std::ptr::from_mut(net.as_mut()).cast::<u8>(),
                 size_of::<QuantisedNetwork>(),
             )
         };
@@ -1064,10 +1076,7 @@ impl NNUEParams {
         }
     }
 
-    pub fn select_feature_weights(
-        &self,
-        bucket: usize,
-    ) -> &Align64<[i16; PSQT_FEATURES * L1_SIZE]> {
+    pub fn select_feature_weights(&self, bucket: usize) -> &Align<[i16; PSQT_FEATURES * L1_SIZE]> {
         // handle mirroring
         let bucket = bucket % BUCKETS;
         let start = bucket * PSQT_FEATURES * L1_SIZE;
@@ -1122,7 +1131,7 @@ pub fn dump_verbatim(output: &std::path::Path) -> anyhow::Result<()> {
     // SAFETY: look,
     let slice = unsafe {
         std::slice::from_raw_parts(
-            util::from_ref::<NNUEParams>(network).cast::<u8>(),
+            std::ptr::from_ref::<NNUEParams>(network).cast::<u8>(),
             size_of::<NNUEParams>(),
         )
     };
@@ -1188,7 +1197,7 @@ pub struct ThreatFeatureUpdate {
 }
 
 impl ThreatFeatureUpdate {
-    pub fn index(self, colour: Colour, king: Square) -> Option<ThreatFeatureIndex> {
+    pub fn index(self, colour: Colour, king: Square) -> (bool, u32) {
         feature::threat_index(colour, king, self.attacker, self.victim, self.from, self.to)
     }
 }
@@ -1234,23 +1243,22 @@ impl PsqtUpdateBuffer {
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, Default)]
-pub struct ThreatUpdateBuffer {
+pub struct AuxUpdateBuffer {
     pub add: ArrayVec<ThreatFeatureUpdate, 128>,
     pub sub: ArrayVec<ThreatFeatureUpdate, 128>,
+    pub afore: [SquareSet; 2],
+    pub after: [SquareSet; 2],
 }
 
-impl ThreatUpdateBuffer {
-    pub fn adds(&self) -> &[ThreatFeatureUpdate] {
-        &self.add[..]
-    }
-
-    pub fn subs(&self) -> &[ThreatFeatureUpdate] {
-        &self.sub[..]
-    }
-
+impl AuxUpdateBuffer {
     pub fn clear(&mut self) {
         self.add.clear();
         self.sub.clear();
+        #[cfg(debug_assertions)]
+        {
+            self.afore = [SquareSet::FULL; 2];
+            self.after = [SquareSet::FULL; 2];
+        }
     }
 }
 
@@ -1258,13 +1266,13 @@ impl ThreatUpdateBuffer {
 #[derive(PartialEq, Eq, Clone, Debug, Default)]
 pub struct UpdateBuffer {
     pub psqt: PsqtUpdateBuffer,
-    pub threat: ThreatUpdateBuffer,
+    pub aux: AuxUpdateBuffer,
 }
 
 impl UpdateBuffer {
     pub fn clear(&mut self) {
         self.psqt.clear();
-        self.threat.clear();
+        self.aux.clear();
     }
 }
 
@@ -1274,7 +1282,7 @@ impl UpdateBuffer {
 pub struct BucketAccumulatorCache {
     // both of these are BUCKETS * 2, rather than just BUCKETS,
     // because we use a horizontally-mirrored architecture.
-    accs: [[Align64<[i16; L1_SIZE]>; 2]; BUCKETS * 2],
+    accs: [[Align<[i16; L1_SIZE]>; 2]; BUCKETS * 2],
     board_states: [[PieceLayout; BUCKETS * 2]; 2],
 }
 
@@ -1410,44 +1418,13 @@ impl NNUEState {
             self.psqt_correct[0][colour] = true;
 
             // threat half:
-            Self::refresh_threats(nnue_params, board, colour, &mut self.threat_accumulators[0]);
+            accumulator::refresh_aux(
+                &nnue_params.l0_aux,
+                &mut self.threat_accumulators[0].halves[colour],
+                board,
+                colour,
+            );
             self.threat_correct[0][colour] = true;
-        }
-    }
-
-    pub fn refresh_threats(
-        nnue_params: &NNUEParams,
-        board: &Board,
-        colour: Colour,
-        acc: &mut Accumulator,
-    ) {
-        let acc = &mut acc.halves[colour];
-
-        acc.fill(0); // clear the accumulator, we'll rebuild it from scratch
-
-        let bbs = &board.state.bbs;
-        let occ = bbs.occupied();
-        let king = board.state.bbs.king_sq(colour);
-        let bb = occ & !bbs.pieces[PieceType::King];
-
-        // todo: think about whether this would be better as
-        // a per-type loop — we might do better if we knew
-        // what sort of piece we were moving, or we could merge
-        // queen directions with ortho/diagonal moves, &c &c
-        for from in bb {
-            let attacker = board.state.mailbox[from].unwrap();
-            let threats = occ & attacks_by_type(attacker, from, occ) & !bbs.pieces[PieceType::King];
-            for to in threats {
-                let victim = board.state.mailbox[to].unwrap();
-                let Some(feature) = threat_index(colour, king, attacker, victim, from, to) else {
-                    continue;
-                };
-                let start = feature.index() * L1_SIZE;
-                let row = &nnue_params.l0_threat[start..start + L1_SIZE];
-                for i in 0..L1_SIZE {
-                    acc[i] += i16::from(row[i]);
-                }
-            }
         }
     }
 
@@ -1534,10 +1511,10 @@ impl NNUEState {
                     nnue_params,
                 );
             } else {
-                Self::materialise_new_threat_acc_from(
+                Self::materialise_new_aux_acc_from(
                     src_acc,
                     tgt_acc,
-                    &self.updates[curr_index].threat,
+                    &self.updates[curr_index].aux,
                     king,
                     colour,
                     nnue_params,
@@ -1578,11 +1555,11 @@ impl NNUEState {
                 if self.can_efficiently_update::<ThreatUpdate>(colour) {
                     self.apply_lazy_updates::<ThreatUpdate>(nnue_params, board, colour);
                 } else {
-                    Self::refresh_threats(
-                        nnue_params,
+                    accumulator::refresh_aux(
+                        &nnue_params.l0_aux,
+                        &mut self.threat_accumulators[self.current_acc].halves[colour],
                         board,
                         colour,
-                        &mut self.threat_accumulators[self.current_acc],
                     );
                     self.threat_correct[self.current_acc][colour] = true;
                 }
@@ -1730,10 +1707,10 @@ impl NNUEState {
         }
     }
 
-    pub fn materialise_new_threat_acc_from(
+    pub fn materialise_new_aux_acc_from(
         src_acc: &Accumulator,
         tgt_acc: &mut Accumulator,
-        updates: &ThreatUpdateBuffer,
+        updates: &AuxUpdateBuffer,
         king: Square,
         colour: Colour,
         nnue_params: &NNUEParams,
@@ -1741,22 +1718,7 @@ impl NNUEState {
         let src = &src_acc.halves[colour];
         let tgt = &mut tgt_acc.halves[colour];
 
-        // todo: don’t double-buffer.
-        let mut adds = ArrayVec::<ThreatFeatureIndex, 128>::new();
-        let mut subs = ArrayVec::<ThreatFeatureIndex, 128>::new();
-
-        for &add in updates.adds() {
-            if let Some(index) = add.index(colour, king) {
-                adds.push(index);
-            }
-        }
-        for &sub in updates.subs() {
-            if let Some(index) = sub.index(colour, king) {
-                subs.push(index);
-            }
-        }
-
-        accumulator::vector_update_threats(src, tgt, &nnue_params.l0_threat, &adds, &subs);
+        accumulator::vector_update_aux(src, tgt, &nnue_params.l0_aux, updates, king, colour);
     }
 
     /// Evaluate the final layer on the partial activations.
@@ -1795,8 +1757,8 @@ impl NNUEState {
             ]
         };
 
-        let mut l1_outputs = Align64([0.0; L2_SIZE]);
-        let mut l2_outputs = Align64([0.0; L3_SIZE]);
+        let mut l1_outputs = Align([0.0; L2_SIZE]);
+        let mut l2_outputs = Align([0.0; L3_SIZE]);
 
         layers::activate_ft_and_propagate_l1(
             stm_psqt,

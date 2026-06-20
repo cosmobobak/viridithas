@@ -527,6 +527,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn epd_perftsuite() {
         let (success, failures) = parse_epd_file("assets/epds/perftsuite.epd");
         assert!(failures.is_empty(), "failures:\n{}", failures.join("\n"));
@@ -534,6 +535,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn epd_frcperftsuite() {
         let (success, failures) = parse_epd_file("assets/epds/frcperftsuite.epd");
         assert!(failures.is_empty(), "failures:\n{}", failures.join("\n"));
@@ -541,6 +543,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn epd_wac() {
         let (success, failures) = parse_epd_file("assets/epds/wac.epd");
         assert!(failures.is_empty(), "failures:\n{}", failures.join("\n"));
@@ -548,6 +551,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn epd_arasan21() {
         let (success, failures) = parse_epd_file("assets/epds/arasan21.epd");
         assert!(failures.is_empty(), "failures:\n{}", failures.join("\n"));
@@ -555,6 +559,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn epd_tbtest() {
         let (success, failures) = parse_epd_file("assets/epds/tbtest.epd");
         assert!(failures.is_empty(), "failures:\n{}", failures.join("\n"));
@@ -562,6 +567,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn epd_all_files() {
         // Stress test: parse all EPD files
         let epd_files = [

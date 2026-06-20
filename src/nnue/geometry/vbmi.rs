@@ -34,16 +34,16 @@ impl Vector {
 }
 
 pub struct Permutation {
-    pub indices: Vector,
+    pub indexes: Vector,
     pub valid: u64,
 }
 
 pub fn permutation_for(focus: Square) -> Permutation {
     unsafe {
-        let indices = _mm512_loadu_si512(PERMUTATION[focus.index()].as_ptr().cast());
-        let valid = _mm512_testn_epi8_mask(indices, _mm512_set1_epi8(0x80u8 as i8));
+        let indexes = _mm512_loadu_si512(PERMUTATION[focus.index()].as_ptr().cast());
+        let valid = _mm512_testn_epi8_mask(indexes, _mm512_set1_epi8(0x80u8 as i8));
         Permutation {
-            indices: Vector { raw: indices },
+            indexes: Vector { raw: indexes },
             valid,
         }
     }
@@ -57,7 +57,7 @@ pub fn permute_mailbox(
         let lut = _mm512_broadcast_i32x4(_mm_loadu_si128(PIECE_TO_BIT.as_ptr().cast::<__m128i>()));
 
         let masked_mailbox = _mm512_loadu_si512(mailbox.as_ptr().cast());
-        let permuted = _mm512_permutexvar_epi8(permutation.indices.raw, masked_mailbox);
+        let permuted = _mm512_permutexvar_epi8(permutation.indexes.raw, masked_mailbox);
         let bits = _mm512_maskz_shuffle_epi8(permutation.valid, lut, permuted);
         (Vector { raw: permuted }, Vector { raw: bits })
     }
@@ -68,6 +68,7 @@ pub fn permute_mailbox_ignoring(
     mailbox: &[Option<Piece>; 64],
     ignore: Square,
 ) -> (Vector, Vector) {
+    const NO_PIECE: i8 = unsafe { std::mem::transmute::<Option<Piece>, i8>(None) };
     unsafe {
         let lut = _mm512_broadcast_i32x4(_mm_loadu_si128(PIECE_TO_BIT.as_ptr().cast::<__m128i>()));
 
@@ -75,10 +76,9 @@ pub fn permute_mailbox_ignoring(
         let masked_mailbox = _mm512_mask_blend_epi8(
             ignore_mask,
             _mm512_loadu_si512(mailbox.as_ptr().cast()),
-            // None<Piece> is represented as 12 due to niche optimisation.
-            _mm512_set1_epi8(12),
+            _mm512_set1_epi8(NO_PIECE),
         );
-        let permuted = _mm512_permutexvar_epi8(permutation.indices.raw, masked_mailbox);
+        let permuted = _mm512_permutexvar_epi8(permutation.indexes.raw, masked_mailbox);
         let bits = _mm512_maskz_shuffle_epi8(permutation.valid, lut, permuted);
         (Vector { raw: permuted }, Vector { raw: bits })
     }
@@ -88,24 +88,29 @@ pub fn closest_occupied(bits: Vector) -> BitRays {
     unsafe {
         let occupied = _mm512_test_epi8_mask(bits.raw, bits.raw);
         let o = occupied | 0x8181_8181_8181_8181;
-        (o ^ o.wrapping_sub(0x0303_0303_0303_0303)) & occupied
+        BitRays((o ^ o.wrapping_sub(0x0303_0303_0303_0303)) & occupied)
     }
 }
 
 pub fn incoming_attackers(bits: Vector, closest: BitRays) -> BitRays {
     unsafe {
         let mask = _mm512_loadu_si512(INCOMING_THREATS_MASK.as_ptr().cast());
-        _mm512_test_epi8_mask(bits.raw, mask) & closest
+        BitRays(_mm512_test_epi8_mask(bits.raw, mask)) & closest
     }
 }
 
 pub fn incoming_sliders(bits: Vector, closest: BitRays) -> BitRays {
     unsafe {
         let mask = _mm512_loadu_si512(INCOMING_SLIDERS_MASK.as_ptr().cast());
-        _mm512_test_epi8_mask(bits.raw, mask) & closest & 0xFEFE_FEFE_FEFE_FEFE
+        BitRays(_mm512_test_epi8_mask(bits.raw, mask)) & closest & BitRays::NON_KNIGHT
     }
 }
 
 pub fn test_bit(bits: Vector, bit: Bit) -> BitRays {
-    unsafe { _mm512_test_epi8_mask(bits.raw, _mm512_set1_epi8(bit.0 as i8)) }
+    unsafe {
+        BitRays(_mm512_test_epi8_mask(
+            bits.raw,
+            _mm512_set1_epi8(bit.0 as i8),
+        ))
+    }
 }

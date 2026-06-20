@@ -3,14 +3,12 @@
 use std::{
     fs::File,
     io::{BufRead, BufReader},
-    sync::atomic::Ordering,
 };
 
 use anyhow::{Context, bail};
 
 use crate::chess::{
-    CHESS960,
-    board::{Board, movegen::MoveList},
+    board::{Board, Rules, movegen::MoveList},
     fen::Fen,
 };
 
@@ -79,8 +77,6 @@ pub fn nnue_perft(t: &mut ThreadData, depth: usize) -> u64 {
 
 #[cfg(test)]
 pub fn movepicker_perft(t: &mut ThreadData, depth: usize) -> u64 {
-    use crate::movepicker::MovePicker;
-
     #[cfg(debug_assertions)]
     t.board.check_validity();
     // debug_assert!(t.board.check_nnue_coherency(&t.nnue));
@@ -89,7 +85,7 @@ pub fn movepicker_perft(t: &mut ThreadData, depth: usize) -> u64 {
         return 1;
     }
 
-    let mut ml = MovePicker::new(None, None, 0);
+    let mut ml = crate::movepicker::MovePicker::new(None, None, 0);
 
     let mut count = 0;
     while let Some(m) = ml.next(t) {
@@ -113,7 +109,7 @@ pub fn gamut() -> anyhow::Result<()> {
     println!("running perft on perftsuite.epd");
     let f = File::open("assets/epds/perftsuite.epd")
         .with_context(|| "Failed to open assets/epds/perftsuite.epd")?;
-    let mut pos = Board::empty();
+    let mut pos = Board::empty(Rules::Classical);
     for line in BufReader::new(f).lines() {
         let line = line?;
         let mut parts = line.split(';');
@@ -142,9 +138,8 @@ pub fn gamut() -> anyhow::Result<()> {
     }
     // open frcperftsuite.epd
     println!("running perft on frcperftsuite.epd");
-    CHESS960.store(true, Ordering::SeqCst);
     let f = File::open("assets/epds/frcperftsuite.epd").unwrap();
-    let mut pos = Board::empty();
+    let mut pos = Board::empty(Rules::Chess960);
     for line in BufReader::new(f).lines() {
         let line = line.unwrap();
         let mut parts = line.split(';');
@@ -168,19 +163,20 @@ pub fn gamut() -> anyhow::Result<()> {
             }
         }
     }
-    CHESS960.store(false, Ordering::SeqCst);
     Ok(())
 }
 
+#[cfg(test)]
 mod tests {
     #![allow(unused_imports)]
     use std::sync::atomic::{AtomicBool, AtomicU64};
 
     use crate::{
-        chess::{CHESS960, chessmove::Move, piece::PieceType, types::Square},
+        chess::{chessmove::Move, piece::PieceType, types::Square},
         nnue::network::NNUEParams,
+        searchinfo::Control,
         threadpool,
-        transpositiontable::TT,
+        transpositiontable::Cache,
         util::MEGABYTE,
     };
 
@@ -194,10 +190,11 @@ mod tests {
         assert_eq!(perft(&mut pos, 1), 48, "got {}", {
             pos.legal_moves()
                 .into_iter()
-                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                .map(|m| m.display(pos.rules()).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
+        #[cfg(not(miri))]
         assert_eq!(perft(&mut pos, 2), 2_039);
         // assert_eq!(perft(&mut pos, 3), 97_862);
         // assert_eq!(perft(&mut pos, 4), 4_085_603);
@@ -207,45 +204,48 @@ mod tests {
     fn perft_start_position() {
         use super::*;
 
-        let mut pos = Board::empty();
-        pos.set_startpos();
+        let mut pos = Board::startpos();
         assert_eq!(perft(&mut pos, 1), 20, "got {}", {
             pos.legal_moves()
                 .into_iter()
-                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                .map(|m| m.display(pos.rules()).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
         assert_eq!(perft(&mut pos, 2), 400);
+        #[cfg(not(miri))]
         assert_eq!(perft(&mut pos, 3), 8_902);
         // assert_eq!(perft(&mut pos, 4), 197_281);
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn perft_nnue_start_position() {
         use super::*;
 
         let pool = threadpool::make_worker_threads(1);
-        let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16, &pool);
+        let mut cache = Cache::new();
+        cache.resize(MEGABYTE * 16, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
+        let control = Control::default();
         let mut t = ThreadData::new(
             0,
             Board::startpos(),
-            tt.view(),
+            cache.view(),
             nnue_params,
             &stopped,
             &nodes,
             &tbhits,
+            &control,
         );
         assert_eq!(nnue_perft(&mut t, 1), 20, "got {}", {
             t.board
                 .legal_moves()
                 .into_iter()
-                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                .map(|m| m.display(t.board.rules()).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -255,23 +255,34 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn perft_movepicker_start_position() {
         use super::*;
 
         let pos = Board::startpos();
         let pool = threadpool::make_worker_threads(1);
-        let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16, &pool);
+        let mut cache = Cache::new();
+        cache.resize(MEGABYTE * 16, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
-        let mut t = ThreadData::new(0, pos, tt.view(), nnue_params, &stopped, &nodes, &tbhits);
+        let control = Control::default();
+        let mut t = ThreadData::new(
+            0,
+            pos,
+            cache.view(),
+            nnue_params,
+            &stopped,
+            &nodes,
+            &tbhits,
+            &control,
+        );
         assert_eq!(movepicker_perft(&mut t, 1), 20, "got {}", {
             t.board
                 .legal_moves()
                 .into_iter()
-                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                .map(|m| m.display(t.board.rules()).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -281,6 +292,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn perft_movepicker_hard_position() {
         use super::*;
         const TEST_FEN: &str =
@@ -288,18 +300,28 @@ mod tests {
 
         let pos = Board::from_fen(TEST_FEN).unwrap();
         let pool = threadpool::make_worker_threads(1);
-        let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16, &pool);
+        let mut cache = Cache::new();
+        cache.resize(MEGABYTE * 16, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
-        let mut t = ThreadData::new(0, pos, tt.view(), nnue_params, &stopped, &nodes, &tbhits);
+        let control = Control::default();
+        let mut t = ThreadData::new(
+            0,
+            pos,
+            cache.view(),
+            nnue_params,
+            &stopped,
+            &nodes,
+            &tbhits,
+            &control,
+        );
         assert_eq!(movepicker_perft(&mut t, 1), 48, "got {}", {
             t.board
                 .legal_moves()
                 .into_iter()
-                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                .map(|m| m.display(t.board.rules()).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -309,24 +331,35 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn perft_movepicker_forward_promo_evasion() {
         use super::*;
         const TEST_FEN: &str = "r7/P2r4/7R/8/5p2/5K2/3p2P1/R5k1 b - - 0 1";
 
         let pos = Board::from_fen(TEST_FEN).unwrap();
         let pool = threadpool::make_worker_threads(1);
-        let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16, &pool);
+        let mut cache = Cache::new();
+        cache.resize(MEGABYTE * 16, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
-        let mut t = ThreadData::new(0, pos, tt.view(), nnue_params, &stopped, &nodes, &tbhits);
+        let control = Control::default();
+        let mut t = ThreadData::new(
+            0,
+            pos,
+            cache.view(),
+            nnue_params,
+            &stopped,
+            &nodes,
+            &tbhits,
+            &control,
+        );
         assert_eq!(movepicker_perft(&mut t, 1), 4, "got {}", {
             t.board
                 .legal_moves()
                 .into_iter()
-                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                .map(|m| m.display(t.board.rules()).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -335,24 +368,35 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn perft_movepicker_forward_promo_evasion_and_capture() {
         use super::*;
         const TEST_FEN: &str = "r7/P2r4/7R/8/5p2/5K2/3p2P1/2R3k1 b - - 0 1";
 
         let pos = Board::from_fen(TEST_FEN).unwrap();
         let pool = threadpool::make_worker_threads(1);
-        let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16, &pool);
+        let mut cache = Cache::new();
+        cache.resize(MEGABYTE * 16, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
-        let mut t = ThreadData::new(0, pos, tt.view(), nnue_params, &stopped, &nodes, &tbhits);
+        let control = Control::default();
+        let mut t = ThreadData::new(
+            0,
+            pos,
+            cache.view(),
+            nnue_params,
+            &stopped,
+            &nodes,
+            &tbhits,
+            &control,
+        );
         assert_eq!(movepicker_perft(&mut t, 1), 8, "got {}", {
             t.board
                 .legal_moves()
                 .into_iter()
-                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                .map(|m| m.display(t.board.rules()).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -368,7 +412,7 @@ mod tests {
         assert_eq!(perft(&mut pos, 1), 3, "got {}", {
             pos.legal_moves()
                 .into_iter()
-                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                .map(|m| m.display(pos.rules()).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -378,8 +422,7 @@ mod tests {
     fn simple_move_undoability() {
         use super::*;
 
-        let mut pos = Board::empty();
-        pos.set_startpos();
+        let mut pos = Board::startpos();
         let e4 = Move::new(Square::E2, Square::E4);
         let piece_layout_before = pos.state.bbs;
         println!("{piece_layout_before}");

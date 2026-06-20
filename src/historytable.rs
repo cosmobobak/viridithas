@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use crate::{chess::piece::Colour, search::parameters::HistoryConfig, util::BOARD_N_SQUARES};
+use crate::{chess::piece::Colour, search::parameters::HistoryConfig};
 
 #[inline]
 pub fn history_bonus(conf: &HistoryConfig, depth: i32) -> i32 {
@@ -10,6 +10,15 @@ pub fn history_bonus(conf: &HistoryConfig, depth: i32) -> i32 {
 #[inline]
 pub fn history_malus(conf: &HistoryConfig, depth: i32) -> i32 {
     i32::min(conf.malus_mul * depth + conf.malus_offset, conf.malus_max)
+}
+
+#[inline]
+pub fn history_delta(conf: &HistoryConfig, depth: i32, good: bool) -> i32 {
+    if good {
+        history_bonus(conf, depth)
+    } else {
+        -history_malus(conf, depth)
+    }
 }
 
 pub const MAX_HISTORY: i32 = i16::MAX as i32 / 2;
@@ -47,11 +56,11 @@ fn gravity_update_with_modulator<const MAX: i32>(val: &mut i16, modulator: i32, 
 
 #[repr(transparent)]
 pub struct PieceToTable {
-    table: [[i16; BOARD_N_SQUARES]; 12],
+    table: [[i16; 64]; 12],
 }
 
 impl Deref for PieceToTable {
-    type Target = [[i16; BOARD_N_SQUARES]; 12];
+    type Target = [[i16; 64]; 12];
 
     fn deref(&self) -> &Self::Target {
         &self.table
@@ -66,11 +75,11 @@ impl DerefMut for PieceToTable {
 
 #[repr(transparent)]
 pub struct FromToTable {
-    table: [[i16; BOARD_N_SQUARES]; BOARD_N_SQUARES],
+    table: [[i16; 64]; 64],
 }
 
 impl Deref for FromToTable {
-    type Target = [[i16; BOARD_N_SQUARES]; BOARD_N_SQUARES];
+    type Target = [[i16; 64]; 64];
 
     fn deref(&self) -> &Self::Target {
         &self.table
@@ -92,7 +101,7 @@ impl<T> ThreatsHistoryTable<T> {
     pub fn boxed() -> Box<Self> {
         #![allow(clippy::cast_ptr_alignment)]
         // SAFETY: we're allocating a zeroed block of memory, and then casting it to a Box<Self>
-        // this is fine! because [[HistoryTable; BOARD_N_SQUARES]; 12] is just a bunch of i16s
+        // this is fine! because [[HistoryTable; 64]; 12] is just a bunch of i16s
         // at base, which are fine to zero-out.
         unsafe {
             let layout = std::alloc::Layout::new::<Self>();
@@ -110,23 +119,17 @@ impl<T> ThreatsHistoryTable<T> {
 
 impl ThreatsHistoryTable<PieceToTable> {
     pub fn clear(&mut self) {
-        self.table
-            .iter_mut()
-            .flatten()
-            .flat_map(|h| &mut h.table)
-            .flatten()
-            .for_each(|x| *x = 0);
+        for sub_table in self.table.as_flattened_mut() {
+            sub_table.table.as_flattened_mut().fill(0);
+        }
     }
 }
 
 impl ThreatsHistoryTable<FromToTable> {
     pub fn clear(&mut self) {
-        self.table
-            .iter_mut()
-            .flatten()
-            .flat_map(|h| &mut h.table)
-            .flatten()
-            .for_each(|x| *x = 0);
+        for sub_table in self.table.as_flattened_mut() {
+            sub_table.table.as_flattened_mut().fill(0);
+        }
     }
 }
 
@@ -153,7 +156,7 @@ impl CaptureHistoryTable {
     pub fn boxed() -> Box<Self> {
         #![allow(clippy::cast_ptr_alignment)]
         // SAFETY: we're allocating a zeroed block of memory, and then casting it to a Box<Self>
-        // this is fine! because [[HistoryTable; BOARD_N_SQUARES]; 12] is just a bunch of i16s
+        // this is fine! because [[HistoryTable; 64]; 12] is just a bunch of i16s
         // at base, which are fine to zero-out.
         unsafe {
             let layout = std::alloc::Layout::new::<Self>();
@@ -166,12 +169,9 @@ impl CaptureHistoryTable {
     }
 
     pub fn clear(&mut self) {
-        self.table
-            .iter_mut()
-            .flatten()
-            .flat_map(|h| &mut h.table)
-            .flatten()
-            .for_each(|x| *x = 0);
+        for sub_table in self.table.as_flattened_mut() {
+            sub_table.table.as_flattened_mut().fill(0);
+        }
     }
 }
 
@@ -191,14 +191,14 @@ impl DerefMut for CaptureHistoryTable {
 
 #[repr(transparent)]
 pub struct DoubleHistoryTable {
-    table: [[PieceToTable; BOARD_N_SQUARES]; 12],
+    table: [[PieceToTable; 64]; 12],
 }
 
 impl DoubleHistoryTable {
     pub fn boxed() -> Box<Self> {
         #![allow(clippy::cast_ptr_alignment)]
         // SAFETY: we're allocating a zeroed block of memory, and then casting it to a Box<Self>
-        // this is fine! because [[HistoryTable; BOARD_N_SQUARES]; 12] is just a bunch of i16s
+        // this is fine! because [[HistoryTable; 64]; 12] is just a bunch of i16s
         // at base, which are fine to zero-out.
         unsafe {
             let layout = std::alloc::Layout::new::<Self>();
@@ -211,17 +211,14 @@ impl DoubleHistoryTable {
     }
 
     pub fn clear(&mut self) {
-        self.table
-            .iter_mut()
-            .flatten()
-            .flat_map(|h| &mut h.table)
-            .flatten()
-            .for_each(|x| *x = 0);
+        for sub_table in self.table.as_flattened_mut() {
+            sub_table.table.as_flattened_mut().fill(0);
+        }
     }
 }
 
 impl Deref for DoubleHistoryTable {
-    type Target = [[PieceToTable; BOARD_N_SQUARES]; 12];
+    type Target = [[PieceToTable; 64]; 12];
 
     fn deref(&self) -> &Self::Target {
         &self.table
@@ -256,11 +253,9 @@ impl HashHistoryTable {
     }
 
     pub fn clear(&mut self) {
-        self.table
-            .iter_mut()
-            .flat_map(|h| &mut h.table)
-            .flatten()
-            .for_each(|x| *x = 0);
+        for sub_table in &mut self.table {
+            sub_table.table.as_flattened_mut().fill(0);
+        }
     }
 }
 
@@ -287,7 +282,7 @@ impl CorrectionHistoryTable {
     pub fn boxed() -> Box<Self> {
         #![allow(clippy::cast_ptr_alignment)]
         // SAFETY: we're allocating a zeroed block of memory, and then casting it to a Box<Self>
-        // this is fine! because [[HistoryTable; BOARD_N_SQUARES]; 12] is just a bunch of i16s
+        // this is fine! because [[HistoryTable; 64]; 12] is just a bunch of i16s
         // at base, which are fine to zero-out.
         unsafe {
             let layout = std::alloc::Layout::new::<Self>();
@@ -300,7 +295,7 @@ impl CorrectionHistoryTable {
     }
 
     pub fn clear(&mut self) {
-        self.table.iter_mut().for_each(|t| t.fill(0));
+        self.table.as_flattened_mut().fill(0);
     }
 
     #[allow(clippy::cast_possible_truncation)]

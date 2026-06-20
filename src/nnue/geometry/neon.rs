@@ -57,34 +57,34 @@ impl Vector {
 }
 
 pub struct Permutation {
-    pub indices: Vector,
+    pub indexes: Vector,
     pub valid: Vector,
 }
 
 pub fn permutation_for(focus: Square) -> Permutation {
     unsafe {
-        let indices = Vector::load(PERMUTATION[focus.index()].as_ptr());
+        let indexes = Vector::load(PERMUTATION[focus.index()].as_ptr());
         let valid = Vector {
             raw: [
                 vmvnq_u8(vreinterpretq_u8_s8(vshrq_n_s8(
-                    vreinterpretq_s8_u8(indices.raw[0]),
+                    vreinterpretq_s8_u8(indexes.raw[0]),
                     7,
                 ))),
                 vmvnq_u8(vreinterpretq_u8_s8(vshrq_n_s8(
-                    vreinterpretq_s8_u8(indices.raw[1]),
+                    vreinterpretq_s8_u8(indexes.raw[1]),
                     7,
                 ))),
                 vmvnq_u8(vreinterpretq_u8_s8(vshrq_n_s8(
-                    vreinterpretq_s8_u8(indices.raw[2]),
+                    vreinterpretq_s8_u8(indexes.raw[2]),
                     7,
                 ))),
                 vmvnq_u8(vreinterpretq_u8_s8(vshrq_n_s8(
-                    vreinterpretq_s8_u8(indices.raw[3]),
+                    vreinterpretq_s8_u8(indexes.raw[3]),
                     7,
                 ))),
             ],
         };
-        Permutation { indices, valid }
+        Permutation { indexes, valid }
     }
 }
 
@@ -100,10 +100,10 @@ fn permute_mailbox_inner(permutation: &Permutation, mailbox: &Vector) -> (Vector
         );
         let permuted = Vector {
             raw: [
-                vqtbl4q_u8(mb, permutation.indices.raw[0]),
-                vqtbl4q_u8(mb, permutation.indices.raw[1]),
-                vqtbl4q_u8(mb, permutation.indices.raw[2]),
-                vqtbl4q_u8(mb, permutation.indices.raw[3]),
+                vqtbl4q_u8(mb, permutation.indexes.raw[0]),
+                vqtbl4q_u8(mb, permutation.indexes.raw[1]),
+                vqtbl4q_u8(mb, permutation.indexes.raw[2]),
+                vqtbl4q_u8(mb, permutation.indexes.raw[3]),
             ],
         };
         let bits = Vector {
@@ -131,6 +131,7 @@ pub fn permute_mailbox_ignoring(
     mailbox: &[Option<Piece>; 64],
     ignore: Square,
 ) -> (Vector, Vector) {
+    const NO_PIECE: u8 = unsafe { std::mem::transmute::<Option<Piece>, u8>(None) };
     unsafe {
         let iota = Align64([
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
@@ -138,8 +139,7 @@ pub fn permute_mailbox_ignoring(
             46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
         ]);
         let iota = Vector::load(iota.0.as_ptr());
-        // None<Piece> is represented as 12 due to niche optimisation.
-        let none_vec = vdupq_n_u8(12);
+        let none_vec = vdupq_n_u8(NO_PIECE);
         let ignore_vec = vdupq_n_u8(ignore.inner());
 
         let mb = Vector::load(mailbox.as_ptr().cast::<u8>());
@@ -167,7 +167,7 @@ pub fn closest_occupied(bits: Vector) -> BitRays {
         };
         let occupied = occupied_vec.to_mask();
         let o = occupied | 0x8181_8181_8181_8181;
-        (o ^ o.wrapping_sub(0x0303_0303_0303_0303)) & occupied
+        BitRays((o ^ o.wrapping_sub(0x0303_0303_0303_0303)) & occupied)
     }
 }
 
@@ -182,7 +182,7 @@ pub fn incoming_attackers(bits: Vector, closest: BitRays) -> BitRays {
                 vtstq_u8(bits.raw[3], mask.raw[3]),
             ],
         };
-        v.to_mask() & closest
+        BitRays(v.to_mask()) & closest
     }
 }
 
@@ -197,7 +197,7 @@ pub fn incoming_sliders(bits: Vector, closest: BitRays) -> BitRays {
                 vtstq_u8(bits.raw[3], mask.raw[3]),
             ],
         };
-        v.to_mask() & closest & 0xFEFE_FEFE_FEFE_FEFE
+        BitRays(v.to_mask()) & closest & BitRays::NON_KNIGHT
     }
 }
 
@@ -212,6 +212,6 @@ pub fn test_bit(bits: Vector, bit: Bit) -> BitRays {
                 vtstq_u8(bits.raw[3], king_mask),
             ],
         };
-        v.to_mask()
+        BitRays(v.to_mask())
     }
 }

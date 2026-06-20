@@ -30,13 +30,21 @@ openbench:
 tmp-dir:
 	$(MKDIR) $(TMPDIR)
 
-x86-64 x86-64-v2 x86-64-v3 x86-64-v4 native: tmp-dir
+x86-64 x86-64-v2 x86-64-v3 native: tmp-dir
 	cargo rustc -r --features final-release -- -C target-feature=+crt-static -C target-cpu=$@ -C profile-generate=$(TMPDIR) --emit link=$(LXE)-$(VERSION)-$(INF)-$@$(EXT)
 	./$(LXE)-$(VERSION)-$(INF)-$@$(EXT) bench
 	llvm-profdata merge -o $(TMPDIR)/merged.profdata $(TMPDIR)/*.profraw
 
 	cargo rustc -r --features final-release -- -C target-feature=+crt-static -C target-cpu=$@ -C profile-use=$(TMPDIR)/merged.profdata --emit link=$(LXE)-$(VERSION)-$(INF)-$@$(EXT)
 
+	$(RMDIR) $(TMPDIR)
+	$(RMFILE) *.pdb
+
+x86-64-v4: tmp-dir
+	cargo rustc -r --features final-release -- -C target-feature=+crt-static,+gfni,+avx512bw,+avx512vl,+avx512vbmi,+avx512vbmi2,+avx512vnni,+avx512bitalg -C target-cpu=x86-64-v4 -C profile-generate=$(TMPDIR) --emit link=$(LXE)-$(VERSION)-$(INF)-$@$(EXT)
+	./$(LXE)-$(VERSION)-$(INF)-$@$(EXT) bench
+	llvm-profdata merge -o $(TMPDIR)/merged.profdata $(TMPDIR)/*.profraw
+	cargo rustc -r --features final-release -- -C target-feature=+crt-static,+gfni,+avx512bw,+avx512vl,+avx512vbmi,+avx512vbmi2,+avx512vnni,+avx512bitalg -C target-cpu=x86-64-v4 -C profile-use=$(TMPDIR)/merged.profdata --emit link=$(LXE)-$(VERSION)-$(INF)-$@$(EXT)
 	$(RMDIR) $(TMPDIR)
 	$(RMFILE) *.pdb
 

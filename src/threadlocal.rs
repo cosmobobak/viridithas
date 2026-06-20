@@ -15,27 +15,51 @@ use crate::{
     },
     nnue::{self, network::NNUEParams},
     search::pv::PVariation,
-    searchinfo::SearchInfo,
-    stack::StackEntry,
+    searchinfo::{Control, SearchInfo},
+    stack::StackFrame,
     threadpool::{self, ScopeExt},
-    transpositiontable::TTView,
-    util::MAX_DEPTH,
+    transpositiontable::CacheView,
+    util::{MAX_DEPTH, VALUE_NONE},
 };
+
+pub struct Histories {
+    pub piece_to: Box<ThreatsHistoryTable<PieceToTable>>,
+    pub from_to: Box<ThreatsHistoryTable<FromToTable>>,
+    pub tactical: Box<CaptureHistoryTable>,
+    pub continuation: Box<DoubleHistoryTable>,
+    pub pawn: Box<HashHistoryTable>,
+}
+
+impl Histories {
+    pub fn new() -> Self {
+        Self {
+            piece_to: ThreatsHistoryTable::boxed(),
+            from_to: ThreatsHistoryTable::boxed(),
+            tactical: CaptureHistoryTable::boxed(),
+            continuation: DoubleHistoryTable::boxed(),
+            pawn: HashHistoryTable::boxed(),
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.piece_to.clear();
+        self.from_to.clear();
+        self.tactical.clear();
+        self.continuation.clear();
+        self.pawn.clear();
+    }
+}
 
 #[repr(align(64))]
 pub struct ThreadData<'a> {
     // stack array is right-padded by one because singular verification
     // will try to access the next ply in an edge case.
-    pub ss: [StackEntry; MAX_DEPTH + 1],
+    pub ss: [StackFrame; MAX_DEPTH + 1],
     pub banned_nmp: u8,
     pub nnue: Box<nnue::network::NNUEState>,
     pub nnue_params: &'static NNUEParams,
 
-    pub piece_to_hist: Box<ThreatsHistoryTable<PieceToTable>>,
-    pub from_to_hist: Box<ThreatsHistoryTable<FromToTable>>,
-    pub tactical_hist: Box<CaptureHistoryTable>,
-    pub cont_hist: Box<DoubleHistoryTable>,
-    pub pawn_hist: Box<HashHistoryTable>,
+    pub histories: Histories,
     pub killer_move_table: [Option<Move>; MAX_DEPTH + 1],
     pub pawn_corrhist: Box<CorrectionHistoryTable>,
     pub nonpawn_corrhist: [Box<CorrectionHistoryTable>; 2],
@@ -45,7 +69,10 @@ pub struct ThreadData<'a> {
 
     pub thread_id: usize,
 
-    pub pvs: [PVariation; MAX_DEPTH],
+    /// principal variations, indexed by ID iteration.
+    pub pvs: Vec<PVariation>,
+    /// evaluations, indexed by ID iteration.
+    pub scores: Vec<i32>,
     /// the iterative deepening loop counter
     pub iteration: usize,
     /// the highest finished ID iteration
@@ -53,10 +80,15 @@ pub struct ThreadData<'a> {
     /// the draft we're actually kicking off searches at
     pub root_depth: i32,
 
+    /// scratch space for value-at-root
+    pub score_scratch: i32,
+    /// scratch space for PVs as they move up/down the stack.
+    pub pv_scratch: Vec<PVariation>,
+
     pub stm_at_root: Colour,
     pub optimism: [i32; 2],
 
-    pub tt: TTView<'a>,
+    pub cache: CacheView<'a>,
 
     pub board: Board,
     pub info: SearchInfo<'a>,
@@ -66,25 +98,23 @@ impl<'a> ThreadData<'a> {
     const WHITE_BANNED_NMP: u8 = 0b01;
     const BLACK_BANNED_NMP: u8 = 0b10;
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         thread_id: usize,
         board: Board,
-        tt: TTView<'a>,
+        cache: CacheView<'a>,
         nnue_params: &'static NNUEParams,
         stopped: &'a AtomicBool,
         nodes: &'a AtomicU64,
         tbhits: &'a AtomicU64,
+        control: &'a Control,
     ) -> Self {
         let mut td = Self {
-            ss: array::from_fn(|_| StackEntry::default()),
+            ss: array::from_fn(|_| StackFrame::default()),
             banned_nmp: 0,
             nnue: nnue::network::NNUEState::new(&board, nnue_params),
             nnue_params,
-            piece_to_hist: ThreatsHistoryTable::boxed(),
-            from_to_hist: ThreatsHistoryTable::boxed(),
-            tactical_hist: CaptureHistoryTable::boxed(),
-            cont_hist: DoubleHistoryTable::boxed(),
-            pawn_hist: HashHistoryTable::boxed(),
+            histories: Histories::new(),
             killer_move_table: [None; MAX_DEPTH + 1],
             pawn_corrhist: CorrectionHistoryTable::boxed(),
             nonpawn_corrhist: [
@@ -95,21 +125,28 @@ impl<'a> ThreadData<'a> {
             minor_corrhist: CorrectionHistoryTable::boxed(),
             cont_corrhist: CorrectionHistoryTable::boxed(),
             thread_id,
-            #[allow(clippy::large_stack_arrays)]
-            pvs: [const {
+            pvs: vec![
                 PVariation {
-                    score: 0,
                     moves: ArrayVec::new_const(),
-                }
-            }; MAX_DEPTH],
+                };
+                MAX_DEPTH
+            ],
+            scores: vec![VALUE_NONE; MAX_DEPTH],
             iteration: 0,
             completed: 0,
             root_depth: 0,
+            score_scratch: VALUE_NONE,
+            pv_scratch: vec![
+                PVariation {
+                    moves: ArrayVec::new_const(),
+                };
+                MAX_DEPTH + 1 // reaches forward by one when bootstrapping
+            ],
             stm_at_root: board.turn(),
             optimism: [0; 2],
-            tt,
+            cache,
             board,
-            info: SearchInfo::new(stopped, nodes, tbhits),
+            info: SearchInfo::new(stopped, nodes, tbhits, control),
         };
 
         td.clear_tables();
@@ -144,11 +181,7 @@ impl<'a> ThreadData<'a> {
     }
 
     pub fn clear_tables(&mut self) {
-        self.piece_to_hist.clear();
-        self.from_to_hist.clear();
-        self.tactical_hist.clear();
-        self.cont_hist.clear();
-        self.pawn_hist.clear();
+        self.histories.clear();
         self.pawn_corrhist.clear();
         self.nonpawn_corrhist[Colour::White].clear();
         self.nonpawn_corrhist[Colour::Black].clear();
@@ -170,31 +203,34 @@ impl<'a> ThreadData<'a> {
         self.stm_at_root = self.board.turn();
     }
 
-    pub fn update_best_line(&mut self, pv: &PVariation) {
+    pub fn update_best_line(&mut self) {
         self.completed = self.iteration;
-        self.pvs[self.iteration] = pv.clone();
+        self.pvs[self.iteration] = self.pv_scratch[0].clone();
+        self.scores[self.iteration] = self.score_scratch;
     }
 
     pub fn revert_best_line(&mut self) {
         self.completed = self.iteration - 1;
     }
 
-    pub const fn pv(&self) -> &PVariation {
+    pub fn pv(&self) -> &PVariation {
         &self.pvs[self.completed]
     }
 
-    pub const fn pv_mut(&mut self) -> &mut PVariation {
-        &mut self.pvs[self.completed]
+    pub fn score(&self) -> i32 {
+        self.scores[self.completed]
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn make_thread_data<'a>(
     pos: &Board,
-    tt: TTView<'a>,
+    cache: CacheView<'a>,
     nnue_params: &'static NNUEParams,
     stopped: &'a AtomicBool,
     nodes: &'a AtomicU64,
     tbhits: &'a AtomicU64,
+    control: &'a Control,
     worker_threads: &[threadpool::WorkerThread],
 ) -> anyhow::Result<Vec1<Box<ThreadData<'a>>>> {
     std::thread::scope(|s| -> anyhow::Result<Vec1<Box<ThreadData>>> {
@@ -209,11 +245,12 @@ pub fn make_thread_data<'a>(
                         tx.send(Box::new(ThreadData::new(
                             thread_id,
                             pos.clone(),
-                            tt,
+                            cache,
                             nnue_params,
                             stopped,
                             nodes,
                             tbhits,
+                            control,
                         )))
                         .unwrap();
                     },

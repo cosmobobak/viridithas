@@ -10,7 +10,7 @@ use std::arch::x86_64::{
 use crate::{
     chess::{piece::Piece, types::Square},
     nnue::geometry::Bit,
-    util::{self, Align64},
+    util::Align,
 };
 
 use super::{BitRays, INCOMING_SLIDERS_MASK, INCOMING_THREATS_MASK, PERMUTATION, PIECE_TO_BIT};
@@ -33,7 +33,7 @@ impl Vector {
         unsafe {
             let a = u64::from(_mm256_movemask_epi8(self.raw[0]) as u32);
             let b = u64::from(_mm256_movemask_epi8(self.raw[1]) as u32);
-            a | (b << 32)
+            BitRays(a | (b << 32))
         }
     }
 
@@ -50,25 +50,25 @@ impl Vector {
     }
 
     unsafe fn cast<T>(v: &T) -> Self {
-        unsafe { Self::load(util::from_ref(v).cast::<u8>()) }
+        unsafe { Self::load(std::ptr::from_ref(v).cast::<u8>()) }
     }
 }
 
 pub struct Permutation {
-    pub indices: Vector,
+    pub indexes: Vector,
     pub invalid: Vector,
 }
 
 pub fn permutation_for(focus: Square) -> Permutation {
     unsafe {
-        let indices = Vector::cast(&PERMUTATION[focus.index()]);
+        let indexes = Vector::cast(&PERMUTATION[focus.index()]);
         let invalid = Vector {
             raw: [
-                _mm256_cmpeq_epi8(indices.raw[0], _mm256_set1_epi8(0x80u8.cast_signed())),
-                _mm256_cmpeq_epi8(indices.raw[1], _mm256_set1_epi8(0x80u8.cast_signed())),
+                _mm256_cmpeq_epi8(indexes.raw[0], _mm256_set1_epi8(0x80u8.cast_signed())),
+                _mm256_cmpeq_epi8(indexes.raw[1], _mm256_set1_epi8(0x80u8.cast_signed())),
             ],
         };
-        Permutation { indices, invalid }
+        Permutation { indexes, invalid }
     }
 }
 
@@ -98,12 +98,12 @@ fn permute_mailbox_inner(permutation: &Permutation, masked_mailbox: Vector) -> (
                 half_swizzle(
                     masked_mailbox.raw[0],
                     masked_mailbox.raw[1],
-                    permutation.indices.raw[0],
+                    permutation.indexes.raw[0],
                 ),
                 half_swizzle(
                     masked_mailbox.raw[0],
                     masked_mailbox.raw[1],
-                    permutation.indices.raw[1],
+                    permutation.indexes.raw[1],
                 ),
             ],
         };
@@ -137,16 +137,16 @@ pub fn permute_mailbox_ignoring(
     mailbox: &[Option<Piece>; 64],
     ignore: Square,
 ) -> (Vector, Vector) {
+    const NO_PIECE: i8 = unsafe { std::mem::transmute::<Option<Piece>, i8>(None) };
     unsafe {
-        let iota = Align64([
+        let iota = Align([
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
             24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45,
             46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
         ]);
         let iota = Vector::load(iota.0.as_ptr());
         let ignore_vec = _mm256_set1_epi8(ignore.inner().cast_signed());
-        // None<Piece> is represented as 12 due to niche optimisation.
-        let none_vec = _mm256_set1_epi8(12);
+        let none_vec = _mm256_set1_epi8(NO_PIECE);
         let mb = Vector::load(mailbox.as_ptr().cast::<u8>());
         let masked_mailbox = Vector {
             raw: [
@@ -175,8 +175,8 @@ pub fn closest_occupied(bits: Vector) -> BitRays {
             ],
         };
         let occupied = !unoccupied.mask();
-        let o = occupied | 0x8181_8181_8181_8181;
-        (o ^ o.wrapping_sub(0x0303_0303_0303_0303)) & occupied
+        let o = occupied.0 | 0x8181_8181_8181_8181;
+        BitRays(o ^ o.wrapping_sub(0x0303_0303_0303_0303)) & occupied
     }
 }
 
@@ -214,7 +214,7 @@ pub fn incoming_sliders(bits: Vector, closest: BitRays) -> BitRays {
                 ),
             ],
         };
-        !v.mask() & closest & 0xFEFE_FEFE_FEFE_FEFE
+        !v.mask() & closest & BitRays::NON_KNIGHT
     }
 }
 

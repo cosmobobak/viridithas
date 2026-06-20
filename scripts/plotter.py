@@ -11,131 +11,146 @@ Reads JSON from stdin containing tracked value statistics and histograms,
 then generates matplotlib visualisations.
 """
 
+import argparse
 import json
 import sys
 import math
 from pathlib import Path
 
 import matplotlib.pyplot as plt  # type: ignore
+import matplotlib.ticker as mtick  # type: ignore
+
+palette = {
+    "red": "#FF5000",
+    "blue": "#50C0FF",
+    "cyan": "#00A0E0",
+    "grey": "#808080",
+    "bg-a": "#101010",
+    "bg-b": "#121212",
+    "text": "#F0F0F0",
+}
+
+plt.rcParams["text.color"] = palette["text"]
+plt.rcParams["axes.labelcolor"] = palette["text"]
+plt.rcParams["axes.titlecolor"] = palette["text"]
+plt.rcParams["font.family"] = "Iosevka Signalis"
 
 
-def bucket_to_int_range(bucket: int) -> tuple[int, int] | None:
-    """
-    Convert bucket index to the integer range [lo, hi] that maps to it.
-    Returns None if no integers map to this bucket.
-
-    Bucket index is computed as: 65 + floor(log2(v^2)) for v > 0
-    So for bucket b, we need integers v where floor(log2(v^2)) = b - 65.
-    That means: 2^((b-65)/2) <= v < 2^((b-64)/2)
-    """
-    if bucket == 64:
-        return (0, 0)
-    elif bucket > 64:
-        fine_log = bucket - 65
-        lo = math.ceil(2 ** (fine_log / 2))
-        hi = math.ceil(2 ** ((fine_log + 1) / 2)) - 1
-        if lo > hi:
-            return None
-        return (lo, hi)
-    else:
-        fine_log = 63 - bucket
-        lo = math.ceil(2 ** (fine_log / 2))
-        hi = math.ceil(2 ** ((fine_log + 1) / 2)) - 1
-        if lo > hi:
-            return None
-        return (-hi, -lo)
-
-
-def format_int(v: int) -> str:
-    """Format an integer for display."""
+def format_int(v: int, sig_figs: int = 3) -> str:
+    """Format an integer for display with the given number of significant figures."""
     if v == 0:
         return "0"
-    abs_v = abs(v)
     sign = "-" if v < 0 else ""
-    if abs_v >= 1_000_000:
-        return f"{sign}{abs_v // 1_000_000}M"
-    elif abs_v >= 1_000:
-        return f"{sign}{abs_v // 1_000}K"
-    else:
+    abs_v = abs(v)
+
+    suffixes = ["", "K", "M", "G", "T", "P", "E"]
+    magnitude = min(int(math.log10(abs_v)) // 3, len(suffixes) - 1)
+
+    if magnitude == 0:
         return f"{sign}{abs_v}"
 
+    scaled = abs_v / 1000**magnitude
+    decimal_places = max(0, sig_figs - int(math.log10(scaled)) - 1)
+    formatted = f"{scaled:.{decimal_places}f}"
 
-def bucket_to_label(bucket: int) -> str:
-    """Convert bucket index to a human-readable label showing integer range."""
-    int_range = bucket_to_int_range(bucket)
-    if int_range is None:
-        return ""  # empty bucket
-    lo, hi = int_range
-    if lo == hi:
-        return format_int(lo)
-    else:
-        return format_int(lo)  # i could do something smart but whatever
+    # Rounding may bump us into the next magnitude (e.g. 999_500 -> "1000K" -> "1.00M")
+    if float(formatted) >= 1000 and magnitude < len(suffixes) - 1:
+        magnitude += 1
+        scaled /= 1000
+        formatted = f"{scaled:.{sig_figs - 1}f}"
+
+    return f"{sign}{formatted}{suffixes[magnitude]}"
 
 
-def plot_tracked_value(ax, data: dict, index: int) -> None:
+def bucket_to_x_index(bucket: dict) -> int:
+    if bucket["start"] == 0:
+        assert bucket["end"] == 0
+        return 0
+    # average in log-space:
+    s = math.log2(abs(bucket["start"]))
+    e = math.log2(abs(bucket["end"]))
+    m = (s + e) / 2
+    x = int(round(math.copysign(math.exp2(m), bucket["start"])))
+    return x
+
+
+def alternate():
+    while True:
+        yield palette["blue"]
+        yield palette["red"]
+
+
+alt_map = alternate()
+
+
+def plot_tracked_value(ax, data: dict, index: int, min_bucket_fraction: float = 0.0) -> None:
     """Plot a single tracked value's histogram on the given axes."""
-    name: int = data["name"]
+    name: str = data["name"]
     count: int = data["count"]
     avg: int = data["avg"]
     avg_abs: int = data["avg_abs"]
     stddev: int = data["stddev"]
     min_val: int = data["min"]
     max_val: int = data["max"]
-    histogram: list[int] = data["histogram"]
+    buckets: list[dict] = data["buckets"]
 
-    # find non-zero range
-    nonzero_indices = [i for i, v in enumerate(histogram) if v > 0]
-    if not nonzero_indices:
+    if [0, 1] == [min_val, max_val]:
+        return plot_tracked_boolean(ax, data, index)
+
+    if min_bucket_fraction > 0 and count > 0:
+        threshold = min_bucket_fraction * count
+        buckets = [b for b in buckets if b["count"] >= threshold]
+
+    if not buckets:
         ax.text(0.5, 0.5, "no data", ha="center", va="center", transform=ax.transAxes)
-        ax.set_title(name, fontsize=8)
+        ax.set_title(name, fontsize=12)
         return
 
-    lo, hi = min(nonzero_indices), max(nonzero_indices)
-    # add some padding
-    lo = max(0, lo - 1)
-    hi = min(127, hi + 1)
-
-    # filter to only buckets that can contain integer values
-    all_buckets = list(range(lo, hi + 1))
-    valid_buckets = [b for b in all_buckets if bucket_to_int_range(b) is not None]
-    values = [histogram[b] for b in valid_buckets]
-
-    if not values:
-        ax.text(
-            0.5,
-            0.5,
-            "No valid buckets",
-            ha="center",
-            va="center",
-            transform=ax.transAxes,
-        )
-        ax.set_title(name, fontsize=8)
-        return
+    # normalise by bucket size
+    values = [b["count"] / (abs(b["start"] - b["end"]) + 1) for b in buckets]
+    # normalise by sum
+    s = sum(values)
+    values = [v / s for v in values]
 
     # Create bar chart
-    ax.bar(
-        range(len(valid_buckets)),
+    color = next(alt_map)
+    x = [bucket_to_x_index(b) for b in buckets]
+    ax.plot(
+        x,
         values,
-        color="steelblue",
-        edgecolor="navy",
-        alpha=0.7,
+        color=color,
+        # edgecolor=palette["text"],
+        # alpha=0.7,
     )
+    ax.fill_between(x, values, color=color, alpha=0.55, linewidth=0, hatch="--")
 
     # X-axis labels (show subset to avoid crowding)
-    if len(valid_buckets) <= 16:
-        tick_indices = list(range(len(valid_buckets)))
+    if len(range(x[0], x[-1] + 1)) <= 16:
+        tick_indices = list(range(x[0], x[-1] + 1))
     else:
-        step = max(1, len(valid_buckets) // 8)
-        tick_indices = list(range(0, len(valid_buckets), step))
+        if x[0] < 0:
+            lo = min(x[0], -x[-1])
+            hi = max(-x[0], x[-1])
+        else:
+            lo = x[0]
+            hi = x[-1]
+        step = max(1, len(range(lo, hi + 1)) // 8)
+        tick_indices = list(range(lo, hi + 1, step))
+        pad = 0.03
+        r = hi - lo + 1
+        lo = lo - r * pad
+        hi = hi + r * pad
+        ax.set_xlim(lo, hi)
 
     ax.set_xticks(tick_indices)
-    ax.set_xticklabels(
-        [bucket_to_label(valid_buckets[i]) for i in tick_indices], fontsize=6
-    )
+    ax.set_xticklabels([format_int(i) for i in tick_indices], fontsize=8)
 
     # Y-axis: use log scale if range is large
-    if max(values) > 100 * min(v for v in values if v > 0):
-        ax.set_yscale("log")
+    log = False
+    # if max(values) > 100 * min(v for v in values if v > 0):
+    #     log = True
+    #     ax.set_yscale("log")
+    # ax.set_xscale("log")
 
     # title with stats
     # name format is `file:line expr`, extract the expr part
@@ -143,27 +158,129 @@ def plot_tracked_value(ax, data: dict, index: int) -> None:
         # split on first space to separate "file:line" from "expr"
         _, expr = name.split(" ", 1)
         # truncate long expressions
-        short_name = expr if len(expr) <= 40 else expr[:37] + "..."
+        short_name = expr if len(expr) <= 40 else expr[:37] + "…"
+        short_name = short_name.replace("_", " ").upper()
     else:
         short_name = name
-    title = f"{short_name}\nn={count:,} avg={avg:.1f} |avg|={avg_abs:.1f} std={stddev:.1f}\nmin={min_val} max={max_val}"
-    ax.set_title(title, fontsize=7)
-    ax.tick_params(axis="both", labelsize=6)
+    print_count = f"{count:,}".replace(",", " ")
+    title = f"{short_name}\nN = {print_count}   μ = {avg:.1f}   |μ| = {avg_abs:.1f}\nσ = {stddev:.1f}   LO = {min_val}   HI = {max_val}".replace("-", "\u2212")
+    ax.set_title(title, fontsize=16)
+    ax.tick_params(axis="both", labelsize=12)
 
-    ax.set_facecolor("white")
+    ax.set_facecolor(palette["bg-b"])
 
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    ax.spines["left"].set_color("black")
+    ax.spines["left"].set_color(palette["text"])
     ax.spines["left"].set_linewidth(1.5)
-    ax.spines["bottom"].set_color("black")
+    ax.spines["bottom"].set_color(palette["text"])
     ax.spines["bottom"].set_linewidth(1.5)
 
-    ax.tick_params(colors="black")
+    ax.tick_params(colors=palette["text"])
+    # ax.yaxis.set_major_formatter(mtick.PercentFormatter(1.0))
+    ax.get_yaxis().set_ticks([])
+    if log:
+        ax.set_ylabel("LOG-DENSITY", fontsize=16)
+    else:
+        ax.set_ylabel("DENSITY", fontsize=16)
+
+    ax.grid(False)
+
+
+def plot_tracked_boolean(ax, data: dict, index: int) -> None:
+    """Plot a single tracked boolean's ratio on the given axes."""
+
+    name: str = data["name"]
+    count: int = data["count"]
+    avg: int = data["avg"]
+
+    # create pie chart
+    labels = ("TRUE", "FALSE")
+    sizes = [avg * count, count - avg * count]
+    wedges, _ = ax.pie(
+        sizes,
+        colors=[palette["blue"], palette["red"]],
+        radius=1,
+        startangle=120,
+        wedgeprops=dict(width=0.5, edgecolor="w"),
+    )
+
+    # annotate each wedge with an arrow pointing outward, following the
+    # matplotlib pie-and-donut-labels recipe:
+    # https://matplotlib.org/stable/gallery/pie_and_polar_charts/pie_and_donut_labels.html
+    bbox_props = dict(
+        boxstyle="square,pad=0.3",
+        fc=palette["text"],
+        ec=palette["text"],
+        lw=1.2,
+    )
+    kw = dict(
+        arrowprops=dict(arrowstyle="-", color=palette["text"], lw=1.5),
+        bbox=bbox_props,
+        zorder=0,
+        va="center_baseline",
+        color=palette["bg-a"],
+    )
+    for i, p in enumerate(wedges):
+        ang = (p.theta2 - p.theta1) / 2.0 + p.theta1
+        x = math.cos(math.radians(ang))
+        y = math.sin(math.radians(ang))
+        sign_x = 1 if x >= 0 else -1
+        horizontalalignment = "left" if sign_x > 0 else "right"
+        connectionstyle = f"angle,angleA=0,angleB={ang}"
+        kw["arrowprops"]["connectionstyle"] = connectionstyle  # type: ignore
+        ax.annotate(
+            labels[i],
+            xy=(x, y),
+            xytext=(1.35 * sign_x, 1.4 * y),
+            horizontalalignment=horizontalalignment,
+            **kw,
+        )
+
+    # title with stats
+    # name format is `file:line expr`, extract the expr part
+    if " " in name:
+        # split on first space to separate "file:line" from "expr"
+        _, expr = name.split(" ", 1)
+        # truncate long expressions
+        short_name = expr if len(expr) <= 40 else expr[:37] + "…"
+    else:
+        short_name = name
+    print_count = f"{count:,}".replace(",", " ")
+    title = f"{short_name}\nN = {print_count}   μ = {avg:.1f}".replace("-", "\u2212")
+    ax.set_title(title, fontsize=16)
+    ax.tick_params(axis="both", labelsize=12)
+
+    ax.set_facecolor(palette["bg-b"])
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_color(palette["text"])
+    ax.spines["left"].set_linewidth(1.5)
+    ax.spines["bottom"].set_color(palette["text"])
+    ax.spines["bottom"].set_linewidth(1.5)
+
+    ax.tick_params(colors=palette["text"])
     ax.grid(False)
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--min-bucket-fraction",
+        type=float,
+        default=0.0,
+        help=(
+            "Drop buckets whose count is less than this fraction of the tracked "
+            "value's total samples (e.g. 0.01 drops anything under 1%%). Default: 0."
+        ),
+    )
+    args = parser.parse_args()
+
+    if not 0.0 <= args.min_bucket_fraction < 1.0:
+        print("--min-bucket-fraction must be in [0, 1)", file=sys.stderr)
+        sys.exit(2)
+
     # read JSON from stdin
     try:
         data = json.load(sys.stdin)
@@ -187,14 +304,19 @@ def main():
     cols = math.ceil(math.sqrt(n))
     rows = math.ceil(n / cols)
 
-    fig, axes = plt.subplots(rows, cols, figsize=(4 * cols, 3 * rows))
+    fig, axes = plt.subplots(
+        rows,
+        cols,
+        figsize=(16 / 3 * cols, 9 / 3 * rows),
+        facecolor=palette["bg-b"],
+    )
     if n == 1:
         axes = [axes]
     else:
         axes = axes.flatten() if hasattr(axes, "flatten") else [axes]
 
     for i, d in enumerate(data):
-        plot_tracked_value(axes[i], d, i)
+        plot_tracked_value(axes[i], d, i, min_bucket_fraction=args.min_bucket_fraction)
 
     # hide unused subplots
     for i in range(n, len(axes)):
@@ -203,7 +325,7 @@ def main():
     plt.tight_layout()
 
     # save to file
-    output_path = Path("stats_plot.png")
+    output_path = Path("stats_plot.svg")
     plt.savefig(output_path, dpi=150)
     print(f"Saved plot to {output_path}", file=sys.stderr)
 

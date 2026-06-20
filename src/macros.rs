@@ -38,40 +38,38 @@ macro_rules! min {
 #[cfg(feature = "stats")]
 #[allow(unused_macros)]
 macro_rules! track {
-    ($v:expr) => {{
+    ($name:expr; $v:expr) => {{
         #[allow(clippy::cast_possible_wrap)]
         {
             #[linkme::distributed_slice($crate::stats::TRACKED_VALUES)]
-            static ENTRY: $crate::stats::TrackedValue = $crate::stats::TrackedValue::new(concat!(
-                file!(),
-                ":",
-                line!(),
-                " ",
-                stringify!($v)
-            ));
+            static ENTRY: $crate::stats::TrackedValue = $crate::stats::TrackedValue::new(const { $name });
             let value = $v;
             ENTRY.record(value as i64);
             value
         }
     }};
+    // if name not specified, construct from source.
+    ($v:expr) => {{ track!(concat!(file!(), ":", line!(), " ", stringify!($v)); $v) }};
 }
 
 /// No-op version when stats feature is disabled.
 #[cfg(not(feature = "stats"))]
 #[allow(unused_macros)]
 macro_rules! track {
-    ($v:expr) => {{
+    ($name:expr; $v:expr) => {{
         #[allow(unused)]
         {
             $v
         }
     }};
+    // if name not specified, construct from source.
+    ($v:expr) => {{ track!(concat!(file!(), ":", line!(), " ", stringify!($v)); $v) }};
 }
 
 macro_rules! include_bytes_aligned {
     ($path:literal) => {{
         // this assignment is made possible by CoerceUnsized
-        static ALIGNED: &$crate::util::Align64<[u8]> = &Align64(*include_bytes!($path));
+        static ALIGNED: &$crate::util::Align<[u8]> = &Align(*include_bytes!($path));
 
         &ALIGNED.0
     }};

@@ -1,14 +1,13 @@
 use std::sync::{
     Mutex,
-    atomic::{AtomicBool, AtomicU64, Ordering},
+    atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicU64, AtomicUsize, Ordering},
     mpsc,
 };
 
 use crate::{
     search::{LMTable, parameters::Config},
     timemgmt::TimeManager,
-    uci,
-    util::BatchedAtomicCounter,
+    util::{BatchedAtomicCounter, MAX_DEPTH},
 };
 
 #[cfg(feature = "stats")]
@@ -26,6 +25,8 @@ pub struct SearchInfo<'a> {
     pub root_move_nodes: [[u64; 64]; 64], // [from][to]
     /// Signal to stop the search.
     pub stopped: &'a AtomicBool,
+    /// Shared runtime controls and UCI-settable options.
+    pub control: &'a Control,
     /// The highest depth reached (selective depth).
     pub seldepth: i32,
     /// A handle to a receiver for stdin.
@@ -57,14 +58,49 @@ pub struct SearchInfo<'a> {
     pub qfailhigh_index: [u64; MAX_POSITION_MOVES],
 }
 
+#[derive(Debug)]
+pub struct Control {
+    pub quit: AtomicBool,
+    pub go_mate_max_depth: AtomicUsize,
+    pub pretty_print: AtomicBool,
+    pub ponder: AtomicBool,
+    pub chess960: AtomicBool,
+    pub syzygy_enabled: AtomicBool,
+    pub syzygy_probe_limit: AtomicU8,
+    pub syzygy_probe_depth: AtomicI32,
+    pub contempt: AtomicI32,
+}
+
+impl Default for Control {
+    fn default() -> Self {
+        Self {
+            quit: AtomicBool::new(false),
+            go_mate_max_depth: AtomicUsize::new(MAX_DEPTH),
+            pretty_print: AtomicBool::new(true),
+            ponder: AtomicBool::new(false),
+            chess960: AtomicBool::new(false),
+            syzygy_enabled: AtomicBool::new(false),
+            syzygy_probe_limit: AtomicU8::new(7),
+            syzygy_probe_depth: AtomicI32::new(1),
+            contempt: AtomicI32::new(0),
+        }
+    }
+}
+
 impl<'a> SearchInfo<'a> {
-    pub fn new(stopped: &'a AtomicBool, nodes: &'a AtomicU64, tbhits: &'a AtomicU64) -> Self {
+    pub fn new(
+        stopped: &'a AtomicBool,
+        nodes: &'a AtomicU64,
+        tbhits: &'a AtomicU64,
+        control: &'a Control,
+    ) -> Self {
         let out = Self {
             nodes: BatchedAtomicCounter::new(nodes),
             tbhits: BatchedAtomicCounter::new(tbhits),
             #[allow(clippy::large_stack_arrays)]
             root_move_nodes: [[0; 64]; 64],
             stopped,
+            control,
             seldepth: 0,
             stdin_rx: None,
             print_to_stdout: true,
@@ -126,7 +162,7 @@ impl<'a> SearchInfo<'a> {
             }
             self.stopped.store(true, Ordering::SeqCst);
             if cmd == "quit" {
-                uci::QUIT.store(true, Ordering::SeqCst);
+                self.control.quit.store(true, Ordering::SeqCst);
             }
             true
         } else {
@@ -192,8 +228,10 @@ impl<'a> SearchInfo<'a> {
     }
 }
 
+#[cfg(test)]
 mod tests {
     #![allow(unused_imports)]
+    use super::Control;
     use std::{
         array,
         sync::atomic::{AtomicBool, AtomicU64},
@@ -204,11 +242,10 @@ mod tests {
         evaluation::{mate_in, mated_in},
         nnue::network::NNUEParams,
         search::search_position,
-        searchinfo::SearchInfo,
         threadlocal::ThreadData,
         threadpool,
         timemgmt::{SearchLimit, TimeManager},
-        transpositiontable::TT,
+        transpositiontable::Cache,
         util::MEGABYTE,
     };
 
@@ -216,6 +253,7 @@ mod tests {
     static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn go_mate_in_2_white() {
         let guard = TEST_LOCK.lock().unwrap();
 
@@ -224,18 +262,20 @@ mod tests {
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
+        let control = Control::default();
         let pool = threadpool::make_worker_threads(1);
-        let mut tt = TT::new();
-        tt.resize(MEGABYTE, &pool);
+        let mut cache = Cache::new();
+        cache.resize(MEGABYTE, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = Box::new(ThreadData::new(
             0,
             position,
-            tt.view(),
+            cache.view(),
             nnue_params,
             &stopped,
             &nodes,
             &tbhits,
+            &control,
         ));
         t.info.clock = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let (value, mov) = search_position(&pool, array::from_mut(&mut t));
@@ -254,6 +294,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn go_mated_in_2_white() {
         let guard = TEST_LOCK.lock().unwrap();
 
@@ -262,18 +303,20 @@ mod tests {
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
+        let control = Control::default();
         let pool = threadpool::make_worker_threads(1);
-        let mut tt = TT::new();
-        tt.resize(MEGABYTE, &pool);
+        let mut cache = Cache::new();
+        cache.resize(MEGABYTE, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = Box::new(ThreadData::new(
             0,
             position,
-            tt.view(),
+            cache.view(),
             nnue_params,
             &stopped,
             &nodes,
             &tbhits,
+            &control,
         ));
         t.info.clock = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let (value, mov) = search_position(&pool, array::from_mut(&mut t));
@@ -292,6 +335,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn go_mated_in_2_black() {
         let guard = TEST_LOCK.lock().unwrap();
 
@@ -300,18 +344,20 @@ mod tests {
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
+        let control = Control::default();
         let pool = threadpool::make_worker_threads(1);
-        let mut tt = TT::new();
-        tt.resize(MEGABYTE, &pool);
+        let mut cache = Cache::new();
+        cache.resize(MEGABYTE, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = Box::new(ThreadData::new(
             0,
             position,
-            tt.view(),
+            cache.view(),
             nnue_params,
             &stopped,
             &nodes,
             &tbhits,
+            &control,
         ));
         t.info.clock = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let (value, mov) = search_position(&pool, array::from_mut(&mut t));
@@ -330,6 +376,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn go_mate_in_2_black() {
         let guard = TEST_LOCK.lock().unwrap();
 
@@ -338,18 +385,20 @@ mod tests {
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
         let tbhits = AtomicU64::new(0);
+        let control = Control::default();
         let pool = threadpool::make_worker_threads(1);
-        let mut tt = TT::new();
-        tt.resize(MEGABYTE, &pool);
+        let mut cache = Cache::new();
+        cache.resize(MEGABYTE, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = Box::new(ThreadData::new(
             0,
             position,
-            tt.view(),
+            cache.view(),
             nnue_params,
             &stopped,
             &nodes,
             &tbhits,
+            &control,
         ));
         t.info.clock = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let (value, mov) = search_position(&pool, array::from_mut(&mut t));

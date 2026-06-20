@@ -3,14 +3,12 @@ use arrayvec::ArrayVec;
 use std::{
     fmt::{Display, Formatter},
     ops::{Deref, DerefMut},
-    sync::atomic::Ordering,
 };
 
 use crate::{
     cfor,
     chess::{
-        CHESS960,
-        board::Board,
+        board::{Board, Rules},
         chessmove::{Move, MoveFlags},
         magic::{
             DIAG_ATTACKS, DIAG_REL_BITS, DIAG_TABLE, ORTH_ATTACKS, ORTH_REL_BITS, ORTH_TABLE,
@@ -77,12 +75,14 @@ impl Display for MoveList {
         }
         writeln!(f, "MoveList: ({}) [", self.inner.len())?;
         for m in &self.inner[0..self.inner.len() - 1] {
-            writeln!(f, "  {} ${}, ", m.mov.display(false), m.score)?;
+            writeln!(f, "  {} ${}, ", m.mov.display(Rules::Classical), m.score)?;
         }
         writeln!(
             f,
             "  {} ${}",
-            self.inner[self.inner.len() - 1].mov.display(false),
+            self.inner[self.inner.len() - 1]
+                .mov
+                .display(Rules::Classical),
             self.inner[self.inner.len() - 1].score
         )?;
         write!(f, "]")
@@ -713,7 +713,7 @@ impl Board {
     fn generate_castling_moves_for<C: Col>(&self, move_list: &mut MoveList) {
         let occupied = self.state.bbs.occupied();
 
-        if CHESS960.load(Ordering::Relaxed) {
+        if self.rules == Rules::Chess960 {
             let king_sq = self.state.bbs.king_sq(C::COLOUR);
             if self.sq_attacked(king_sq, C::Opposite::COLOUR) {
                 return;
@@ -727,7 +727,7 @@ impl Board {
                     Colour::White => Rank::One,
                     Colour::Black => Rank::Eight,
                 });
-                self.try_generate_frc_castling::<C>(
+                self.try_generate_960_castling::<C>(
                     king_sq,
                     castling_sq,
                     king_dst,
@@ -745,7 +745,7 @@ impl Board {
                     Colour::White => Rank::One,
                     Colour::Black => Rank::Eight,
                 });
-                self.try_generate_frc_castling::<C>(
+                self.try_generate_960_castling::<C>(
                     king_sq,
                     castling_sq,
                     king_dst,
@@ -801,7 +801,7 @@ impl Board {
         }
     }
 
-    fn try_generate_frc_castling<C: Col>(
+    fn try_generate_960_castling<C: Col>(
         &self,
         king_sq: Square,
         castling_sq: Square,
@@ -1012,6 +1012,7 @@ mod tests {
     };
 
     #[test]
+    #[cfg_attr(miri, ignore)] // too slow.
     fn staged_matches_full() {
         let positions = bench::BENCH_POSITIONS
             .into_iter()
