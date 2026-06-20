@@ -56,7 +56,7 @@ pub const AUX_FEATURES: usize = THREAT_FEATURES + PAWN_TUPLE_FEATURES;
 /// The amount to scale the output of the network by.
 /// This is to allow for the sigmoid activation to differentiate positions with
 /// a small difference in evaluation.
-pub const SCALE: i32 = 239;
+pub const SCALE: i32 = 240;
 /// The size of one-half of the hidden layer of the network.
 pub const L1_SIZE: usize = 1024;
 /// The size of the second layer of the network.
