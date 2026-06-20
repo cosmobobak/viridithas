@@ -6,7 +6,7 @@ use crate::{
         squareset::SquareSet,
         types::{File, Rank, Square},
     },
-    nnue::network::{MERGE_KING_PLANES, PSQT_FEATURES, PsqtFeatureUpdate, THREAT_FEATURES},
+    nnue::network::{MERGE_KING_PLANES, PAWN_TUPLE_FEATURES, PSQT_FEATURES, PsqtFeatureUpdate},
 };
 
 /// wrapper to enforce bounds.
@@ -93,7 +93,7 @@ pub fn psqt_index_full(colour: Colour, king: Square, f: PsqtFeatureUpdate) -> us
 /// array (see `ATTACK_INDEX`).
 #[rustfmt::skip]
 const PIECE_TARGET_MAP: [[i32; 6]; 6] = [
-    [ 0,  1, -1,  2, -1, -1],
+    [-1,  0, -1,  1, -1, -1],
     [ 0,  1,  2,  3,  4, -1],
     [ 0,  1,  2,  3, -1, -1],
     [ 0,  1,  2,  3, -1, -1],
@@ -262,14 +262,10 @@ static OFFSET: Offset = {
 
 /// `ATTACK_INDEX[attacker][victim][forwards]` gives the
 /// base feature index for a given (attacker, victim, direction)
-/// combination, or `THREAT_FEATURES` (60144 atow)
-/// as a sentinel meaning “excluded”.
+/// combination, or `u32::MAX` as a sentinel meaning “excluded”.
 ///
 /// The [forwards] dimension handles semi-exclusion.
 static ATTACK_INDEX: [[[u32; 2]; 12]; 12] = {
-    #[expect(clippy::cast_possible_truncation)]
-    const FEATURES: u32 = THREAT_FEATURES as u32;
-
     let mut dst = [[[0; 2]; 12]; 12];
 
     cfor!(let mut attacker_idx = 0; attacker_idx < 12; attacker_idx += 1; {
@@ -300,8 +296,8 @@ static ATTACK_INDEX: [[[u32; 2]; 12]; 12] = {
 
             // some of the above work has been done on garbage values,
             // but gets screened out here.
-            dst[attacker as usize][victim as usize][0] = if full_excluded { FEATURES } else { feature };
-            dst[attacker as usize][victim as usize][1] = if full_excluded || semi_excluded { FEATURES } else { feature };
+            dst[attacker as usize][victim as usize][0] = if full_excluded { u32::MAX } else { feature };
+            dst[attacker as usize][victim as usize][1] = if full_excluded || semi_excluded { u32::MAX } else { feature };
         });
     });
 
@@ -362,7 +358,35 @@ pub fn threat_index(
     let piece_index = u32::from(PIECE_INDEX[attacker][from][to]);
 
     (
-        attack_index as usize != THREAT_FEATURES,
-        attack_index + offset + piece_index,
+        attack_index != u32::MAX,
+        attack_index.wrapping_add(offset).wrapping_add(piece_index),
     )
+}
+
+fn pawn_compressed_index(colour: Colour, king: Square, pawn_colour: Colour, mut sq: Square) -> u16 {
+    if colour == Colour::Black {
+        sq = sq.flip_rank();
+    }
+    if king.file() >= File::E {
+        sq = sq.flip_file();
+    }
+    let offset = u16::from(colour != pawn_colour) * 48;
+    offset + u16::from(sq) - 8
+}
+
+pub fn pawn_pawn_index(
+    colour: Colour,
+    king: Square,
+    a: Colour,
+    a_sq: Square,
+    b: Colour,
+    b_sq: Square,
+) -> u16 {
+    let a_idx = pawn_compressed_index(colour, king, a, a_sq);
+    let b_idx = pawn_compressed_index(colour, king, b, b_sq);
+    let hi = max!(a_idx, b_idx);
+    let lo = min!(a_idx, b_idx);
+    let idx = hi * (hi - 1) / 2 + lo;
+    debug_assert!(usize::from(idx) < PAWN_TUPLE_FEATURES);
+    idx
 }

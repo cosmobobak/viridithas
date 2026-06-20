@@ -810,7 +810,7 @@ impl Board {
             }
             .unwrap();
             let to_clear = Piece::new(side.flip(), PieceType::Pawn);
-            threat_updates::on_change::<Sub>(&mut update_buffer.threat, self, to_clear, clear_at);
+            threat_updates::on_change::<Sub>(&mut update_buffer.aux, self, to_clear, clear_at);
             self.state.mailbox[clear_at] = None;
             self.state.bbs.clear_piece_at(clear_at, to_clear);
             update_buffer.psqt.clear_piece(clear_at, to_clear);
@@ -846,13 +846,7 @@ impl Board {
             let new_piece_at_to = m
                 .promotion_type()
                 .map_or(piece, |promo| Piece::new(side, promo));
-            threat_updates::on_mutate(
-                &mut update_buffer.threat,
-                self,
-                captured,
-                new_piece_at_to,
-                to,
-            );
+            threat_updates::on_mutate(&mut update_buffer.aux, self, captured, new_piece_at_to, to);
             self.state.mailbox[to] = Some(new_piece_at_to);
             self.state.bbs.clear_piece_at(to, captured);
             update_buffer.psqt.clear_piece(to, captured);
@@ -892,16 +886,9 @@ impl Board {
             if captured.is_none() {
                 // if we’re not capturing, we can call the fused move path.
                 self.state.mailbox[to] = Some(promo_piece);
-                threat_updates::on_move(
-                    &mut update_buffer.threat,
-                    self,
-                    piece,
-                    from,
-                    promo_piece,
-                    to,
-                );
+                threat_updates::on_move(&mut update_buffer.aux, self, piece, from, promo_piece, to);
             } else {
-                threat_updates::on_change::<Sub>(&mut update_buffer.threat, self, piece, from);
+                threat_updates::on_change::<Sub>(&mut update_buffer.aux, self, piece, from);
             }
             update_buffer.psqt.add_piece(to, promo_piece);
         } else if castle {
@@ -915,24 +902,24 @@ impl Board {
             };
             let rook = Piece::new(side, PieceType::Rook);
             self.state.mailbox[from] = None;
-            threat_updates::on_change::<Sub>(&mut update_buffer.threat, self, piece, from);
+            threat_updates::on_change::<Sub>(&mut update_buffer.aux, self, piece, from);
             self.state.mailbox[rook_from] = None;
-            threat_updates::on_change::<Sub>(&mut update_buffer.threat, self, rook, rook_from);
+            threat_updates::on_change::<Sub>(&mut update_buffer.aux, self, rook, rook_from);
             self.state.mailbox[to] = Some(piece);
-            threat_updates::on_change::<Add>(&mut update_buffer.threat, self, piece, to);
+            threat_updates::on_change::<Add>(&mut update_buffer.aux, self, piece, to);
             self.state.mailbox[rook_to] = Some(rook);
-            threat_updates::on_change::<Add>(&mut update_buffer.threat, self, rook, rook_to);
+            threat_updates::on_change::<Add>(&mut update_buffer.aux, self, rook, rook_to);
         } else if captured.is_some() {
             self.state.bbs.move_piece(from, to, piece);
             // update mailbox and compute threats for the moving piece
             self.state.mailbox[from] = None;
-            threat_updates::on_change::<Sub>(&mut update_buffer.threat, self, piece, from);
+            threat_updates::on_change::<Sub>(&mut update_buffer.aux, self, piece, from);
         } else {
             self.state.bbs.move_piece(from, to, piece);
             // update mailbox and compute threats for the moving piece
             self.state.mailbox[from] = None;
             self.state.mailbox[to] = Some(piece);
-            threat_updates::on_move(&mut update_buffer.threat, self, piece, from, piece, to);
+            threat_updates::on_move(&mut update_buffer.aux, self, piece, from, piece, to);
         }
 
         self.side = self.side.flip();
@@ -1086,12 +1073,22 @@ impl Board {
     }
 
     pub fn make_move_nnue(&mut self, m: Move, nnue: &mut NNUEState) {
-        let update_buffer = &mut nnue.updates[nnue.current_acc];
-        update_buffer.clear();
         let piece = self.state.mailbox[m.from()].unwrap();
+
+        let update_buffer = &mut nnue.updates[nnue.current_acc];
+
+        update_buffer.clear();
+        update_buffer.aux.afore[Colour::White] =
+            self.state.bbs.pieces[PieceType::Pawn] & self.state.bbs.colours[Colour::White];
+        update_buffer.aux.afore[Colour::Black] =
+            self.state.bbs.pieces[PieceType::Pawn] & self.state.bbs.colours[Colour::Black];
 
         self.make_move_base(m, update_buffer);
 
+        update_buffer.aux.after[Colour::White] =
+            self.state.bbs.pieces[PieceType::Pawn] & self.state.bbs.colours[Colour::White];
+        update_buffer.aux.after[Colour::Black] =
+            self.state.bbs.pieces[PieceType::Pawn] & self.state.bbs.colours[Colour::Black];
         nnue.moves[nnue.current_acc] = MovedPiece {
             from: m.from(),
             to: m.to(),

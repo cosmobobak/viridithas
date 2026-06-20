@@ -8,7 +8,7 @@ use crate::{
     },
     nnue::{
         geometry::{self, BitRays},
-        network::{ThreatFeatureUpdate, ThreatUpdateBuffer},
+        network::{AuxUpdateBuffer, ThreatFeatureUpdate},
     },
 };
 
@@ -100,7 +100,7 @@ mod vbmi {
         nnue::{
             geometry,
             network::{
-                ThreatUpdateBuffer,
+                AuxUpdateBuffer,
                 threat_updates::{AddSub, Direction},
             },
         },
@@ -111,7 +111,7 @@ mod vbmi {
     /// subtractive, and the threats are either inbound or
     /// outbound from the piece. Also see `push_discovered`.
     pub unsafe fn push_focus<Op: AddSub, Dir: Direction>(
-        updates: &mut ThreatUpdateBuffer,
+        updates: &mut AuxUpdateBuffer,
         indexes: geometry::Vector, // square indexes
         rays: geometry::Vector,    // pieces on said squares
         br: geometry::BitRays,     // bitrays where set bit sees focus square
@@ -172,7 +172,7 @@ mod vbmi {
     /// some square, or blocked by arrival of such a piece
     /// on such a square. For direct threats → `push_focus`.
     pub unsafe fn push_discovered<Op: AddSub>(
-        updates: &mut ThreatUpdateBuffer,
+        updates: &mut AuxUpdateBuffer,
         idxs: geometry::Vector,
         rays: geometry::Vector,
         sliders: geometry::BitRays,
@@ -229,7 +229,7 @@ mod generic {
         nnue::{
             geometry,
             network::{
-                ThreatFeatureUpdate, ThreatUpdateBuffer,
+                AuxUpdateBuffer, ThreatFeatureUpdate,
                 threat_updates::{AddSub, Direction},
             },
         },
@@ -240,7 +240,7 @@ mod generic {
     /// subtractive, and the threats are either inbound or
     /// outbound from the piece. Also see `push_discovered`.
     pub unsafe fn push_focus<Op: AddSub, Dir: Direction>(
-        updates: &mut ThreatUpdateBuffer,
+        updates: &mut AuxUpdateBuffer,
         indexes: geometry::Vector, // square indexes
         rays: geometry::Vector,    // pieces on said squares
         br: geometry::BitRays,     // bitrays where set bit sees focus square
@@ -302,7 +302,7 @@ mod generic {
     /// some square, or blocked by arrival of such a piece
     /// on such a square. For direct threats → `push_focus`.
     pub unsafe fn push_discovered<Op: AddSub>(
-        updates: &mut ThreatUpdateBuffer,
+        updates: &mut AuxUpdateBuffer,
         idxs: geometry::Vector,
         rays: geometry::Vector,
         sliders: geometry::BitRays,
@@ -362,7 +362,7 @@ pub use generic::*;
 /// This includes threats directly emitted by or inbound to the piece,
 /// and discovered/blocked threats from sliders through the piece.
 pub fn on_change<Op: AddSub>(
-    updates: &mut ThreatUpdateBuffer,
+    updates: &mut AuxUpdateBuffer,
     board: &Board,
     piece: Piece,
     sq: Square,
@@ -417,7 +417,7 @@ pub fn on_change<Op: AddSub>(
 ///
 /// Because the piece is not moving, no threats are discovered or blocked.
 pub fn on_mutate(
-    updates: &mut ThreatUpdateBuffer,
+    updates: &mut AuxUpdateBuffer,
     board: &Board,
     old_piece: Piece,
     new_piece: Piece,
@@ -455,7 +455,7 @@ pub fn on_mutate(
 /// This function takes piece-types for old & new, in case you wish to
 /// transform the type of the piece as it moves (e.g. in case of promotion).
 pub fn on_move(
-    updates: &mut ThreatUpdateBuffer,
+    updates: &mut AuxUpdateBuffer,
     board: &Board,
     old_piece: Piece,
     src: Square,
@@ -611,7 +611,7 @@ mod tests {
 
         let threats_before = collect_threats_simple(&board_before);
 
-        let mut buf = ThreatUpdateBuffer::default();
+        let mut buf = AuxUpdateBuffer::default();
         let piece = board_before.state.mailbox[m.from()].unwrap();
 
         // Remove threats before the move
@@ -709,7 +709,7 @@ mod tests {
 
         let simple = collect_threats_simple(&board_after);
 
-        let incremental = apply_threat_diff(threats_before, &buffer.threat.sub, &buffer.threat.add);
+        let incremental = apply_threat_diff(threats_before, &buffer.aux.sub, &buffer.aux.add);
         assert_threats_eq(
             &simple,
             &incremental,
@@ -742,21 +742,62 @@ mod tests {
 
     use crate::{
         chess::piece::Colour,
-        nnue::network::{L1_SIZE, NNUEParams, feature::threat_index},
+        nnue::network::{
+            L1_SIZE, NNUEParams, PAWN_TUPLE_FEATURES,
+            feature::{pawn_pawn_index, threat_index},
+            pawn_updates::PAWN_PAWN_MASKS,
+        },
         util::Align,
     };
 
-    /// Compute sorted threat feature indexes for a given perspective.
-    fn threat_indexes(board: &Board, colour: Colour) -> ArrayVec<u32, 128> {
-        let king = board.state.bbs.king_sq(colour);
+    /// Compute sorted auxiliary feature indexes (threats
+    /// and pawn-pawn relations) for a given perspective.
+    fn aux_indexes(board: &Board, colour: Colour) -> ArrayVec<u32, 256> {
+        let bbs = &board.state.bbs;
+        let king = bbs.king_sq(colour);
+
+        // Threat features are offset to make space for the
+        // pawn-pawn features that occupy 0..PAWN_TUPLE_FEATURES.
+        let pawn_offset = u32::try_from(PAWN_TUPLE_FEATURES).unwrap();
         let threats = collect_threats_simple(board);
         let mut indexes = threats
             .iter()
             .filter_map(|t| {
                 let (good, idx) = threat_index(colour, king, t.attacker, t.victim, t.from, t.to);
-                good.then_some(idx)
+                good.then_some(pawn_offset + idx)
             })
-            .collect::<ArrayVec<_, _>>();
+            .collect::<ArrayVec<u32, 256>>();
+
+        // Pawn-pawn relational features, occupying 0..PAWN_TUPLE_FEATURES.
+        let our_pawns = bbs.pieces[PieceType::Pawn] & bbs.colours[colour];
+        let their_pawns = bbs.pieces[PieceType::Pawn] & bbs.colours[!colour];
+
+        let mut our_pawns_iter = our_pawns.into_iter();
+        let mut their_pawns_iter = their_pawns.into_iter();
+
+        while let Some(a) = our_pawns_iter.next() {
+            let mask = PAWN_PAWN_MASKS[a.file()];
+            for b in our_pawns_iter.remaining() & mask {
+                indexes.push(u32::from(pawn_pawn_index(
+                    colour, king, colour, a, colour, b,
+                )));
+            }
+            for b in their_pawns & mask {
+                indexes.push(u32::from(pawn_pawn_index(
+                    colour, king, colour, a, !colour, b,
+                )));
+            }
+        }
+
+        while let Some(a) = their_pawns_iter.next() {
+            let mask = PAWN_PAWN_MASKS[a.file()];
+            for b in their_pawns_iter.remaining() & mask {
+                indexes.push(u32::from(pawn_pawn_index(
+                    colour, king, !colour, a, !colour, b,
+                )));
+            }
+        }
+
         indexes.sort_unstable();
         indexes
     }
@@ -765,18 +806,20 @@ mod tests {
     fn startpos_threat_indexes() {
         let board = Board::from_fen(STARTPOS).unwrap();
         let expected = [
-            506, 525, 3878, 3879, 3899, 3900, 8351, 8449, 9240, 9344, 15603, 15604, 15605, 18512,
-            32570, 32589, 36699, 36700, 36720, 36721, 42790, 42888, 43687, 43791, 54247, 54248,
-            54249, 57166,
+            0, 2, 5, 9, 14, 20, 27, 3828, 3829, 3916, 3917, 3918, 4004, 4006, 4007, 4008, 4094,
+            4097, 4098, 4099, 4185, 4189, 4190, 4191, 4277, 4282, 4283, 4284, 4370, 4376, 4377,
+            4378, 4464, 4471, 4472, 4559, 4898, 4917, 8270, 8271, 8291, 8292, 12743, 12841, 13632,
+            13736, 19995, 19996, 19997, 22904, 36794, 36813, 40923, 40924, 40944, 40945, 47014,
+            47112, 47911, 48015, 58471, 58472, 58473, 61390,
         ];
         // symmetric
         assert_eq!(
-            &threat_indexes(&board, Colour::White),
+            &aux_indexes(&board, Colour::White),
             &expected[..],
             "white threats"
         );
         assert_eq!(
-            &threat_indexes(&board, Colour::Black),
+            &aux_indexes(&board, Colour::Black),
             &expected[..],
             "black threats"
         );
@@ -787,24 +830,28 @@ mod tests {
         let board = Board::from_fen(KIWIPETE).unwrap();
 
         let white_expected = [
-            34, 95, 605, 606, 608, 1276, 2034, 2374, 2376, 2377, 4517, 8351, 8449, 15907, 15908,
-            15919, 17370, 18821, 23190, 24659, 30086, 30134, 30195, 30397, 30398, 30401, 30488,
-            30491, 30807, 30809, 30840, 32491, 32521, 33531, 35486, 37185, 38306, 42786, 42888,
-            54045, 54050, 54054, 54055, 55505,
+            0, 2, 20, 27, 173, 383, 397, 1540, 1541, 2420, 2421, 2422, 3240, 3241, 3242, 3296,
+            3405, 3422, 3431, 4006, 4007, 4024, 4086, 4088, 4191, 4205, 4214, 4269, 4283, 4284,
+            4306, 4348, 4370, 4471, 4472, 4535, 4571, 4997, 4998, 5000, 5668, 6426, 6766, 6768,
+            6769, 8909, 12743, 12841, 20299, 20300, 20311, 21762, 23213, 27582, 29051, 34503,
+            34712, 34715, 35031, 35033, 35064, 36715, 36745, 37755, 39710, 41409, 42530, 47010,
+            47112, 58269, 58274, 58278, 58279, 59729,
         ];
         let black_expected = [
-            3, 4, 7, 94, 97, 389, 581, 612, 1619, 2263, 2265, 2293, 4490, 5607, 8355, 8449, 15752,
-            15753, 15758, 15765, 17213, 30107, 30143, 30372, 30489, 30710, 30711, 30712, 32510,
-            32512, 32515, 33186, 33740, 35517, 37212, 42790, 42888, 46560, 48008, 53839, 53847,
-            53848, 55300, 56761,
+            14, 38, 57, 59, 440, 442, 505, 2282, 2283, 2289, 2777, 2779, 2786, 2843, 3837, 3860,
+            3918, 3925, 3948, 4004, 4007, 4014, 4016, 4080, 4094, 4282, 4283, 4308, 4346, 4376,
+            4378, 4401, 4464, 4472, 4495, 4559, 4570, 4573, 4781, 4973, 5004, 6011, 6655, 6657,
+            6685, 8882, 9999, 12747, 12841, 20144, 20145, 20150, 20157, 21605, 34713, 34934, 34935,
+            34936, 36734, 36736, 36739, 37410, 37964, 39741, 41436, 47014, 47112, 50784, 52232,
+            58063, 58071, 58072, 59524, 60985,
         ];
         assert_eq!(
-            &threat_indexes(&board, Colour::White),
+            &aux_indexes(&board, Colour::White),
             &white_expected[..],
             "white threats"
         );
         assert_eq!(
-            &threat_indexes(&board, Colour::Black),
+            &aux_indexes(&board, Colour::Black),
             &black_expected[..],
             "black threats"
         );
@@ -820,11 +867,11 @@ mod tests {
 
         for colour in [Colour::White, Colour::Black] {
             // compute expected accumulator by summing weight rows
-            let indexes = threat_indexes(&board, colour);
+            let indexes = aux_indexes(&board, colour);
             let mut expected = Align([0i16; L1_SIZE]);
             for &idx in &indexes {
                 let start = idx as usize * L1_SIZE;
-                let row = &nnue_params.l0_threat[start..start + L1_SIZE];
+                let row = &nnue_params.l0_aux[start..start + L1_SIZE];
                 for (e, &r) in expected.0.iter_mut().zip(row) {
                     *e += i16::from(r);
                 }
@@ -834,12 +881,7 @@ mod tests {
             let mut acc = crate::nnue::accumulator::Accumulator {
                 halves: [Align([0i16; L1_SIZE]), Align([0i16; L1_SIZE])],
             };
-            accumulator::refresh_threats(
-                &nnue_params.l0_threat,
-                &mut acc.halves[colour],
-                &board,
-                colour,
-            );
+            accumulator::refresh_aux(&nnue_params.l0_aux, &mut acc.halves[colour], &board, colour);
 
             assert_eq!(
                 acc.halves[colour].0, expected.0,

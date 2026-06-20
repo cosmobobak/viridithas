@@ -257,6 +257,10 @@ impl SquareIter {
     pub const fn new(value: u64) -> Self {
         Self { value }
     }
+
+    pub const fn remaining(&self) -> SquareSet {
+        SquareSet::from_inner(self.value)
+    }
 }
 
 impl Iterator for SquareIter {
