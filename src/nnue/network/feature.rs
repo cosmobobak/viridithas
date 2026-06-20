@@ -363,7 +363,12 @@ pub fn threat_index(
     )
 }
 
-fn pawn_compressed_index(colour: Colour, king: Square, pawn_colour: Colour, mut sq: Square) -> u16 {
+pub fn pawn_compressed_index(
+    colour: Colour,
+    king: Square,
+    pawn_colour: Colour,
+    mut sq: Square,
+) -> u16 {
     if colour == Colour::Black {
         sq = sq.flip_rank();
     }
