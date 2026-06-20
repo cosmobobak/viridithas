@@ -93,7 +93,7 @@ pub fn psqt_index_full(colour: Colour, king: Square, f: PsqtFeatureUpdate) -> us
 /// array (see `ATTACK_INDEX`).
 #[rustfmt::skip]
 const PIECE_TARGET_MAP: [[i32; 6]; 6] = [
-    [ 0,  1, -1,  2, -1, -1],
+    [-1,  0, -1,  1, -1, -1],
     [ 0,  1,  2,  3,  4, -1],
     [ 0,  1,  2,  3, -1, -1],
     [ 0,  1,  2,  3, -1, -1],
