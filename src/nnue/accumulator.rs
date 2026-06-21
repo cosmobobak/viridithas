@@ -30,7 +30,7 @@ mod simd {
         chess::{
             board::{Board, movegen::attacks_by_type},
             piece::{Colour, PieceType},
-            types::Square,
+            types::{File, Square},
         },
         nnue::{
             network::{
@@ -204,18 +204,98 @@ mod simd {
         }
     }
 
-    // #[cfg(target_feature = "avx512vbmi")]
-    // fn add_pawn_pawn_indexes(
-    //     buffer: &AuxUpdateBuffer,
-    //     king: Square,
-    //     colour: Colour,
-    //     adds: &mut ArrayVec<u32, 192>,
-    //     subs: &mut ArrayVec<u32, 192>,
-    // ) {
-    //     todo!()
-    // }
+    #[cfg(target_feature = "avx512vbmi")]
+    fn add_pawn_pawn_indexes(
+        buffer: &AuxUpdateBuffer,
+        king: Square,
+        colour: Colour,
+        adds: &mut ArrayVec<u32, 192>,
+        subs: &mut ArrayVec<u32, 192>,
+    ) {
+        use std::arch::x86_64::{
+            __m512i, _mm512_add_epi16, _mm512_castsi512_si256, _mm512_cvtepu8_epi16,
+            _mm512_cvtepu16_epi32, _mm512_mask_add_epi8, _mm512_maskz_compress_epi8,
+            _mm512_max_epu16, _mm512_min_epu16, _mm512_mullo_epi16, _mm512_set_epi8,
+            _mm512_set1_epi8, _mm512_set1_epi16, _mm512_slli_epi32, _mm512_srli_epi16,
+            _mm512_storeu_si512, _mm512_sub_epi8, _mm512_sub_epi16, _mm512_xor_si512,
+        };
 
-    // #[cfg(not(target_feature = "avx512vbmi"))]
+        use crate::nnue::network::feature::pawn_compressed_index;
+
+        let orient = (if colour == Colour::Black { 56 } else { 0 })
+            | (if king.file() >= File::E { 7 } else { 0 });
+
+        unsafe {
+            #[rustfmt::skip]
+            let iota = _mm512_set_epi8(
+                63, 62, 61, 60, 59, 58, 57, 56, 55, 54, 53, 52, 51, 50, 49, 48,
+                47, 46, 45, 44, 43, 42, 41, 40, 39, 38, 37, 36, 35, 34, 33, 32,
+                31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16,
+                15, 14, 13, 12, 11, 10,  9,  8,  7,  6,  5,  4,  3,  2,  1,  0,
+            );
+            let base = _mm512_sub_epi8(
+                _mm512_xor_si512(iota, _mm512_set1_epi8(orient)),
+                _mm512_set1_epi8(8),
+            );
+            let ids_after = _mm512_mask_add_epi8(
+                base,
+                buffer.after[!colour].inner(),
+                base,
+                _mm512_set1_epi8(48),
+            );
+            let ids_afore = _mm512_mask_add_epi8(
+                base,
+                buffer.afore[!colour].inner(),
+                base,
+                _mm512_set1_epi8(48),
+            );
+
+            let push = |out: &mut ArrayVec<u32, 192>, id_a: u16, partners: u64, ids: __m512i| {
+                let n = partners.count_ones() as usize;
+                if n == 0 {
+                    return;
+                }
+                let pids = _mm512_cvtepu8_epi16(_mm512_castsi512_si256(
+                    _mm512_maskz_compress_epi8(partners, ids),
+                ));
+                let id_a = _mm512_set1_epi16(id_a.cast_signed());
+                let hi = _mm512_max_epu16(id_a, pids);
+                let lo = _mm512_min_epu16(id_a, pids);
+                // hi * (hi - 1) / 2 + lo
+                let prod = _mm512_mullo_epi16(hi, _mm512_sub_epi16(hi, _mm512_set1_epi16(1)));
+                let idx = _mm512_add_epi16(_mm512_srli_epi16(prod, 1), lo);
+                let off = _mm512_slli_epi32(_mm512_cvtepu16_epi32(_mm512_castsi512_si256(idx)), 10);
+                let len = out.len();
+                _mm512_storeu_si512(out.as_mut_ptr().add(len).cast(), off);
+                out.set_len(len + n);
+            };
+
+            let mut after_remaining =
+                (buffer.after[Colour::White] | buffer.after[Colour::Black]).inner();
+            let mut afore_remaining =
+                (buffer.afore[Colour::White] | buffer.afore[Colour::Black]).inner();
+
+            for pawn_colour in Colour::all() {
+                let add = buffer.after[pawn_colour] & !buffer.afore[pawn_colour];
+                let sub = buffer.afore[pawn_colour] & !buffer.after[pawn_colour];
+
+                for a in add {
+                    after_remaining &= !a.as_set().inner();
+                    let id_a = pawn_compressed_index(colour, king, pawn_colour, a);
+                    let partners = PAWN_PAWN_MASKS[a.file()].inner() & after_remaining;
+                    push(adds, id_a, partners, ids_after);
+                }
+                for a in sub {
+                    afore_remaining &= !a.as_set().inner();
+                    let id_a = pawn_compressed_index(colour, king, pawn_colour, a);
+                    let partners = PAWN_PAWN_MASKS[a.file()].inner() & afore_remaining;
+                    push(subs, id_a, partners, ids_afore);
+                }
+            }
+        }
+    }
+
+    #[cfg(not(target_feature = "avx512vbmi"))]
     fn add_pawn_pawn_indexes(
         buffer: &AuxUpdateBuffer,
         king: Square,
