@@ -68,7 +68,8 @@ const SEE_TACTICAL_MARGIN: i32 = -28;
 const FUTILITY_COEFF_0: i32 = 86;
 const FUTILITY_COEFF_1: i32 = 70;
 const RAZORING_COEFF_0: i32 = 123;
-const RAZORING_COEFF_1: i32 = 295;
+const RAZORING_COEFF_1: i32 = 256;
+const RAZORING_COEFF_2: i32 = 96;
 const DOUBLE_EXTENSION_MARGIN: i32 = 13;
 const TRIPLE_EXTENSION_MARGIN: i32 = 201;
 const LMR_BASE: f64 = 99.0;
@@ -1049,9 +1050,13 @@ pub fn alpha_beta<NT: NodeType>(
         // razoring.
         // if the static eval is too low, check if qsearch can beat alpha.
         // if it can't, we can prune the node.
+        let razor_d = (depth - 3).max(0);
         if alpha < 2000
             && static_eval
-                < alpha - t.info.conf.razoring_coeff_0 - t.info.conf.razoring_coeff_1 * depth
+                < alpha
+                    - t.info.conf.razoring_coeff_0
+                    - t.info.conf.razoring_coeff_1 * depth
+                    - t.info.conf.razoring_coeff_2 * razor_d * razor_d
         {
             let v = quiescence::<OffPV>(t, alpha, beta);
             if v <= alpha {
