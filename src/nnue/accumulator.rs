@@ -30,7 +30,7 @@ mod simd {
         chess::{
             board::{Board, movegen::attacks_by_type},
             piece::{Colour, PieceType},
-            types::{File, Square},
+            types::Square,
         },
         nnue::{
             network::{
@@ -220,6 +220,7 @@ mod simd {
             _mm512_storeu_si512, _mm512_sub_epi8, _mm512_sub_epi16, _mm512_xor_si512,
         };
 
+        use crate::chess::types::File;
         use crate::nnue::network::feature::pawn_compressed_index;
 
         let orient = (if colour == Colour::Black { 56 } else { 0 })

@@ -1231,7 +1231,7 @@ impl Board {
         if gives_check {
             let mut ml = MoveList::new();
             playout.generate_moves(&mut ml);
-            for &m in ml.iter_moves() {
+            for &m in ml.iter() {
                 if !playout.is_legal(m) {
                     continue;
                 }
@@ -1295,7 +1295,7 @@ impl Board {
         let mut legal_moves = ArrayVec::new();
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
-        for &m in move_list.iter_moves() {
+        for &m in move_list.iter() {
             if self.is_legal(m) {
                 legal_moves.push(m);
             }
@@ -1433,7 +1433,7 @@ impl Board {
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
         let mut legal_moves = false;
-        for &m in move_list.iter_moves() {
+        for &m in move_list.iter() {
             if self.is_legal(m) {
                 legal_moves = true;
                 break;
@@ -1456,7 +1456,7 @@ impl Board {
         assert!(self.in_check());
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
-        for &mv in move_list.iter_moves() {
+        for &mv in move_list.iter() {
             assert!(!self.is_legal(mv));
         }
     }

@@ -1022,7 +1022,7 @@ fn divide_perft(depth: usize, pos: &mut Board) {
     let mut nodes = 0;
     let mut ml = MoveList::new();
     pos.generate_moves(&mut ml);
-    for &m in ml.iter_moves() {
+    for &m in ml.iter() {
         if !pos.is_legal(m) {
             continue;
         }

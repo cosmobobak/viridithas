@@ -1,10 +1,12 @@
 use std::cell::Cell;
 
+use arrayvec::ArrayVec;
+
 use crate::{
     chess::{
         board::{
             Board, Rules,
-            movegen::{AllMoves, MoveList, MoveListEntry, SkipQuiets, pawn_attacks_by},
+            movegen::{AllMoves, MAX_POSITION_MOVES, MoveList, SkipQuiets, pawn_attacks_by},
         },
         chessmove::Move,
         piece::PieceType,
@@ -35,6 +37,7 @@ pub enum Stage {
 #[derive(Debug)]
 pub struct MovePicker {
     moves: MoveList,
+    scores: ArrayVec<i32, MAX_POSITION_MOVES>,
     index: usize,
     pub stage: Stage,
     tt_move: Option<Move>,
@@ -43,28 +46,11 @@ pub struct MovePicker {
     see_threshold: i32,
 }
 
-fn fast_select(entries: &[Cell<MoveListEntry>]) -> Option<&Cell<MoveListEntry>> {
-    #![allow(clippy::cast_possible_truncation)]
-    fn to_u64(e: MoveListEntry) -> u64 {
-        #![allow(clippy::cast_sign_loss)]
-        let widened = i64::from(e.score);
-        let offset = widened - i64::from(i32::MIN);
-        (offset as u64) << 32
-    }
-    let best = entries
-        .iter()
-        .enumerate()
-        .map(|(i, e)| to_u64(e.get()) | i as u64)
-        .max()?;
-    let best_idx = best & 0xFFFF_FFFF;
-    // SAFETY: best_idx is guaranteed to be in-bounds.
-    unsafe { Some(entries.get_unchecked(best_idx as usize)) }
-}
-
 impl MovePicker {
     pub fn new(tt_move: Option<Move>, killer: Option<Move>, see_threshold: i32) -> Self {
         Self {
             moves: MoveList::new(),
+            scores: ArrayVec::new(),
             index: 0,
             stage: Stage::TTMove,
             tt_move,
@@ -99,12 +85,12 @@ impl MovePicker {
             } else {
                 t.board.generate_captures::<AllMoves>(&mut self.moves);
             }
-            Self::score_captures(&t.board, &t.histories, &mut self.moves);
+            Self::score_captures(&t.board, &t.histories, &self.moves, &mut self.scores);
         }
         if self.stage == Stage::YieldGoodCaptures {
-            if let Some(m) = self.yield_once(t) {
-                if m.score >= WINNING_CAPTURE_BONUS {
-                    return Some(m.mov);
+            if let Some((m, s)) = self.yield_once(t) {
+                if s >= WINNING_CAPTURE_BONUS {
+                    return Some(m);
                 }
                 // the move was not winning, so we're going to
                 // generate quiet moves next. As such, we decrement
@@ -133,13 +119,13 @@ impl MovePicker {
             if !self.skip_quiets {
                 let start = self.moves.len();
                 t.board.generate_quiets(&mut self.moves);
-                let quiets = &mut self.moves[start..];
-                Self::score_quiets(&t.board, &t.histories, &t.ss, quiets);
+                let quiets = &self.moves[start..];
+                Self::score_quiets(&t.board, &t.histories, &t.ss, quiets, &mut self.scores);
             }
         }
         if self.stage == Stage::YieldRemaining {
-            if let Some(m) = self.yield_once(t) {
-                return Some(m.mov);
+            if let Some((m, _)) = self.yield_once(t) {
+                return Some(m);
             }
             self.stage = Stage::Done;
         }
@@ -153,44 +139,49 @@ impl MovePicker {
     /// Usually only one iteration is performed, but in the case where
     /// the best move has already been tried or doesn't meet SEE requirements,
     /// we will continue to iterate until we find a move that is valid.
-    fn yield_once(&mut self, t: &ThreadData) -> Option<MoveListEntry> {
-        let remaining = &mut self.moves[self.index..];
-        let mut remaining = Cell::as_slice_of_cells(Cell::from_mut(remaining));
-        while let Some(best_entry_ref) = fast_select(remaining) {
-            let best = best_entry_ref.get();
+    fn yield_once(&mut self, t: &ThreadData) -> Option<(Move, i32)> {
+        let r_moves = &mut self.moves[self.index..];
+        let r_scores = &mut self.scores[self.index..];
+        let mut r_moves = Cell::as_slice_of_cells(Cell::from_mut(r_moves));
+        let mut r_scores = Cell::as_slice_of_cells(Cell::from_mut(r_scores));
+        while let Some((best_mv_entry, best_score_entry)) =
+            r_moves.iter().zip(r_scores).max_by_key(|(_, s)| s.get())
+        {
+            let best_mv = best_mv_entry.get();
+            let best_score = best_score_entry.get();
             debug_assert!(
-                best.score < WINNING_CAPTURE_BONUS / 2 || best.score >= MIN_WINNING_SEE_SCORE,
+                !(WINNING_CAPTURE_BONUS / 2..MIN_WINNING_SEE_SCORE).contains(&best_score),
                 "{}'s score is {}, lower bound is {}, this is too close.",
-                best.mov.display(Rules::Classical),
-                best.score,
+                best_mv.display(Rules::Classical),
+                best_score,
                 MIN_WINNING_SEE_SCORE
             );
             // test if this is a potentially-winning capture that's yet to be SEE-ed:
-            if best.score >= MIN_WINNING_SEE_SCORE
-                && !static_exchange_eval(&t.board, &t.info.conf, best.mov, self.see_threshold)
+            if best_score >= MIN_WINNING_SEE_SCORE
+                && !static_exchange_eval(&t.board, &t.info.conf, best_mv, self.see_threshold)
             {
                 // if it fails SEE, then we want to try the next best move, and de-mark this one.
-                best_entry_ref.set(MoveListEntry {
-                    score: best.score - WINNING_CAPTURE_BONUS,
-                    mov: best.mov,
-                });
+                best_score_entry.set(best_score - WINNING_CAPTURE_BONUS);
                 continue;
             }
 
             // swap the best move with the first unsorted move.
-            best_entry_ref.set(remaining[0].get());
-            remaining[0].set(best);
-            remaining = &remaining[1..];
+            best_mv_entry.set(r_moves[0].get());
+            best_score_entry.set(r_scores[0].get());
+            r_moves[0].set(best_mv);
+            r_scores[0].set(best_score);
+            r_moves = &r_moves[1..];
+            r_scores = &r_scores[1..];
 
             self.index += 1;
 
-            if self.skip_quiets && best.score < MIN_WINNING_SEE_SCORE {
+            if self.skip_quiets && best_score < MIN_WINNING_SEE_SCORE {
                 // the best we could find wasn't winning,
                 // and we're skipping quiet moves, so we're done.
                 return None;
             }
-            if !(Some(best.mov) == self.tt_move || Some(best.mov) == self.killer) {
-                return Some(best);
+            if !(Some(best_mv) == self.tt_move || Some(best_mv) == self.killer) {
+                return Some((best_mv, best_score));
             }
         }
 
@@ -202,7 +193,8 @@ impl MovePicker {
         board: &Board,
         histories: &Histories,
         ss: &[StackFrame; MAX_DEPTH + 1],
-        ms: &mut [MoveListEntry],
+        ms: &[Move],
+        scores: &mut ArrayVec<i32, MAX_POSITION_MOVES>,
     ) {
         let height = board.height();
 
@@ -226,9 +218,9 @@ impl MovePicker {
         let their_pawns = board.state.bbs.pieces[PieceType::Pawn] & them;
 
         for m in ms {
-            let from = m.mov.from();
+            let from = m.from();
             let piece = board.state.mailbox[from].unwrap();
-            let to = m.mov.history_to_square();
+            let to = m.history_to_square();
             let from_threat = usize::from(threats.contains_square(from));
             let to_threat = usize::from(threats.contains_square(to));
 
@@ -243,7 +235,7 @@ impl MovePicker {
             }
             score += i32::from(histories.pawn[pawn_index][piece][to]);
 
-            score += 10_000 * i32::from(board.gives_check(m.mov));
+            score += 10_000 * i32::from(board.gives_check(*m));
 
             match piece.piece_type() {
                 PieceType::Pawn => {
@@ -290,20 +282,25 @@ impl MovePicker {
                 PieceType::King => {}
             }
 
-            m.score = score;
+            scores.push(score);
         }
     }
 
-    pub fn score_captures(board: &Board, histories: &Histories, moves: &mut [MoveListEntry]) {
+    pub fn score_captures(
+        board: &Board,
+        histories: &Histories,
+        moves: &[Move],
+        scores: &mut ArrayVec<i32, MAX_POSITION_MOVES>,
+    ) {
         const MVV_SCORE: [i32; 6] = [0, 2400, 2400, 4800, 9600, 0];
 
         let threats = board.state.threats.all;
         for m in moves {
-            let from = m.mov.from();
-            let to = m.mov.to();
+            let from = m.from();
+            let to = m.to();
             let threat_to = threats.contains_square(to);
             let piece = board.state.mailbox[from].unwrap();
-            let capture = history::caphist_piece_type(board, m.mov);
+            let capture = history::caphist_piece_type(board, *m);
 
             // optimistically initialised with the winning-SEE score.
             // lazily checked during yield_once.
@@ -312,7 +309,7 @@ impl MovePicker {
             score += MVV_SCORE[capture];
             score += i32::from(histories.tactical[usize::from(threat_to)][capture][piece][to]);
 
-            m.score = score;
+            scores.push(score);
         }
     }
 }

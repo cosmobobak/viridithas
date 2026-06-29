@@ -280,7 +280,7 @@ impl Board {
         let mut move_buffer = MoveList::new();
         self.generate_moves(&mut move_buffer);
 
-        for &m in move_buffer.iter_moves() {
+        for &m in move_buffer.iter() {
             // Check target square
             if m.to() != to_square {
                 continue;

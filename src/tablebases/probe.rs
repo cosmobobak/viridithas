@@ -161,7 +161,7 @@ pub fn get_root_wdl_dtz(board: &Board) -> Option<WdlDtzResult> {
             _ => None,
         };
 
-        for &m in moves.iter_moves() {
+        for &m in moves.iter() {
             if m.from() == from
                 && m.to() == to
                 && (promotion == 0 || m.promotion_type() == promo_piece_type)

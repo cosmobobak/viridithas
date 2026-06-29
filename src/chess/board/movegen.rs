@@ -22,16 +22,10 @@ use crate::{
 
 pub const MAX_POSITION_MOVES: usize = 218;
 
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MoveListEntry {
-    pub score: i32,
-    pub mov: Move,
-}
-
+#[repr(transparent)]
 #[derive(Clone, Debug)]
 pub struct MoveList {
-    inner: ArrayVec<MoveListEntry, MAX_POSITION_MOVES>,
+    inner: ArrayVec<Move, MAX_POSITION_MOVES>,
 }
 
 impl MoveList {
@@ -42,11 +36,7 @@ impl MoveList {
     }
 
     fn push(&mut self, m: Move) {
-        self.inner.push(MoveListEntry { mov: m, score: 0 });
-    }
-
-    pub fn iter_moves(&self) -> impl Iterator<Item = &Move> {
-        self.inner.iter().map(|e| &e.mov)
+        self.inner.push(m);
     }
 
     pub fn clear(&mut self) {
@@ -55,15 +45,15 @@ impl MoveList {
 }
 
 impl Deref for MoveList {
-    type Target = [MoveListEntry];
+    type Target = [Move];
 
-    fn deref(&self) -> &[MoveListEntry] {
+    fn deref(&self) -> &[Move] {
         &self.inner
     }
 }
 
 impl DerefMut for MoveList {
-    fn deref_mut(&mut self) -> &mut [MoveListEntry] {
+    fn deref_mut(&mut self) -> &mut [Move] {
         &mut self.inner
     }
 }
@@ -75,15 +65,12 @@ impl Display for MoveList {
         }
         writeln!(f, "MoveList: ({}) [", self.inner.len())?;
         for m in &self.inner[0..self.inner.len() - 1] {
-            writeln!(f, "  {} ${}, ", m.mov.display(Rules::Classical), m.score)?;
+            writeln!(f, "  {}, ", m.display(Rules::Classical))?;
         }
         writeln!(
             f,
-            "  {} ${}",
-            self.inner[self.inner.len() - 1]
-                .mov
-                .display(Rules::Classical),
-            self.inner[self.inner.len() - 1].score
+            "  {}",
+            self.inner[self.inner.len() - 1].display(Rules::Classical),
         )?;
         write!(f, "]")
     }
@@ -557,7 +544,7 @@ impl Board {
         } else {
             self.generate_moves_for::<Black>(move_list);
         }
-        debug_assert!(move_list.iter_moves().all(|m| m.is_valid()));
+        debug_assert!(move_list.iter().all(|m| m.is_valid()));
     }
 
     fn generate_moves_for<C: Col>(&self, move_list: &mut MoveList) {
@@ -638,7 +625,7 @@ impl Board {
         } else {
             self.generate_captures_for::<Black, Mode>(move_list);
         }
-        debug_assert!(move_list.iter_moves().all(|m| m.is_valid()));
+        debug_assert!(move_list.iter().all(|m| m.is_valid()));
     }
 
     fn generate_captures_for<C: Col, Mode: MoveGenMode>(&self, move_list: &mut MoveList) {
@@ -831,7 +818,7 @@ impl Board {
         } else {
             self.generate_quiets_for::<Black>(move_list);
         }
-        debug_assert!(move_list.iter_moves().all(|m| m.is_valid()));
+        debug_assert!(move_list.iter().all(|m| m.is_valid()));
     }
 
     fn generate_pawn_quiet<C: Col>(&self, move_list: &mut MoveList, valid_target: SquareSet) {
@@ -961,8 +948,8 @@ pub fn synced_perft(pos: &mut Board, depth: usize) -> u64 {
 
     let mut full_moves_vec = ml.to_vec();
     let mut staged_moves_vec = ml_staged.to_vec();
-    full_moves_vec.sort_unstable_by_key(|m| m.mov);
-    staged_moves_vec.sort_unstable_by_key(|m| m.mov);
+    full_moves_vec.sort_unstable();
+    staged_moves_vec.sort_unstable();
     let eq = full_moves_vec == staged_moves_vec;
     assert!(
         eq,
@@ -971,21 +958,21 @@ pub fn synced_perft(pos: &mut Board, depth: usize) -> u64 {
         {
             let mut mvs = Vec::new();
             for m in full_moves_vec {
-                mvs.push(pos.san(m.mov).unwrap().to_string());
+                mvs.push(pos.san(m).unwrap().to_string());
             }
             mvs.join(", ")
         },
         {
             let mut mvs = Vec::new();
             for m in staged_moves_vec {
-                mvs.push(pos.san(m.mov).unwrap().to_string());
+                mvs.push(pos.san(m).unwrap().to_string());
             }
             mvs.join(", ")
         }
     );
 
     let mut count = 0;
-    for &m in ml.iter_moves() {
+    for &m in ml.iter() {
         if !pos.is_legal(m) {
             continue;
         }
@@ -1042,7 +1029,7 @@ mod tests {
         pos.generate_captures::<AllMoves>(&mut ml);
         pos.generate_quiets(&mut ml);
 
-        for m in ml.iter_moves() {
+        for m in ml.iter() {
             let Some(Piece::WK) = pos.state.mailbox[m.from()] else {
                 continue;
             };
