@@ -65,6 +65,7 @@ fn fast_select<'a>(
 
     let idx = (best & 0xFFFF_FFFF) as usize;
 
+    // SAFETY: best_idx is guaranteed to be in-bounds.
     let refs = unsafe {
         let m = moves.get_unchecked(idx);
         let s = scores.get_unchecked(idx);
