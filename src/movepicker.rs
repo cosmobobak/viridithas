@@ -46,6 +46,34 @@ pub struct MovePicker {
     see_threshold: i32,
 }
 
+fn fast_select<'a>(
+    moves: &'a [Cell<Move>],
+    scores: &'a [Cell<i32>],
+) -> Option<(&'a Cell<Move>, &'a Cell<i32>)> {
+    #![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    fn to_u64(score: i32, i: usize) -> u64 {
+        let widened = i64::from(score);
+        let offset = widened - i64::from(i32::MIN);
+        ((offset as u64) << 32) | i as u64
+    }
+    let best = scores
+        .iter()
+        .take(moves.len())
+        .enumerate()
+        .map(|(i, s)| to_u64(s.get(), i))
+        .max()?;
+
+    let idx = (best & 0xFFFF_FFFF) as usize;
+
+    let refs = unsafe {
+        let m = moves.get_unchecked(idx);
+        let s = scores.get_unchecked(idx);
+        (m, s)
+    };
+
+    Some(refs)
+}
+
 impl MovePicker {
     pub fn new(tt_move: Option<Move>, killer: Option<Move>, see_threshold: i32) -> Self {
         Self {
@@ -144,11 +172,9 @@ impl MovePicker {
         let r_scores = &mut self.scores[self.index..];
         let mut r_moves = Cell::as_slice_of_cells(Cell::from_mut(r_moves));
         let mut r_scores = Cell::as_slice_of_cells(Cell::from_mut(r_scores));
-        while let Some((best_mv_entry, best_score_entry)) =
-            r_moves.iter().zip(r_scores).max_by_key(|(_, s)| s.get())
-        {
-            let best_mv = best_mv_entry.get();
-            let best_score = best_score_entry.get();
+        while let Some((best_mv_ref, best_score_ref)) = fast_select(r_moves, r_scores) {
+            let best_mv = best_mv_ref.get();
+            let best_score = best_score_ref.get();
             debug_assert!(
                 !(WINNING_CAPTURE_BONUS / 2..MIN_WINNING_SEE_SCORE).contains(&best_score),
                 "{}'s score is {}, lower bound is {}, this is too close.",
@@ -161,13 +187,13 @@ impl MovePicker {
                 && !static_exchange_eval(&t.board, &t.info.conf, best_mv, self.see_threshold)
             {
                 // if it fails SEE, then we want to try the next best move, and de-mark this one.
-                best_score_entry.set(best_score - WINNING_CAPTURE_BONUS);
+                best_score_ref.set(best_score - WINNING_CAPTURE_BONUS);
                 continue;
             }
 
             // swap the best move with the first unsorted move.
-            best_mv_entry.set(r_moves[0].get());
-            best_score_entry.set(r_scores[0].get());
+            best_mv_ref.set(r_moves[0].get());
+            best_score_ref.set(r_scores[0].get());
             r_moves[0].set(best_mv);
             r_scores[0].set(best_score);
             r_moves = &r_moves[1..];
