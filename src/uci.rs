@@ -185,6 +185,14 @@ pub fn main_loop() -> Result<(), UciError> {
                 println!("{:?}", t.board);
                 Ok(())
             }
+            "license" => {
+                crate::print_license(false);
+                Ok(())
+            }
+            "license full" => {
+                crate::print_license(true);
+                Ok(())
+            }
             "nnuebench" => {
                 nnue::network::inference_benchmark(
                     &thread_data[0].nnue,
