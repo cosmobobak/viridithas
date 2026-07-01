@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 use std::ops::{BitAnd, Not};
 
 #[cfg(target_feature = "avx512vbmi")]

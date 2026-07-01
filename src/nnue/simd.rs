@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 #![allow(clippy::all, clippy::nursery, clippy::pedantic, dead_code)]
 #![allow(clippy::undocumented_unsafe_blocks)]
 

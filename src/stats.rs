@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 //! Statistics tracking for search value distributions.
 //!
 //! This module provides infrastructure for tracking the distribution of values

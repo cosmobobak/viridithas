@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 macro_rules! max {
     ($a:expr) => {{
         let mut idx = 0;

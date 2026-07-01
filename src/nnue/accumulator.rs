@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 use crate::{
     nnue::network::{L1_SIZE, PSQT_FEATURES, feature::PsqtFeatureIndex},
     util::Align,

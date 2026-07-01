@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 #![deny(
     clippy::panic,
     clippy::unwrap_used,

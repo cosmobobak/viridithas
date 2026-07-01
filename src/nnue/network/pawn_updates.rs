@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 use crate::chess::squareset::SquareSet;
 
 /// For a pawn on a given file, which other pawns are

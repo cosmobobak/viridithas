@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 #[allow(
     dead_code,
     non_camel_case_types,

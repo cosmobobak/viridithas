@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 use std::{
     mem::{MaybeUninit, size_of},
     ptr::slice_from_raw_parts_mut,

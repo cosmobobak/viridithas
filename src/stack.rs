@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 use crate::chess::{chessmove::Move, types::ContHistIndex};
 
 /// An out-of-line explicit stack frame, permitting the search
