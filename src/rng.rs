@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 const SEED: u128 = 0x246C_CB2D_3B40_2853_9918_0A6D_BC3A_F444;
 pub struct XorShiftState {
     pub state: u128,

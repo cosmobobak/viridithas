@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 use crate::chess::{
     board::{Board, GameOutcome, Rules},
     piece::{Colour, Piece, PieceType},

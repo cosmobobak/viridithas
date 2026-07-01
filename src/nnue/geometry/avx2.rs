@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 #![expect(clippy::cast_sign_loss, clippy::undocumented_unsafe_blocks)]
 
 use std::arch::x86_64::{

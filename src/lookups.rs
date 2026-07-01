@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 #![allow(clippy::cast_possible_truncation)]
 
 use crate::rng::XorShiftState;

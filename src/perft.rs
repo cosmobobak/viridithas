@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 #![allow(clippy::module_name_repetitions)]
 
 use std::{

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 use std::{
     fmt::{self, Display},
     mem::size_of,
