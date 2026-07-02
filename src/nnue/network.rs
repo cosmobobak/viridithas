@@ -60,9 +60,9 @@ pub const SCALE: i32 = 240;
 /// The size of one-half of the hidden layer of the network.
 pub const L1_SIZE: usize = 1024;
 /// The size of the second layer of the network.
-pub const L2_SIZE: usize = 32;
+pub const L2_SIZE: usize = 48;
 /// The size of the third layer of the network.
-pub const L3_SIZE: usize = 32;
+pub const L3_SIZE: usize = 48;
 /// The number of output heads.
 pub const HEADS: usize = 1;
 /// The quantisation factor for the feature transformer weights.
