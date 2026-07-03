@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only
 
 use std::path::PathBuf;
 
@@ -26,7 +26,7 @@ pub enum Subcommands {
     Perft,
     /// Print licensing information and third-party notices.
     License {
-        /// Also print the full text of the GNU General Public License v3.
+        /// Also print the full text of the GNU Affero General Public License v3.
         #[clap(long)]
         full: bool,
     },

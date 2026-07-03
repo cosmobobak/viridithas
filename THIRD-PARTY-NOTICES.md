@@ -1,7 +1,7 @@
 # Third-Party Notices
 
-Viridithas is licensed under the GNU General Public License v3.0 (see `LICENSE`).
-It incorporates the following components under their own, GPLv3-compatible terms.
+Viridithas is licensed under the GNU Affero General Public License v3.0 (see `LICENSE`).
+It incorporates the following components under their own, AGPLv3-compatible terms.
 These notices must be retained in source and binary distributions.
 
 ## Pyrrhic / Fathom: Syzygy tablebase probing (`deps/pyrrhic/`)
@@ -66,5 +66,5 @@ repository) are dedicated to the public domain under
 
 Prior to version 20.0.0, Viridithas was distributed under the MIT License.
 Contributions made before the relicense were licensed under the MIT License,
-which permits their inclusion in this GPLv3-licensed work; those earlier
+which permits their inclusion in this AGPLv3-licensed work; those earlier
 releases remain available under the MIT License.

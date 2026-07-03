@@ -1,18 +1,18 @@
-// SPDX-License-Identifier: GPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only
 //
 // Viridithas.
 // Copyright (C) 2022-2026 Cosmo Bobak
 //
 // This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// it under the terms of the GNU Affero General Public License as published by
 // the Free Software Foundation, version 3.
 //
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// GNU Affero General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
+// You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
@@ -67,8 +67,9 @@ pub static NAME: &str = "Viridithas";
 /// The version of the engine.
 pub static VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// The full text of the GNU General Public License v3.0, under which Viridithas is distributed.
-pub const GPL_LICENSE_TEXT: &str = include_str!("../LICENSE");
+/// The full text of the GNU Affero General Public License v3.0,
+/// under which Viridithas is distributed.
+pub const AGPL_LICENSE_TEXT: &str = include_str!("../LICENSE");
 /// Notices for third-party components bundled into Viridithas under their own terms.
 pub const THIRD_PARTY_NOTICES: &str = include_str!("../THIRD-PARTY-NOTICES.md");
 /// The git commit this binary was built from ("unknown" if unavailable at build time).
@@ -81,7 +82,7 @@ pub fn print_license(full: bool) {
     println!("Copyright (C) 2022-2026 Cosmo Bobak");
     println!();
     println!("This program is free software: you can redistribute it and/or modify it");
-    println!("under the terms of the GNU General Public License, version 3.");
+    println!("under the terms of the GNU Affero General Public License, version 3.");
     println!("This program comes with ABSOLUTELY NO WARRANTY.");
     println!();
     println!("{}", corresponding_source_notice());
@@ -89,11 +90,11 @@ pub fn print_license(full: bool) {
     print!("{THIRD_PARTY_NOTICES}");
     if full {
         println!();
-        print!("{GPL_LICENSE_TEXT}");
+        print!("{AGPL_LICENSE_TEXT}");
     } else {
         println!(
             "\nRun `viridithas license --full` (CLI) or `license full` (UCI) to print the full \
-             GNU GPL v3, or see <https://www.gnu.org/licenses/gpl-3.0.html>."
+             GNU AGPL v3, or see <https://www.gnu.org/licenses/agpl-3.0.html>."
         );
     }
 }
