@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use std::ops::{Deref, DerefMut};
 
 use crate::{chess::piece::Colour, search::parameters::HistoryConfig};

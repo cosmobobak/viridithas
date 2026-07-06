@@ -4,6 +4,24 @@ fn main() {
     prep_net();
     build_dependencies();
     generate_bindings();
+    emit_git_info();
+}
+
+fn emit_git_info() {
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .args(args)
+            .output()
+            .ok()
+            .filter(|out| out.status.success())
+            .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_owned())
+    };
+
+    let hash = git(&["rev-parse", "HEAD"]).unwrap_or_else(|| "unknown".to_owned());
+    let dirty = git(&["status", "--porcelain"]).is_some_and(|s| !s.is_empty());
+
+    println!("cargo:rustc-env=VIRIDITHAS_GIT_HASH={hash}");
+    println!("cargo:rustc-env=VIRIDITHAS_GIT_DIRTY={}", u8::from(dirty));
 }
 
 fn prep_net() {

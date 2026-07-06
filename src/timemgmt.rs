@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use std::{
     sync::atomic::{AtomicBool, Ordering},
     time::{Duration, Instant},

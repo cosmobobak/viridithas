@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 #![allow(clippy::module_name_repetitions)]
 
 use std::{

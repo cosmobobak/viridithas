@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 #![allow(clippy::too_many_arguments)]
 
 pub mod parameters;

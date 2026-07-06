@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 #![expect(clippy::cast_possible_truncation)]
 
 //! FFI bridge for Pyrrhic tablebase probing.

@@ -1,3 +1,20 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// Viridithas.
+// Copyright (C) 2022-2026 Cosmo Bobak
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, version 3.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::missing_const_for_fn)]
 #![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
@@ -42,13 +59,62 @@ mod util;
 #[cfg(feature = "datagen")]
 use cli::Subcommands::{Analyse, CountPositions, Datagen, Relabel, Rescale, Splat};
 use cli::Subcommands::{
-    Bench, EvalStats, Merge, NNUEDryRun, Perft, Quantise, Spsa, Verbatim, VisNNUE,
+    Bench, EvalStats, License, Merge, NNUEDryRun, Perft, Quantise, Spsa, Verbatim, VisNNUE,
 };
 
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";
 /// The version of the engine.
 pub static VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// The full text of the GNU Affero General Public License v3.0,
+/// under which Viridithas is distributed.
+pub const AGPL_LICENSE_TEXT: &str = include_str!("../LICENSE");
+/// Notices for third-party components bundled into Viridithas under their own terms.
+pub const THIRD_PARTY_NOTICES: &str = include_str!("../THIRD-PARTY-NOTICES.md");
+/// The git commit this binary was built from ("unknown" if unavailable at build time).
+pub const GIT_HASH: &str = env!("VIRIDITHAS_GIT_HASH");
+
+/// Print Viridithas's copyright banner and third-party
+/// notices and optionally the full text of the licence.
+pub fn print_license(full: bool) {
+    println!("Viridithas, a superhuman chess engine.");
+    println!("Copyright (C) 2022-2026 Cosmo Bobak");
+    println!();
+    println!("This program is free software: you can redistribute it and/or modify it");
+    println!("under the terms of the GNU Affero General Public License, version 3.");
+    println!("This program comes with ABSOLUTELY NO WARRANTY.");
+    println!();
+    println!("{}", corresponding_source_notice());
+    println!();
+    print!("{THIRD_PARTY_NOTICES}");
+    if full {
+        println!();
+        print!("{AGPL_LICENSE_TEXT}");
+    } else {
+        println!(
+            "\nRun `viridithas license --full` (CLI) or `license full` (UCI) to print the full \
+             GNU AGPL v3, or see <https://www.gnu.org/licenses/agpl-3.0.html>."
+        );
+    }
+}
+
+fn corresponding_source_notice() -> String {
+    const REPO: &str = "https://github.com/cosmobobak/viridithas";
+    if GIT_HASH == "unknown" {
+        format!("Built from Viridithas {VERSION}. Complete corresponding source: <{REPO}>.")
+    } else {
+        let modified = if env!("VIRIDITHAS_GIT_DIRTY") == "1" {
+            " plus uncommitted local modifications"
+        } else {
+            ""
+        };
+        format!(
+            "Built from commit {GIT_HASH}{modified}.\n\
+             Complete corresponding source: <{REPO}/tree/{GIT_HASH}>."
+        )
+    }
+}
 
 fn main() -> anyhow::Result<()> {
     if std::env::args_os().len() == 1 {
@@ -75,6 +141,10 @@ fn main() -> anyhow::Result<()> {
             )?)
         }
         Some(Perft) => perft::gamut(),
+        Some(License { full }) => {
+            print_license(full);
+            Ok(())
+        }
         Some(Quantise { input, output }) => nnue::network::quantise(&input, &output),
         Some(Merge { input, output }) => nnue::network::merge(&input, &output),
         Some(Verbatim { output }) => nnue::network::dump_verbatim(&output),

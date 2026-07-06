@@ -1,9 +1,9 @@
 [package]
 name = "viridithas"
-version = "20.0.0"
+version = "21.0.0"
 edition = "2024"
 description = "A superhuman chess engine."
-license = "MIT"
+license = "AGPL-3.0-only"
 readme = "README.md"
 keywords = ["chess", "treesearch"]
 categories = ["games"]
