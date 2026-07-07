@@ -80,6 +80,19 @@ Andrew Grant's [Ethereal](https://github.com/AndyGrant/Ethereal), the exceedingl
 
 [The SweHosting OpenBench Instance](https://chess.swehosting.se/), which is invaluable in testing new patches and features.
 
+## License
+
+Viridithas is free software, licensed under the [GNU Affero General Public License v3.0](LICENSE) (`AGPL-3.0-only`).
+
+- The neural networks embedded in Viridithas (the `.nnue` / `.nnue.zst` files,
+  hosted in [viridithas-networks](https://github.com/cosmobobak/viridithas-networks)) are
+  dedicated to the public domain under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
+- Viridithas bundles third-party components under their own AGPLv3-compatible terms; see 
+  [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+- Versions prior to 20.0.0 were released under the MIT License and remain available under those terms.
+
+By contributing to Viridithas, you agree that your contributions will be licensed under the `AGPL-3.0-only` license.
+
 [build-badge]:https://img.shields.io/github/actions/workflow/status/cosmobobak/viridithas/rust.yml?branch=master&logo=github&style=for-the-badge
 [build-link]:https://github.com/cosmobobak/viridithas/actions/workflows/rust.yml
 [commits-badge]:https://img.shields.io/github/commits-since/cosmobobak/viridithas/latest?style=for-the-badge

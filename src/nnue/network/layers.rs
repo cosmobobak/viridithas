@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 const AVX512CHUNK: usize = 512 / 32;
 
 /// This constant determines the shift applied as part of the optimised

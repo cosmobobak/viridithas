@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 #![allow(clippy::all, clippy::nursery, clippy::pedantic, dead_code)]
 #![allow(clippy::undocumented_unsafe_blocks)]
 

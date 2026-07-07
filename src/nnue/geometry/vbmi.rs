@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 #![expect(
     clippy::undocumented_unsafe_blocks,
     clippy::cast_ptr_alignment,

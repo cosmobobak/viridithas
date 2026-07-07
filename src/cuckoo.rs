@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use crate::{
     chess::{
         board::movegen::attacks_by_type,

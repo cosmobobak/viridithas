@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use std::path::PathBuf;
 
 use clap::Parser;
@@ -22,6 +24,12 @@ pub enum Subcommands {
     },
     /// Run the perft suite.
     Perft,
+    /// Print licensing information and third-party notices.
+    License {
+        /// Also print the full text of the GNU Affero General Public License v3.
+        #[clap(long)]
+        full: bool,
+    },
     /// Quantise a network parameter file.
     Quantise {
         /// Path to input network parameter file.
