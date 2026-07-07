@@ -61,7 +61,7 @@ fn version() -> impl Display {
     let ext = if cfg!(feature = "final-release") {
         String::new()
     } else {
-        format!("-{}", &GIT_HASH[..8])
+        format!("-{}", &GIT_HASH[..8.min(GIT_HASH.len())])
     };
     format!("{VERSION}{ext}")
 }
