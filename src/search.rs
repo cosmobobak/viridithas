@@ -1305,12 +1305,17 @@ pub fn alpha_beta<NT: NodeType>(
                 // normal singular extension
                 sext = 1;
             }
-        } else if !NT::PV && value >= beta {
+        } else if value >= beta {
             // multi-cut: if a move other than the best one beats beta,
             // then we can cut with relatively high confidence.
             // it's completely fine to return decisive scores here,
             // as they lower-bound the true score.
-            return value;
+            if !NT::PV {
+                return value;
+            }
+            // should we reduce the whole node? below, we only reduce the TT move.
+            sext = 0;
+            depth -= depth / 4;
         } else if ce.value >= beta {
             // a sort of light multi-cut.
             sext = -3 + i32::from(NT::PV);
