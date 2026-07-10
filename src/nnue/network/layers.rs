@@ -232,7 +232,7 @@ mod simd {
                         let elem = elem.assume_init();
                         let nnz = elem != 0;
                         if nnz {
-                            super::NNZ_COUNTS[i % L1_SIZE / 2][j % L1_SIZE / 2]
+                            super::NNZ_COUNTS[i % (L1_SIZE / 2)][j % (L1_SIZE / 2)]
                                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         }
                     }
