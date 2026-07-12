@@ -102,8 +102,8 @@ mod simd {
         ntm_psqt: &Align<[i16; L1_SIZE]>,
         stm_thrt: &Align<[i16; L1_SIZE]>,
         ntm_thrt: &Align<[i16; L1_SIZE]>,
-        weights: &Align<[i8; L1_SIZE * L2_SIZE]>,
-        biases: &Align<[f32; L2_SIZE]>,
+        weights: &Align<[i8; L1_SIZE * L2_SIZE / 2]>,
+        biases: &Align<[f32; L2_SIZE / 2]>,
         output: &mut Align<[f32; L2_SIZE]>,
     ) {
         const L1_PAIR_COUNT: usize = L1_SIZE / 2;
@@ -261,11 +261,11 @@ mod simd {
     fn propagate_l1(
         ft_outputs: &Align<[MaybeUninit<u8>; L1_SIZE]>,
         nnz_slice: &[u16],
-        weights: &Align<[i8; L1_SIZE * L2_SIZE]>,
-        biases: &Align<[f32; L2_SIZE]>,
+        weights: &Align<[i8; L1_SIZE * L2_SIZE / 2]>,
+        biases: &Align<[f32; L2_SIZE / 2]>,
         output: &mut Align<[f32; L2_SIZE]>,
     ) {
-        const NUM_ACCS: usize = L2_SIZE / F32_CHUNK;
+        const NUM_ACCS: usize = L2_SIZE / 2 / F32_CHUNK;
         // SAFETY: Breaking it down by unsafe operations:
         // 1. get_unchecked[_mut] / .as[_mut]_ptr().add(): We only ever index at most
         // div_ceil(L1_PAIR_COUNT - 1, I16_CHUNK * 2) + I16_CHUNK + L1_PAIR_COUNT
@@ -283,8 +283,8 @@ mod simd {
             // from the same issues. If you feel like conditionally compiling
             // this based on target CPU, past-cosmonaut would not object.
             // c.f. https://github.com/official-stockfish/Stockfish/pull/6336.
-            let mut acc = Align([0; L2_SIZE]);
-            let mut aux = Align([0; L2_SIZE]);
+            let mut acc = Align([0; L2_SIZE / 2]);
+            let mut aux = Align([0; L2_SIZE / 2]);
 
             let nnz_count = nnz_slice.len();
 
@@ -310,10 +310,10 @@ mod simd {
                 let input32_c = simd::trans_i32_i8(simd::splat_i32(*input32.get_unchecked(nnz_ic)));
                 let input32_d = simd::trans_i32_i8(simd::splat_i32(*input32.get_unchecked(nnz_id)));
                 // compute the block indices into the weights matrix.
-                let w_offset_a = nnz_ia * L2_SIZE * L1_CHUNK_PER_32;
-                let w_offset_b = nnz_ib * L2_SIZE * L1_CHUNK_PER_32;
-                let w_offset_c = nnz_ic * L2_SIZE * L1_CHUNK_PER_32;
-                let w_offset_d = nnz_id * L2_SIZE * L1_CHUNK_PER_32;
+                let w_offset_a = nnz_ia * L2_SIZE / 2 * L1_CHUNK_PER_32;
+                let w_offset_b = nnz_ib * L2_SIZE / 2 * L1_CHUNK_PER_32;
+                let w_offset_c = nnz_ic * L2_SIZE / 2 * L1_CHUNK_PER_32;
+                let w_offset_d = nnz_id * L2_SIZE / 2 * L1_CHUNK_PER_32;
                 // for each SIMD-block in the row, compute the product
                 // of the non-zero activation with the corresponding
                 // weight, and add it to the accumulator.
@@ -338,7 +338,7 @@ mod simd {
                 // load the non-zero block, and splat it into a SIMD register.
                 let input32 = simd::trans_i32_i8(simd::splat_i32(*input32.get_unchecked(nnz_i)));
                 // compute the block index into the weights matrix.
-                let w_offset = nnz_i * L2_SIZE * L1_CHUNK_PER_32;
+                let w_offset = nnz_i * L2_SIZE / 2 * L1_CHUNK_PER_32;
                 // for each SIMD-block in the row, compute the product
                 // of the non-zero activation with the corresponding
                 // weight, and add it to the accumulator.
@@ -365,16 +365,22 @@ mod simd {
             let inv_k = simd::splat_f32(1.0 / SWISH_K);
             let half_k = simd::splat_f32(SWISH_K / 2.0);
             let sum_mul = simd::splat_f32(L1_MUL);
-            for i in 0..L2_SIZE / F32_CHUNK {
+            for i in 0..L2_SIZE / 2 / F32_CHUNK {
                 // convert i32 to f32, multiplying by the quantisation constant
                 let bias = simd::load_f32(biases.as_ptr().add(i * F32_CHUNK));
                 let unscaled = simd::i32_to_f32(simd::load_i32(acc.as_ptr().add(i * F32_CHUNK)));
                 let preact = simd::madd_f32(unscaled, sum_mul, bias);
-                // activate
+                // activate with swish
                 let gate = simd::min_f32(simd::max_f32(simd::add_f32(preact, half_k), zero), k);
                 let act = simd::mul_f32(preact, gate);
                 let act = simd::mul_f32(act, inv_k);
                 simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK), act);
+                // activate with x²
+                let squared = simd::mul_f32(preact, preact);
+                simd::store_f32(
+                    output.as_mut_ptr().add(i * F32_CHUNK + L2_SIZE / 2),
+                    squared,
+                );
             }
         }
     }
