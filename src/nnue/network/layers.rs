@@ -32,7 +32,8 @@ pub static FT_OUTPUT_FILE: std::sync::LazyLock<
 mod simd {
     use crate::nnue::{
         network::{
-            Align, L1_CHUNK_PER_32, L1_IN, L1_OUT, L2_IN, L2_OUT, L3_IN, QA,
+            ACC_LEN, Align, BYPASS, L0_OUT, L1_CHUNK_PER_32, L1_IN, L1_OUT, L2_IN, L2_OUT, L3_IN,
+            QA,
             layers::{AVX512CHUNK, FT_SHIFT, L1_MUL, SWISH_K},
         },
         simd::{self, F32_CHUNK, I16_CHUNK, S, U8_CHUNK, VecI32},
@@ -430,6 +431,33 @@ mod simd {
                 let input = simd::load_f32(inputs.as_ptr().add(i * F32_CHUNK));
                 let act = simd::add_f32(act, input);
                 simd::store_f32(output.as_mut_ptr().add(i * F32_CHUNK), act);
+            }
+        }
+    }
+
+    /// Dequantise the bypass lanes of the accumulators and activate them into
+    /// the tail of the L3 input buffer.
+    #[expect(clippy::cast_precision_loss)]
+    pub fn propagate_bypass(
+        stm_psqt: &Align<[i16; ACC_LEN]>,
+        ntm_psqt: &Align<[i16; ACC_LEN]>,
+        stm_thrt: &Align<[i16; ACC_LEN]>,
+        ntm_thrt: &Align<[i16; ACC_LEN]>,
+        output: &mut Align<[f32; L3_IN]>,
+    ) {
+        const DEQUANT: f32 = 1.0 / QA as f32;
+        for (side, (psqt, thrt)) in [(stm_psqt, stm_thrt), (ntm_psqt, ntm_thrt)]
+            .into_iter()
+            .enumerate()
+        {
+            for i in 0..BYPASS {
+                // combine PSQT and threat preäctivations
+                let raw = i32::from(psqt[L0_OUT + i]) + i32::from(thrt[L0_OUT + i]);
+                let x = raw as f32 * DEQUANT;
+                // Hard-Swish activation
+                // act(x) = x · clamp(x + k/2, 0, k) / k
+                let gate = f32::clamp(x + SWISH_K / 2.0, 0.0, SWISH_K);
+                output[L2_OUT + side * BYPASS + i] = x * gate * (1.0 / SWISH_K);
             }
         }
     }

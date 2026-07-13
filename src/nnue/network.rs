@@ -64,7 +64,8 @@ pub const L1_IN: usize = 1024;
 pub const L1_OUT: usize = 32;
 pub const L2_IN: usize = 32;
 pub const L2_OUT: usize = 32;
-pub const L3_IN: usize = 32 + BYPASS;
+// the bypass lanes of both perspectives feed l3 directly:
+pub const L3_IN: usize = L2_OUT + 2 * BYPASS;
 
 /// The amount to scale the output of the network by.
 /// This is to allow for the sigmoid activation to differentiate positions with
@@ -545,17 +546,11 @@ impl QuantisedNetwork {
         let src_buckets = self.l0_weights.chunks_exact(PSQT_FEATURES * (ACC_LEN));
         let tgt_buckets = net.l0_weights.chunks_exact_mut(PSQT_FEATURES * (ACC_LEN));
         for (src_bucket, tgt_bucket) in src_buckets.zip(tgt_buckets) {
-            repermute_ft_bucket(
-                tgt_bucket[..L1_IN].as_mut_array().unwrap(),
-                src_bucket[..L1_IN].as_array().unwrap(),
-            );
+            repermute_ft_bucket(tgt_bucket, src_bucket);
         }
 
         // permute the feature transformer biases
-        repermute_ft_bias(
-            net.l0_biases[..L1_IN].as_mut_array().unwrap(),
-            self.l0_biases[..L1_IN].as_array().unwrap(),
-        );
+        repermute_ft_bias(&mut net.l0_biases, &self.l0_biases);
 
         // repermute the threat plane weights
         repermute_threat_weights(&mut net.l0_aux, &self.l0_aux);
@@ -607,14 +602,17 @@ impl QuantisedNetwork {
 
             let mut regs = vec![[0i16; 8]; num_regs];
 
-            // transpose weights
-            for i in (0..PSQT_FEATURES * L1_IN * BUCKETS / num_chunks).step_by(num_regs) {
-                for j in 0..num_regs {
-                    regs[j] = *weights[i + j];
-                }
+            // transpose weights, within the main (non-bypass) prefix of each row
+            for row in 0..PSQT_FEATURES * BUCKETS {
+                let base = row * ACC_LEN / num_chunks;
+                for i in (0..L1_IN / num_chunks).step_by(num_regs) {
+                    for j in 0..num_regs {
+                        regs[j] = *weights[base + i + j];
+                    }
 
-                for j in 0..num_regs {
-                    *weights[i + j] = regs[order[j]];
+                    for j in 0..num_regs {
+                        *weights[base + i + j] = regs[order[j]];
+                    }
                 }
             }
 
@@ -634,13 +632,16 @@ impl QuantisedNetwork {
             // now the same for the threat plane weights
             let mut threat_weights: Vec<&mut PermChunk<i8>> =
                 net.l0_aux.as_chunks_mut::<8>().0.iter_mut().collect();
-            for i in (0..AUX_FEATURES * L1_IN / num_chunks).step_by(num_regs) {
-                for j in 0..num_regs {
-                    i8_regs[j] = *threat_weights[i + j];
-                }
+            for row in 0..AUX_FEATURES {
+                let base = row * ACC_LEN / num_chunks;
+                for i in (0..L1_IN / num_chunks).step_by(num_regs) {
+                    for j in 0..num_regs {
+                        i8_regs[j] = *threat_weights[base + i + j];
+                    }
 
-                for j in 0..num_regs {
-                    *threat_weights[i + j] = i8_regs[order[j]];
+                    for j in 0..num_regs {
+                        *threat_weights[base + i + j] = i8_regs[order[j]];
+                    }
                 }
             }
         }
@@ -732,23 +733,25 @@ fn repermute_l1_weights(
     }
 }
 
-fn repermute_ft_bias(feature_bias: &mut [i16; L1_IN], unsorted: &[i16; L1_IN]) {
+fn repermute_ft_bias(feature_bias: &mut [i16; ACC_LEN], unsorted: &[i16; ACC_LEN]) {
     for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
         feature_bias[tgt_index] = unsorted[src_index];
     }
     for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
         feature_bias[tgt_index + L1_IN / 2] = unsorted[src_index + L1_IN / 2];
     }
+    // the bypass tail is not permuted
+    feature_bias[L1_IN..].copy_from_slice(&unsorted[L1_IN..]);
 }
 
-fn repermute_ft_bucket(tgt_bucket: &mut [i16; L1_IN], unsorted: &[i16; L1_IN]) {
+fn repermute_ft_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
     // for each input feature,
     for i in 0..PSQT_FEATURES {
+        let feature = i * ACC_LEN;
         // for each neuron in the layer,
         for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
             // get the neuron's corresponding weight in the unsorted bucket,
             // and write it to the same feature (but the new position) in the target bucket.
-            let feature = i * L1_IN;
             tgt_bucket[feature + tgt_index] = unsorted[feature + src_index];
         }
         for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
@@ -756,9 +759,11 @@ fn repermute_ft_bucket(tgt_bucket: &mut [i16; L1_IN], unsorted: &[i16; L1_IN]) {
             let src_index = src_index + L1_IN / 2;
             // get the neuron's corresponding weight in the unsorted bucket,
             // and write it to the same feature (but the new position) in the target bucket.
-            let feature = i * L1_IN;
             tgt_bucket[feature + tgt_index] = unsorted[feature + src_index];
         }
+        // the bypass tail is not permuted
+        tgt_bucket[feature + L1_IN..feature + ACC_LEN]
+            .copy_from_slice(&unsorted[feature + L1_IN..feature + ACC_LEN]);
     }
 }
 
@@ -767,16 +772,18 @@ fn repermute_threat_weights(
     unsorted: &[i8; AUX_FEATURES * (ACC_LEN)],
 ) {
     for i in 0..AUX_FEATURES {
+        let feature = i * ACC_LEN;
         for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
-            let feature = i * L1_IN;
             tgt[feature + tgt_index] = unsorted[feature + src_index];
         }
         for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
             let tgt_index = tgt_index + L1_IN / 2;
             let src_index = src_index + L1_IN / 2;
-            let feature = i * L1_IN;
             tgt[feature + tgt_index] = unsorted[feature + src_index];
         }
+        // the bypass tail is not permuted
+        tgt[feature + L1_IN..feature + ACC_LEN]
+            .copy_from_slice(&unsorted[feature + L1_IN..feature + ACC_LEN]);
     }
 }
 
@@ -1775,7 +1782,7 @@ impl NNUEState {
         };
 
         let mut l2_inputs = Align([0.0; L1_OUT]);
-        let mut l3_inputs = Align([0.0; L2_OUT + BYPASS]);
+        let mut l3_inputs = Align([0.0; L3_IN]);
 
         layers::activate_ft_and_propagate_l1(
             stm_psqt.shorten::<L1_IN>(),
@@ -1792,6 +1799,7 @@ impl NNUEState {
             &nn.l2_bias[out],
             l3_inputs.shorten_mut::<L2_OUT>(),
         );
+        layers::propagate_bypass(stm_psqt, ntm_psqt, stm_thrt, ntm_thrt, &mut l3_inputs);
 
         if HEADS == 1 {
             let mut l3_output = 0.0;
