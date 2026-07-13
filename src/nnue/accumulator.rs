@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 use crate::{
-    nnue::network::{L1_SIZE, PSQT_FEATURES, feature::PsqtFeatureIndex},
+    nnue::network::{ACC_LEN, PSQT_FEATURES, feature::PsqtFeatureIndex},
     util::Align,
 };
 
 /// Pre-activations of l0’s output.
 pub struct Accumulator {
-    pub halves: [Align<[i16; L1_SIZE]>; 2],
+    pub halves: [Align<[i16; ACC_LEN]>; 2],
 }
 
 #[allow(clippy::inline_always)]
 #[inline(always)]
-unsafe fn slice_to_aligned<T>(slice: &[T]) -> &Align<[T; L1_SIZE]> {
-    debug_assert_eq!(slice.len(), L1_SIZE);
+unsafe fn slice_to_aligned<T>(slice: &[T]) -> &Align<[T; ACC_LEN]> {
+    debug_assert_eq!(slice.len(), ACC_LEN);
     // don't immediately cast to Align64, as we want to check the alignment first.
     let ptr = slice.as_ptr();
     debug_assert_eq!(ptr.align_offset(64), 0);
@@ -27,7 +27,7 @@ unsafe fn slice_to_aligned<T>(slice: &[T]) -> &Align<[T; L1_SIZE]> {
 mod simd {
     use arrayvec::ArrayVec;
 
-    use super::{Align, L1_SIZE, PSQT_FEATURES, PsqtFeatureIndex, slice_to_aligned};
+    use super::{Align, PSQT_FEATURES, PsqtFeatureIndex, slice_to_aligned};
     use crate::{
         chess::{
             board::{Board, movegen::attacks_by_type},
@@ -36,7 +36,7 @@ mod simd {
         },
         nnue::{
             network::{
-                AUX_FEATURES, AuxUpdateBuffer, PAWN_TUPLE_FEATURES,
+                ACC_LEN, AUX_FEATURES, AuxUpdateBuffer, PAWN_TUPLE_FEATURES,
                 feature::{pawn_pawn_index, threat_index},
                 pawn_updates::PAWN_PAWN_MASKS,
             },
@@ -46,8 +46,8 @@ mod simd {
 
     /// Apply add/subtract PSQT updates in place.
     pub fn vector_update_inplace_psqt(
-        input: &mut Align<[i16; L1_SIZE]>,
-        bucket: &Align<[i16; PSQT_FEATURES * L1_SIZE]>,
+        input: &mut Align<[i16; ACC_LEN]>,
+        bucket: &Align<[i16; PSQT_FEATURES * ACC_LEN]>,
         adds: &[PsqtFeatureIndex],
         subs: &[PsqtFeatureIndex],
     ) {
@@ -59,19 +59,19 @@ mod simd {
             let mut add_blocks = ArrayVec::<_, 32>::new();
             let mut sub_blocks = ArrayVec::<_, 32>::new();
             for &add_index in adds {
-                let add_index = add_index.index() * L1_SIZE;
+                let add_index = add_index.index() * ACC_LEN;
                 add_blocks.push(slice_to_aligned(
-                    bucket.get_unchecked(add_index..add_index + L1_SIZE),
+                    bucket.get_unchecked(add_index..add_index + ACC_LEN),
                 ));
             }
             for &sub_index in subs {
-                let sub_index = sub_index.index() * L1_SIZE;
+                let sub_index = sub_index.index() * ACC_LEN;
                 sub_blocks.push(slice_to_aligned(
-                    bucket.get_unchecked(sub_index..sub_index + L1_SIZE),
+                    bucket.get_unchecked(sub_index..sub_index + ACC_LEN),
                 ));
             }
             let mut registers = [simd::zero_i16(); REGISTERS];
-            for i in 0..L1_SIZE / UNROLL {
+            for i in 0..ACC_LEN / UNROLL {
                 let unroll_offset = i * UNROLL;
                 for (r_idx, reg) in registers.iter_mut().enumerate() {
                     let src = input.as_ptr().add(unroll_offset + r_idx * I16_CHUNK);
@@ -99,9 +99,9 @@ mod simd {
 
     /// Apply add/subtract updates in place.
     pub fn vector_update_aux(
-        src_acc: &Align<[i16; L1_SIZE]>,
-        dst_acc: &mut Align<[i16; L1_SIZE]>,
-        weights: &Align<[i8; AUX_FEATURES * L1_SIZE]>,
+        src_acc: &Align<[i16; ACC_LEN]>,
+        dst_acc: &mut Align<[i16; ACC_LEN]>,
+        weights: &Align<[i8; AUX_FEATURES * ACC_LEN]>,
         updates: &AuxUpdateBuffer,
         king: Square,
         colour: Colour,
@@ -139,7 +139,7 @@ mod simd {
                 );
             }
             let mut registers = [simd::zero_i16(); REGISTERS];
-            for i in 0..L1_SIZE / UNROLL {
+            for i in 0..ACC_LEN / UNROLL {
                 let unroll_offset = i * UNROLL;
                 for (r_idx, reg) in registers.iter_mut().enumerate() {
                     let src = src_acc.as_ptr().add(unroll_offset + r_idx * I16_CHUNK);
@@ -189,7 +189,7 @@ mod simd {
                 // offset to make space for pawn features
                 *loc = (PAWN_TUPLE_FEATURES as u32)
                     .wrapping_add(idx)
-                    .wrapping_mul(L1_SIZE as u32);
+                    .wrapping_mul(ACC_LEN as u32);
                 adds.set_len(len + usize::from(good));
             }
             for &idx in &updates.sub {
@@ -200,7 +200,7 @@ mod simd {
                 // offset to make space for pawn features
                 *loc = (PAWN_TUPLE_FEATURES as u32)
                     .wrapping_add(idx)
-                    .wrapping_mul(L1_SIZE as u32);
+                    .wrapping_mul(ACC_LEN as u32);
                 subs.set_len(len + usize::from(good));
             }
         }
@@ -329,12 +329,12 @@ mod simd {
 
                     for b in buffer.after[Colour::White] & mask {
                         let index = pawn_pawn_index(colour, king, pawn_colour, a, Colour::White, b);
-                        adds.push_unchecked(u32::from(index) * L1_SIZE as u32);
+                        adds.push_unchecked(u32::from(index) * ACC_LEN as u32);
                     }
 
                     for b in buffer.after[Colour::Black] & mask {
                         let index = pawn_pawn_index(colour, king, pawn_colour, a, Colour::Black, b);
-                        adds.push_unchecked(u32::from(index) * L1_SIZE as u32);
+                        adds.push_unchecked(u32::from(index) * ACC_LEN as u32);
                     }
                 }
 
@@ -345,12 +345,12 @@ mod simd {
 
                     for b in buffer.afore[Colour::White] & mask {
                         let index = pawn_pawn_index(colour, king, pawn_colour, a, Colour::White, b);
-                        subs.push_unchecked(u32::from(index) * L1_SIZE as u32);
+                        subs.push_unchecked(u32::from(index) * ACC_LEN as u32);
                     }
 
                     for b in buffer.afore[Colour::Black] & mask {
                         let index = pawn_pawn_index(colour, king, pawn_colour, a, Colour::Black, b);
-                        subs.push_unchecked(u32::from(index) * L1_SIZE as u32);
+                        subs.push_unchecked(u32::from(index) * ACC_LEN as u32);
                     }
                 }
             }
@@ -358,8 +358,8 @@ mod simd {
     }
 
     pub fn refresh_aux(
-        weights: &Align<[i8; AUX_FEATURES * L1_SIZE]>,
-        acc: &mut Align<[i16; L1_SIZE]>,
+        weights: &Align<[i8; AUX_FEATURES * ACC_LEN]>,
+        acc: &mut Align<[i16; ACC_LEN]>,
         board: &Board,
         colour: Colour,
     ) {
@@ -394,7 +394,7 @@ mod simd {
                     // feature offset to make space for pawns.
                     *loc = (PAWN_TUPLE_FEATURES as u32)
                         .wrapping_add(feature)
-                        .wrapping_mul(L1_SIZE as u32);
+                        .wrapping_mul(ACC_LEN as u32);
                     indexes.set_len(len + usize::from(good));
                 }
             }
@@ -410,11 +410,11 @@ mod simd {
                 let mask = PAWN_PAWN_MASKS[a.file()];
                 for b in our_pawns_iter.remaining() & mask {
                     let index = u32::from(pawn_pawn_index(colour, king, colour, a, colour, b));
-                    indexes.push_unchecked(index * L1_SIZE as u32);
+                    indexes.push_unchecked(index * ACC_LEN as u32);
                 }
                 for b in their_pawns & mask {
                     let index = u32::from(pawn_pawn_index(colour, king, colour, a, !colour, b));
-                    indexes.push_unchecked(index * L1_SIZE as u32);
+                    indexes.push_unchecked(index * ACC_LEN as u32);
                 }
             }
 
@@ -422,7 +422,7 @@ mod simd {
                 let mask = PAWN_PAWN_MASKS[a.file()];
                 for b in their_pawns_iter.remaining() & mask {
                     let index = u32::from(pawn_pawn_index(colour, king, !colour, a, !colour, b));
-                    indexes.push_unchecked(index * L1_SIZE as u32);
+                    indexes.push_unchecked(index * ACC_LEN as u32);
                 }
             }
 
@@ -435,7 +435,7 @@ mod simd {
             }
 
             let mut registers = [simd::zero_i16(); REGISTERS];
-            for i in 0..L1_SIZE / UNROLL {
+            for i in 0..ACC_LEN / UNROLL {
                 let unroll_offset = i * UNROLL;
                 for reg in &mut registers {
                     *reg = simd::zero_i16();
@@ -458,24 +458,24 @@ mod simd {
 
     /// Move a PSQT feature from one square to another.
     pub fn vector_add_sub_psqt(
-        input: &Align<[i16; L1_SIZE]>,
-        output: &mut Align<[i16; L1_SIZE]>,
-        bucket: &Align<[i16; PSQT_FEATURES * L1_SIZE]>,
+        input: &Align<[i16; ACC_LEN]>,
+        output: &mut Align<[i16; ACC_LEN]>,
+        bucket: &Align<[i16; PSQT_FEATURES * ACC_LEN]>,
         add: PsqtFeatureIndex,
         sub: PsqtFeatureIndex,
     ) {
-        let offset_add = add.index() * L1_SIZE;
-        let offset_sub = sub.index() * L1_SIZE;
+        let offset_add = add.index() * ACC_LEN;
+        let offset_sub = sub.index() * ACC_LEN;
         let s_block;
         let a_block;
         // SAFETY: offset_{add,sub} are multiples of LAYER_1_SIZE, and so are correctly-aligned.
         // additionally, as they originate from FeatureIndex, the L1-SIZE slices are all in bounds,
         // as FeatureIndex ranges in 0..704.
         unsafe {
-            s_block = slice_to_aligned(bucket.get_unchecked(offset_sub..offset_sub + L1_SIZE));
-            a_block = slice_to_aligned(bucket.get_unchecked(offset_add..offset_add + L1_SIZE));
+            s_block = slice_to_aligned(bucket.get_unchecked(offset_sub..offset_sub + ACC_LEN));
+            a_block = slice_to_aligned(bucket.get_unchecked(offset_add..offset_add + ACC_LEN));
         }
-        for i in 0..L1_SIZE / I16_CHUNK {
+        for i in 0..ACC_LEN / I16_CHUNK {
             // SAFETY: we never hold multiple mutable references, we never mutate immutable memory, etc.
             unsafe {
                 let x = simd::load_i16(input.as_ptr().add(i * I16_CHUNK));
@@ -490,16 +490,16 @@ mod simd {
 
     /// Subtract two PSQT features and add one PSQT feature all at once.
     pub fn vector_add_sub2_psqt(
-        input: &Align<[i16; L1_SIZE]>,
-        output: &mut Align<[i16; L1_SIZE]>,
-        bucket: &Align<[i16; PSQT_FEATURES * L1_SIZE]>,
+        input: &Align<[i16; ACC_LEN]>,
+        output: &mut Align<[i16; ACC_LEN]>,
+        bucket: &Align<[i16; PSQT_FEATURES * ACC_LEN]>,
         add: PsqtFeatureIndex,
         sub1: PsqtFeatureIndex,
         sub2: PsqtFeatureIndex,
     ) {
-        let offset_add = add.index() * L1_SIZE;
-        let offset_sub1 = sub1.index() * L1_SIZE;
-        let offset_sub2 = sub2.index() * L1_SIZE;
+        let offset_add = add.index() * ACC_LEN;
+        let offset_sub1 = sub1.index() * ACC_LEN;
+        let offset_sub2 = sub2.index() * ACC_LEN;
         let a_block;
         let s_block1;
         let s_block2;
@@ -507,11 +507,11 @@ mod simd {
         // additionally, as they originate from FeatureIndex, the L1-SIZE slices are all in bounds, as
         // FeatureIndex ranges in 0..704.
         unsafe {
-            a_block = slice_to_aligned(bucket.get_unchecked(offset_add..offset_add + L1_SIZE));
-            s_block1 = slice_to_aligned(bucket.get_unchecked(offset_sub1..offset_sub1 + L1_SIZE));
-            s_block2 = slice_to_aligned(bucket.get_unchecked(offset_sub2..offset_sub2 + L1_SIZE));
+            a_block = slice_to_aligned(bucket.get_unchecked(offset_add..offset_add + ACC_LEN));
+            s_block1 = slice_to_aligned(bucket.get_unchecked(offset_sub1..offset_sub1 + ACC_LEN));
+            s_block2 = slice_to_aligned(bucket.get_unchecked(offset_sub2..offset_sub2 + ACC_LEN));
         }
-        for i in 0..L1_SIZE / I16_CHUNK {
+        for i in 0..ACC_LEN / I16_CHUNK {
             // SAFETY: we never hold multiple mutable references, we never mutate immutable memory, etc.
             unsafe {
                 let x = simd::load_i16(input.as_ptr().add(i * I16_CHUNK));
@@ -528,18 +528,18 @@ mod simd {
 
     /// Add two PSQT features and subtract two PSQT features all at once.
     pub fn vector_add2_sub2_psqt(
-        input: &Align<[i16; L1_SIZE]>,
-        output: &mut Align<[i16; L1_SIZE]>,
-        bucket: &Align<[i16; PSQT_FEATURES * L1_SIZE]>,
+        input: &Align<[i16; ACC_LEN]>,
+        output: &mut Align<[i16; ACC_LEN]>,
+        bucket: &Align<[i16; PSQT_FEATURES * ACC_LEN]>,
         add1: PsqtFeatureIndex,
         add2: PsqtFeatureIndex,
         sub1: PsqtFeatureIndex,
         sub2: PsqtFeatureIndex,
     ) {
-        let offset_add1 = add1.index() * L1_SIZE;
-        let offset_add2 = add2.index() * L1_SIZE;
-        let offset_sub1 = sub1.index() * L1_SIZE;
-        let offset_sub2 = sub2.index() * L1_SIZE;
+        let offset_add1 = add1.index() * ACC_LEN;
+        let offset_add2 = add2.index() * ACC_LEN;
+        let offset_sub1 = sub1.index() * ACC_LEN;
+        let offset_sub2 = sub2.index() * ACC_LEN;
         let a_block1;
         let a_block2;
         let s_block1;
@@ -548,12 +548,12 @@ mod simd {
         // additionally, as they originate from FeatureIndex, the L1-SIZE slices are all in bounds, as
         // FeatureIndex ranges in 0..704.
         unsafe {
-            a_block1 = slice_to_aligned(bucket.get_unchecked(offset_add1..offset_add1 + L1_SIZE));
-            a_block2 = slice_to_aligned(bucket.get_unchecked(offset_add2..offset_add2 + L1_SIZE));
-            s_block1 = slice_to_aligned(bucket.get_unchecked(offset_sub1..offset_sub1 + L1_SIZE));
-            s_block2 = slice_to_aligned(bucket.get_unchecked(offset_sub2..offset_sub2 + L1_SIZE));
+            a_block1 = slice_to_aligned(bucket.get_unchecked(offset_add1..offset_add1 + ACC_LEN));
+            a_block2 = slice_to_aligned(bucket.get_unchecked(offset_add2..offset_add2 + ACC_LEN));
+            s_block1 = slice_to_aligned(bucket.get_unchecked(offset_sub1..offset_sub1 + ACC_LEN));
+            s_block2 = slice_to_aligned(bucket.get_unchecked(offset_sub2..offset_sub2 + ACC_LEN));
         }
-        for i in 0..L1_SIZE / I16_CHUNK {
+        for i in 0..ACC_LEN / I16_CHUNK {
             // SAFETY: we never hold multiple mutable references, we never mutate immutable memory, etc.
             unsafe {
                 let x = simd::load_i16(input.as_ptr().add(i * I16_CHUNK));
