@@ -241,9 +241,10 @@ mod simd {
         use std::arch::x86_64::{
             __m512i, _mm512_add_epi16, _mm512_castsi512_si256, _mm512_cvtepu8_epi16,
             _mm512_cvtepu16_epi32, _mm512_mask_add_epi8, _mm512_maskz_compress_epi8,
-            _mm512_max_epu16, _mm512_min_epu16, _mm512_mullo_epi16, _mm512_set_epi8,
-            _mm512_set1_epi8, _mm512_set1_epi16, _mm512_slli_epi32, _mm512_srli_epi16,
-            _mm512_storeu_si512, _mm512_sub_epi8, _mm512_sub_epi16, _mm512_xor_si512,
+            _mm512_max_epu16, _mm512_min_epu16, _mm512_mullo_epi16, _mm512_mullo_epi32,
+            _mm512_set_epi8, _mm512_set1_epi8, _mm512_set1_epi16, _mm512_set1_epi32,
+            _mm512_srli_epi16, _mm512_storeu_si512, _mm512_sub_epi8, _mm512_sub_epi16,
+            _mm512_xor_si512,
         };
 
         use crate::nnue::network::feature::pawn_compressed_index;
@@ -290,7 +291,10 @@ mod simd {
                 // hi * (hi - 1) / 2 + lo
                 let prod = _mm512_mullo_epi16(hi, _mm512_sub_epi16(hi, _mm512_set1_epi16(1)));
                 let idx = _mm512_add_epi16(_mm512_srli_epi16(prod, 1), lo);
-                let off = _mm512_slli_epi32(_mm512_cvtepu16_epi32(_mm512_castsi512_si256(idx)), 10);
+                let off = _mm512_mullo_epi32(
+                    _mm512_cvtepu16_epi32(_mm512_castsi512_si256(idx)),
+                    _mm512_set1_epi32(ACC_LEN as i32),
+                );
                 let len = out.len();
                 _mm512_storeu_si512(out.as_mut_ptr().add(len).cast(), off);
                 out.set_len(len + n);
