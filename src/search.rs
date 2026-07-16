@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 #![allow(clippy::too_many_arguments)]
 
 pub mod parameters;
@@ -1268,6 +1270,61 @@ pub fn alpha_beta<NT: NodeType>(
     // there are never more than 32 captures in a position.
     let mut tacticals_tried = ArrayVec::<_, 32>::new();
 
+    let sext;
+    if NT::ROOT {
+        sext = 0;
+    } else if let Some(tt_move) = tt_move
+        && excluded.is_none()
+        && depth >= 6 + i32::from(t.ss[height].ttpv)
+        && let Some(ce) = cached
+        && ce.value != VALUE_NONE
+        && !is_decisive(ce.value)
+        && ce.bound.is_lower()
+        && ce.depth >= depth - 3
+        && height < t.root_depth.cast_unsigned() as usize * 2
+    {
+        let r_beta = ce.value - depth * 48 / 64;
+        let r_depth = (depth - 1) / 2;
+
+        let is_quiet = !t.board.is_tactical(tt_move);
+        // execute a search of the position, pretending that
+        // the move `m` is unplayable, to determine how important
+        // that move is.
+        t.ss[height].excluded = Some(tt_move);
+        let value = alpha_beta::<OffPV>(t, r_depth, r_beta - 1, r_beta, cut_node);
+        t.ss[height].excluded = None;
+
+        if value == VALUE_NONE {
+            sext = 1; // extend if there's only one legal move.
+        } else if value < r_beta {
+            if !NT::PV && t.ss[height].dextensions <= 12 && value < r_beta - t.info.conf.dext_margin
+            {
+                // double-extend if we failed low by a lot
+                sext = 2 + i32::from(is_quiet && value < r_beta - t.info.conf.text_margin);
+            } else {
+                // normal singular extension
+                sext = 1;
+            }
+        } else if !NT::PV && value >= beta {
+            // multi-cut: if a move other than the best one beats beta,
+            // then we can cut with relatively high confidence.
+            // it's completely fine to return decisive scores here,
+            // as they lower-bound the true score.
+            return value;
+        } else if ce.value >= beta {
+            // a sort of light multi-cut.
+            sext = -3 + i32::from(NT::PV);
+        } else if cut_node {
+            // produce a strong negative extension if we didn't fail low on a cut-node.
+            sext = -2;
+        } else {
+            // no extension.
+            sext = 0;
+        }
+    } else {
+        sext = 0;
+    }
+
     while let Some(m) = move_picker.next(t) {
         if excluded == Some(m) {
             continue;
@@ -1358,64 +1415,8 @@ pub fn alpha_beta<NT: NodeType>(
         t.info.nodes.increment();
         moves_made += 1;
 
-        #[expect(clippy::cast_sign_loss)]
-        let root_depth = t.root_depth as usize;
+        let extension = if tt_move == Some(m) { sext } else { 0 };
 
-        let extension;
-        if NT::ROOT {
-            extension = 0;
-        } else if Some(m) == tt_move
-            && excluded.is_none()
-            && depth >= 6 + i32::from(t.ss[height].ttpv)
-            && let Some(ce) = cached
-            && ce.value != VALUE_NONE
-            && !is_decisive(ce.value)
-            && ce.bound.is_lower()
-            && ce.depth >= depth - 3
-            && height < root_depth * 2
-        {
-            let r_beta = ce.value - depth * 48 / 64;
-            let r_depth = (depth - 1) / 2;
-
-            // execute a search of the position, pretending that
-            // the move `m` is unplayable, to determine how important
-            // that move is.
-            t.ss[height].excluded = Some(m);
-            let value = alpha_beta::<OffPV>(t, r_depth, r_beta - 1, r_beta, cut_node);
-            t.ss[height].excluded = None;
-
-            if value == VALUE_NONE {
-                extension = 1; // extend if there's only one legal move.
-            } else if value < r_beta {
-                if !NT::PV
-                    && t.ss[height].dextensions <= 12
-                    && value < r_beta - t.info.conf.dext_margin
-                {
-                    // double-extend if we failed low by a lot
-                    extension = 2 + i32::from(is_quiet && value < r_beta - t.info.conf.text_margin);
-                } else {
-                    // normal singular extension
-                    extension = 1;
-                }
-            } else if !NT::PV && value >= beta {
-                // multi-cut: if a move other than the best one beats beta,
-                // then we can cut with relatively high confidence.
-                // it's completely fine to return decisive scores here,
-                // as they lower-bound the true score.
-                return value;
-            } else if ce.value >= beta {
-                // a sort of light multi-cut.
-                extension = -3 + i32::from(NT::PV);
-            } else if cut_node {
-                // produce a strong negative extension if we didn't fail low on a cut-node.
-                extension = -2;
-            } else {
-                // no extension.
-                extension = 0;
-            }
-        } else {
-            extension = 0;
-        }
         if extension >= 2 {
             t.ss[height].dextensions += 1;
         }

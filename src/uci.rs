@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 #![deny(
     clippy::panic,
     clippy::unwrap_used,
@@ -9,6 +11,7 @@
 pub mod fmt;
 
 use std::{
+    fmt::Display,
     io::Write as _,
     sync::{
         Arc, Mutex, Once,
@@ -19,7 +22,7 @@ use std::{
 };
 
 use crate::{
-    NAME, VERSION,
+    GIT_HASH, NAME, VERSION,
     bench::BENCH_POSITIONS,
     chess::{
         board::{
@@ -54,16 +57,20 @@ const UCI_MAX_THREADS: usize = 512;
 const BENCH_DEPTH: usize = 14;
 const BENCH_THREADS: usize = 1;
 
+fn version() -> impl Display {
+    let ext = if cfg!(feature = "final-release") {
+        String::new()
+    } else {
+        format!("-{}", &GIT_HASH[..8.min(GIT_HASH.len())])
+    };
+    format!("{VERSION}{ext}")
+}
+
 static SET_TERM: Once = Once::new();
 static STDIN_READER_THREAD_KEEP_RUNNING: AtomicBool = AtomicBool::new(true);
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub fn main_loop() -> Result<(), UciError> {
-    let version_extension = if cfg!(feature = "final-release") {
-        ""
-    } else {
-        "-dev"
-    };
-    println!("{NAME} {VERSION}{version_extension} by Cosmo");
+    println!("{NAME} {} by Cosmo", version());
 
     let mut worker_threads = threadpool::make_worker_threads(1);
 
@@ -181,6 +188,14 @@ pub fn main_loop() -> Result<(), UciError> {
             "d" | "debug" => {
                 let t = thread_data.first_mut();
                 println!("{:?}", t.board);
+                Ok(())
+            }
+            "license" => {
+                crate::print_license(false);
+                Ok(())
+            }
+            "license full" => {
+                crate::print_license(true);
                 Ok(())
             }
             "nnuebench" => {
@@ -826,12 +841,7 @@ fn stdin_reader_worker(sender: mpsc::Sender<String>, control: &Control) -> Resul
 }
 
 fn print_uci_response(info: &SearchInfo, full: bool) {
-    let version_extension = if cfg!(feature = "final-release") {
-        ""
-    } else {
-        "-dev"
-    };
-    println!("id name {NAME} {VERSION}{version_extension}");
+    println!("id name {NAME} {}", version());
     println!("id author Cosmo");
     println!(
         "option name Hash type spin default {UCI_DEFAULT_HASH_MEGABYTES} min 1 max {UCI_MAX_HASH_MEGABYTES}"

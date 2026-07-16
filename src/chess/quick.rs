@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 #![expect(clippy::identity_op)]
 
 use crate::{

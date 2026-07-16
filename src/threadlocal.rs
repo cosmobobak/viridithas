@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use std::{
     array,
     sync::atomic::{AtomicBool, AtomicU64},
@@ -140,7 +142,7 @@ impl<'a> ThreadData<'a> {
                 PVariation {
                     moves: ArrayVec::new_const(),
                 };
-                MAX_DEPTH + 1 // reaches forward by one when bootstrapping
+                MAX_DEPTH + 2 // reaches forward by one when bootstrapping, before the MAX_DEPTH check.
             ],
             stm_at_root: board.turn(),
             optimism: [0; 2],

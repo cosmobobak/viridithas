@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 macro_rules! max {
     ($a:expr) => {{
         let mut idx = 0;

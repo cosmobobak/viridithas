@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use std::{
     ops::{Deref, DerefMut},
     sync::atomic::{AtomicU64, Ordering},
