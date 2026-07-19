@@ -72,7 +72,7 @@ impl<'a> BatchedAtomicCounter<'a> {
     }
 }
 
-/// A transparent wrapper that aligns its contents to 64 bytes.
+/// A wrapper that aligns its contents to 64 bytes.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[repr(C, align(64))]
 pub struct Align<T: ?Sized>(pub T);
@@ -87,6 +87,28 @@ impl<T, const SIZE: usize> Deref for Align<[T; SIZE]> {
 impl<T, const SIZE: usize> DerefMut for Align<[T; SIZE]> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+impl<T, const SIZE: usize> Align<[T; SIZE]> {
+    #[expect(unused, reason = "useful for skip connexions")]
+    pub fn shorten<const SHORT: usize>(&self) -> &Align<[T; SHORT]> {
+        const {
+            assert!(SHORT < SIZE);
+        }
+
+        // SAFETY: Reducing to a smaller region is perfectly sound.
+        unsafe { &*std::ptr::from_ref(self).cast::<Align<[T; SHORT]>>() }
+    }
+
+    #[expect(unused, reason = "useful for skip connexions")]
+    pub fn shorten_mut<const SHORT: usize>(&mut self) -> &mut Align<[T; SHORT]> {
+        const {
+            assert!(SHORT < SIZE);
+        }
+
+        // SAFETY: Reducing to a smaller region is perfectly sound.
+        unsafe { &mut *std::ptr::from_mut(self).cast::<Align<[T; SHORT]>>() }
     }
 }
 

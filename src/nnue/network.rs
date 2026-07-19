@@ -47,6 +47,7 @@ const _: () = assert!(!EMBEDDED_NNUE_VERBATIM || EMBEDDED_NNUE.len() == size_of:
 pub const MERGE_KING_PLANES: bool = true;
 /// Whether the unquantised network has a feature factoriser.
 pub const UNQUANTISED_HAS_FACTORISER: bool = true;
+
 /// The number of features present in PSQT part of the input.
 pub const PSQT_FEATURES: usize = (12 - MERGE_KING_PLANES as usize) * 64;
 /// The number of features for pawn-pawn relations.
@@ -55,16 +56,19 @@ pub const PAWN_TUPLE_FEATURES: usize = 96 * 95 / 2;
 pub const THREAT_FEATURES: usize = 59808;
 /// The number of features present in the non-psqt part of the input.
 pub const AUX_FEATURES: usize = THREAT_FEATURES + PAWN_TUPLE_FEATURES;
+
+pub const L0_OUT: usize = 1024;
+pub const ACC_LEN: usize = L0_OUT * 2 / 2;
+pub const L1_IN: usize = ACC_LEN * 2 / 2;
+pub const L1_OUT: usize = 32;
+pub const L2_IN: usize = 32;
+pub const L2_OUT: usize = 32;
+pub const L3_IN: usize = 32;
+
 /// The amount to scale the output of the network by.
 /// This is to allow for the sigmoid activation to differentiate positions with
 /// a small difference in evaluation.
 pub const SCALE: i32 = 240;
-/// The size of one-half of the hidden layer of the network.
-pub const L1_SIZE: usize = 1024;
-/// The size of the second layer of the network.
-pub const L2_SIZE: usize = 32;
-/// The size of the third layer of the network.
-pub const L3_SIZE: usize = 32;
 /// The number of output heads.
 pub const HEADS: usize = 1;
 /// The quantisation factor for the feature transformer weights.
@@ -126,35 +130,35 @@ pub fn nnue_checksum() -> u64 {
 #[rustfmt::skip]
 #[repr(C)]
 struct UnquantisedNetwork {
-    l0_aux:        [f32; AUX_FEATURES * L1_SIZE],
+    l0_aux:        [f32; AUX_FEATURES * L0_OUT],
     // extra bucket for the feature-factoriser.
-    l0_weights:    [f32; 12 * 64 * L1_SIZE * (BUCKETS + UNQUANTISED_HAS_FACTORISER as usize)],
-    l0_biases:     [f32; L1_SIZE],
-    l1_weights:  [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
-    l1_biases:    [[f32; L2_SIZE]; OUTPUT_BUCKETS],
-    l2x_weights: [[[f32; L3_SIZE * 2]; OUTPUT_BUCKETS]; L2_SIZE],
-    l2f_weights:  [[f32; L3_SIZE * 2]; L2_SIZE],
-    l2x_biases:   [[f32; L3_SIZE * 2]; OUTPUT_BUCKETS],
-    l2f_biases:    [f32; L3_SIZE * 2],
-    l3x_weights: [[[f32;   HEADS]; OUTPUT_BUCKETS]; L3_SIZE],
-    l3f_weights:  [[f32;   HEADS]; L3_SIZE],
-    l3x_biases:   [[f32;   HEADS]; OUTPUT_BUCKETS],
-    l3f_biases:    [f32;   HEADS],
+    l0_weights:    [f32; 12 * 64 * L0_OUT * (BUCKETS + UNQUANTISED_HAS_FACTORISER as usize)],
+    l0_biases:     [f32; L0_OUT],
+    l1_weights:  [[[f32; L1_OUT]; OUTPUT_BUCKETS]; L1_IN],
+    l1_biases:    [[f32; L1_OUT]; OUTPUT_BUCKETS],
+    l2x_weights: [[[f32; L2_OUT * 2]; OUTPUT_BUCKETS]; L2_IN],
+    l2f_weights:  [[f32; L2_OUT * 2]; L2_IN],
+    l2x_biases:   [[f32; L2_OUT * 2]; OUTPUT_BUCKETS],
+    l2f_biases:    [f32; L2_OUT * 2],
+    l3x_weights: [[[f32; HEADS]; OUTPUT_BUCKETS]; L3_IN],
+    l3f_weights:  [[f32; HEADS]; L3_IN],
+    l3x_biases:   [[f32; HEADS]; OUTPUT_BUCKETS],
+    l3f_biases:    [f32; HEADS],
 }
 
 /// The floating-point parameters of the network, after de-factorisation.
 #[rustfmt::skip]
 #[repr(C)]
 struct MergedNetwork {
-    l0_aux:       [f32; AUX_FEATURES * L1_SIZE],
-    l0_weights:   [f32; 12 * 64 * L1_SIZE * BUCKETS],
-    l0_biases:    [f32; L1_SIZE],
-    l1_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
-    l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
-    l2_weights: [[[f32; L3_SIZE * 2]; OUTPUT_BUCKETS]; L2_SIZE],
-    l2_biases:   [[f32; L3_SIZE * 2]; OUTPUT_BUCKETS],
-    l3_weights: [[[f32;   HEADS]; OUTPUT_BUCKETS]; L3_SIZE],
-    l3_biases:   [[f32;   HEADS]; OUTPUT_BUCKETS],
+    l0_aux:       [f32; AUX_FEATURES * L0_OUT],
+    l0_weights:   [f32; 12 * 64 * L0_OUT * BUCKETS],
+    l0_biases:    [f32; L0_OUT],
+    l1_weights: [[[f32; L1_OUT]; OUTPUT_BUCKETS]; L1_IN],
+    l1_biases:   [[f32; L1_OUT]; OUTPUT_BUCKETS],
+    l2_weights: [[[f32; L2_OUT * 2]; OUTPUT_BUCKETS]; L2_IN],
+    l2_biases:   [[f32; L2_OUT * 2]; OUTPUT_BUCKETS],
+    l3_weights: [[[f32; HEADS]; OUTPUT_BUCKETS]; L3_IN],
+    l3_biases:   [[f32; HEADS]; OUTPUT_BUCKETS],
 }
 
 /// A quantised network file, for compressed embedding.
@@ -162,15 +166,15 @@ struct MergedNetwork {
 #[repr(C)]
 #[derive(PartialEq, Debug)]
 struct QuantisedNetwork {
-    l0_aux:       [ i8; AUX_FEATURES * L1_SIZE],
-    l0_weights:   [i16; PSQT_FEATURES * L1_SIZE * BUCKETS],
-    l0_biases:    [i16; L1_SIZE],
-    l1_weights: [[[ i8; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
-    l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
-    l2_weights: [[[f32; L3_SIZE * 2]; OUTPUT_BUCKETS]; L2_SIZE],
-    l2_biases:   [[f32; L3_SIZE * 2]; OUTPUT_BUCKETS],
-    l3_weights: [[[f32;   HEADS]; OUTPUT_BUCKETS]; L3_SIZE],
-    l3_biases:   [[f32;   HEADS]; OUTPUT_BUCKETS],
+    l0_aux:       [ i8; AUX_FEATURES * L0_OUT],
+    l0_weights:   [i16; PSQT_FEATURES * L0_OUT * BUCKETS],
+    l0_biases:    [i16; L0_OUT],
+    l1_weights: [[[ i8; L1_OUT]; OUTPUT_BUCKETS]; L1_IN],
+    l1_biases:   [[f32; L1_OUT]; OUTPUT_BUCKETS],
+    l2_weights: [[[f32; L2_OUT * 2]; OUTPUT_BUCKETS]; L2_IN],
+    l2_biases:   [[f32; L2_OUT * 2]; OUTPUT_BUCKETS],
+    l3_weights: [[[f32; HEADS]; OUTPUT_BUCKETS]; L3_IN],
+    l3_biases:   [[f32; HEADS]; OUTPUT_BUCKETS],
 }
 
 /// The parameters of viri's neural network, quantised and permuted
@@ -178,15 +182,15 @@ struct QuantisedNetwork {
 #[rustfmt::skip]
 #[repr(C)]
 pub struct NNUEParams {
-    pub l0_aux:       Align<[ i8; AUX_FEATURES * L1_SIZE]>,
-    pub l0_weights:   Align<[i16; PSQT_FEATURES * L1_SIZE * BUCKETS]>,
-    pub l0_biases:    Align<[i16; L1_SIZE]>,
-    pub l1_weights:  [Align<[ i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
-    pub l1_bias:     [Align<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
-    pub l2_weights:  [Align<[f32; L2_SIZE * L3_SIZE * 2]>; OUTPUT_BUCKETS],
-    pub l2_bias:     [Align<[f32; L3_SIZE * 2]>; OUTPUT_BUCKETS],
-    pub l3_weights: [[Align<[f32; L3_SIZE]>; HEADS]; OUTPUT_BUCKETS],
-    pub l3_bias:             [[f32; HEADS]; OUTPUT_BUCKETS],
+    pub l0_aux:       Align<[ i8; AUX_FEATURES * L0_OUT]>,
+    pub l0_weights:   Align<[i16; PSQT_FEATURES * L0_OUT * BUCKETS]>,
+    pub l0_biases:    Align<[i16; L0_OUT]>,
+    pub l1_weights:  [Align<[ i8; L1_IN * L1_OUT]>; OUTPUT_BUCKETS],
+    pub l1_bias:     [Align<[f32; L1_OUT]>; OUTPUT_BUCKETS],
+    pub l2_weights:  [Align<[f32; L2_IN * (L2_OUT * 2)]>; OUTPUT_BUCKETS],
+    pub l2_bias:     [Align<[f32; L2_OUT * 2]>; OUTPUT_BUCKETS],
+    pub l3_weights: [[Align<[f32; L3_IN]>; HEADS]; OUTPUT_BUCKETS],
+    pub l3_bias:           [[f32; HEADS]; OUTPUT_BUCKETS],
 }
 
 // const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = {
@@ -199,7 +203,7 @@ pub struct NNUEParams {
 //     indices
 // };
 
-const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = [
+const REPERMUTE_INDICES: [usize; L1_IN / 2] = [
     505, 451, 2, 392, 159, 331, 314, 271, 4, 97, 285, 442, 167, 117, 141, 94, 436, 241, 143, 343,
     398, 281, 358, 190, 291, 191, 134, 227, 480, 399, 466, 413, 425, 396, 126, 249, 329, 375, 217,
     255, 263, 274, 207, 221, 315, 196, 224, 106, 202, 45, 57, 496, 419, 508, 269, 197, 296, 5, 453,
@@ -237,17 +241,17 @@ impl UnquantisedNetwork {
         #![allow(clippy::similar_names)]
 
         let mut net = MergedNetwork::zeroed();
-        let mut buckets = self.l0_weights.chunks_exact(12 * 64 * L1_SIZE);
+        let mut buckets = self.l0_weights.chunks_exact(12 * 64 * L0_OUT);
         let factoriser;
         let alternate_buffer;
         if UNQUANTISED_HAS_FACTORISER {
             factoriser = buckets.next().unwrap();
         } else {
-            alternate_buffer = vec![0.0; 12 * 64 * L1_SIZE];
+            alternate_buffer = vec![0.0; 12 * 64 * L0_OUT];
             factoriser = &alternate_buffer;
         }
         for (src_bucket, tgt_bucket) in
-            buckets.zip(net.l0_weights.chunks_exact_mut(12 * 64 * L1_SIZE))
+            buckets.zip(net.l0_weights.chunks_exact_mut(12 * 64 * L0_OUT))
         {
             for piece in Piece::all() {
                 for sq in Square::all() {
@@ -261,9 +265,9 @@ impl UnquantisedNetwork {
                         Square::A1,
                         PsqtFeatureUpdate { sq, piece },
                     );
-                    let src = &src_bucket[i * L1_SIZE..i * L1_SIZE + L1_SIZE];
-                    let fac_src = &factoriser[i * L1_SIZE..i * L1_SIZE + L1_SIZE];
-                    let tgt = &mut tgt_bucket[j * L1_SIZE..j * L1_SIZE + L1_SIZE];
+                    let src = &src_bucket[i * L0_OUT..i * L0_OUT + L0_OUT];
+                    let fac_src = &factoriser[i * L0_OUT..i * L0_OUT + L0_OUT];
+                    let tgt = &mut tgt_bucket[j * L0_OUT..j * L0_OUT + L0_OUT];
                     for ((src, fac_src), tgt) in src.iter().zip(fac_src).zip(tgt) {
                         *tgt = *src + *fac_src;
                     }
@@ -272,43 +276,43 @@ impl UnquantisedNetwork {
         }
 
         // copy the threat weights
-        for i in 0..AUX_FEATURES * L1_SIZE {
+        for i in 0..AUX_FEATURES * L0_OUT {
             net.l0_aux[i] = self.l0_aux[i];
         }
 
         // copy the biases
         net.l0_biases.copy_from_slice(&self.l0_biases);
         // copy the L1 weights
-        for i in 0..L1_SIZE {
+        for i in 0..L1_IN {
             for bucket in 0..OUTPUT_BUCKETS {
-                for j in 0..L2_SIZE {
+                for j in 0..L1_OUT {
                     net.l1_weights[i][bucket][j] = self.l1_weights[i][bucket][j];
                 }
             }
         }
         // copy the L1 biases
-        for i in 0..L2_SIZE {
+        for i in 0..L1_OUT {
             for bucket in 0..OUTPUT_BUCKETS {
                 net.l1_biases[bucket][i] = self.l1_biases[bucket][i];
             }
         }
         // copy the L2 weights
-        for i in 0..L2_SIZE {
+        for i in 0..L2_IN {
             for bucket in 0..OUTPUT_BUCKETS {
-                for j in 0..L3_SIZE * 2 {
+                for j in 0..L2_OUT * 2 {
                     net.l2_weights[i][bucket][j] =
                         self.l2x_weights[i][bucket][j] + self.l2f_weights[i][j];
                 }
             }
         }
         // copy the L2 biases
-        for i in 0..L3_SIZE * 2 {
+        for i in 0..L2_OUT * 2 {
             for bucket in 0..OUTPUT_BUCKETS {
                 net.l2_biases[bucket][i] = self.l2x_biases[bucket][i] + self.l2f_biases[i];
             }
         }
         // copy the L3 weights
-        for i in 0..L3_SIZE {
+        for i in 0..L3_IN {
             for bucket in 0..OUTPUT_BUCKETS {
                 for head in 0..HEADS {
                     net.l3_weights[i][bucket][head] =
@@ -436,10 +440,10 @@ impl MergedNetwork {
 
         let mut net = QuantisedNetwork::zeroed();
         // quantise the feature transformer weights.
-        let buckets = self.l0_weights.chunks_exact(12 * 64 * L1_SIZE);
+        let buckets = self.l0_weights.chunks_exact(12 * 64 * L0_OUT);
 
         for (bucket_idx, (src_bucket, tgt_bucket)) in buckets
-            .zip(net.l0_weights.chunks_exact_mut(PSQT_FEATURES * L1_SIZE))
+            .zip(net.l0_weights.chunks_exact_mut(PSQT_FEATURES * L0_OUT))
             .enumerate()
         {
             // for repermuting the weights.
@@ -470,8 +474,8 @@ impl MergedNetwork {
                         MERGE_KING_PLANES || i == j,
                         "if not merging the king planes, indices should match"
                     );
-                    let src = &src_bucket[i * L1_SIZE..i * L1_SIZE + L1_SIZE];
-                    let tgt = &mut tgt_bucket[j * L1_SIZE..j * L1_SIZE + L1_SIZE];
+                    let src = &src_bucket[i * L0_OUT..i * L0_OUT + L0_OUT];
+                    let tgt = &mut tgt_bucket[j * L0_OUT..j * L0_OUT + L0_OUT];
                     for (src, tgt) in src.iter().zip(tgt) {
                         // extra clamp in case bucket + factoriser goes out of the clipping bounds
                         let scaled = f32::clamp(*src, -1.98, 1.98) * f32::from(QA);
@@ -503,9 +507,9 @@ impl MergedNetwork {
         }
 
         // quantise the l1 weights
-        for i in 0..L1_SIZE {
+        for i in 0..L1_IN {
             for bucket in 0..OUTPUT_BUCKETS {
-                for j in 0..L2_SIZE {
+                for j in 0..L1_OUT {
                     let v = self.l1_weights[i][bucket][j] * f32::from(QB);
                     if v.abs() > QB_BOUND {
                         eprintln!("L1 weight {v} is too large (max = {QB_BOUND})");
@@ -537,17 +541,17 @@ impl QuantisedNetwork {
     fn permute(&self, use_simd: bool) -> Box<NNUEParams> {
         let mut net = NNUEParams::zeroed();
         // permute the feature transformer weights
-        let src_buckets = self.l0_weights.chunks_exact(PSQT_FEATURES * L1_SIZE);
-        let tgt_buckets = net.l0_weights.chunks_exact_mut(PSQT_FEATURES * L1_SIZE);
+        let src_buckets = self.l0_weights.chunks_exact(PSQT_FEATURES * L0_OUT);
+        let tgt_buckets = net.l0_weights.chunks_exact_mut(PSQT_FEATURES * L0_OUT);
         for (src_bucket, tgt_bucket) in src_buckets.zip(tgt_buckets) {
-            repermute_ft_bucket(tgt_bucket, src_bucket);
+            repermute_l0_psqt_bucket(tgt_bucket, src_bucket);
         }
 
         // permute the feature transformer biases
-        repermute_ft_bias(&mut net.l0_biases, &self.l0_biases);
+        repermute_l0_bias(&mut net.l0_biases, &self.l0_biases);
 
         // repermute the threat plane weights
-        repermute_threat_weights(&mut net.l0_aux, &self.l0_aux);
+        repermute_l0_aux(&mut net.l0_aux, &self.l0_aux);
 
         // transpose FT weights and biases so that packus transposes it back to the intended order
         if use_simd {
@@ -597,18 +601,21 @@ impl QuantisedNetwork {
             let mut regs = vec![[0i16; 8]; num_regs];
 
             // transpose weights
-            for i in (0..PSQT_FEATURES * L1_SIZE * BUCKETS / num_chunks).step_by(num_regs) {
-                for j in 0..num_regs {
-                    regs[j] = *weights[i + j];
-                }
+            for row in 0..PSQT_FEATURES * BUCKETS {
+                let base = row * L0_OUT / num_chunks;
+                for i in (0..L1_IN / num_chunks).step_by(num_regs) {
+                    for j in 0..num_regs {
+                        regs[j] = *weights[base + i + j];
+                    }
 
-                for j in 0..num_regs {
-                    *weights[i + j] = regs[order[j]];
+                    for j in 0..num_regs {
+                        *weights[base + i + j] = regs[order[j]];
+                    }
                 }
             }
 
             // transpose biases
-            for i in (0..L1_SIZE / num_chunks).step_by(num_regs) {
+            for i in (0..L1_IN / num_chunks).step_by(num_regs) {
                 for j in 0..num_regs {
                     regs[j] = *biases[i + j];
                 }
@@ -623,59 +630,62 @@ impl QuantisedNetwork {
             // now the same for the threat plane weights
             let mut threat_weights: Vec<&mut PermChunk<i8>> =
                 net.l0_aux.as_chunks_mut::<8>().0.iter_mut().collect();
-            for i in (0..AUX_FEATURES * L1_SIZE / num_chunks).step_by(num_regs) {
-                for j in 0..num_regs {
-                    i8_regs[j] = *threat_weights[i + j];
-                }
+            for row in 0..AUX_FEATURES {
+                let base = row * L0_OUT / num_chunks;
+                for i in (0..L1_IN / num_chunks).step_by(num_regs) {
+                    for j in 0..num_regs {
+                        i8_regs[j] = *threat_weights[base + i + j];
+                    }
 
-                for j in 0..num_regs {
-                    *threat_weights[i + j] = i8_regs[order[j]];
+                    for j in 0..num_regs {
+                        *threat_weights[base + i + j] = i8_regs[order[j]];
+                    }
                 }
             }
         }
 
         // transpose the L{1,2,3} weights and biases
-        let mut sorted = vec![[[0i8; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE];
-        repermute_l1_weights(&mut sorted, &self.l1_weights);
+        let mut sorted = vec![[[0i8; L1_OUT]; OUTPUT_BUCKETS]; L1_IN];
+        repermute_l1_weights(sorted.as_mut_array().unwrap(), &self.l1_weights);
         for bucket in 0..OUTPUT_BUCKETS {
             // quant the L1 weights
             if use_simd {
-                for i in 0..L1_SIZE / L1_CHUNK_PER_32 {
-                    for j in 0..L2_SIZE {
+                for i in 0..L1_IN / L1_CHUNK_PER_32 {
+                    for j in 0..L1_OUT {
                         for k in 0..L1_CHUNK_PER_32 {
                             net.l1_weights[bucket]
-                                [i * L1_CHUNK_PER_32 * L2_SIZE + j * L1_CHUNK_PER_32 + k] =
+                                [i * L1_CHUNK_PER_32 * L1_OUT + j * L1_CHUNK_PER_32 + k] =
                                 sorted[i * L1_CHUNK_PER_32 + k][bucket][j];
                         }
                     }
                 }
             } else {
-                for i in 0..L1_SIZE {
-                    for j in 0..L2_SIZE {
-                        net.l1_weights[bucket][j * L1_SIZE + i] = sorted[i][bucket][j];
+                for i in 0..L1_IN {
+                    for j in 0..L1_OUT {
+                        net.l1_weights[bucket][j * L1_IN + i] = sorted[i][bucket][j];
                     }
                 }
             }
 
             // transfer the L1 biases
-            for i in 0..L2_SIZE {
+            for i in 0..L1_OUT {
                 net.l1_bias[bucket][i] = self.l1_biases[bucket][i];
             }
 
             // transpose the L2 weights
-            for i in 0..L2_SIZE {
-                for j in 0..L3_SIZE * 2 {
-                    net.l2_weights[bucket][i * L3_SIZE * 2 + j] = self.l2_weights[i][bucket][j];
+            for i in 0..L2_IN {
+                for j in 0..L2_OUT * 2 {
+                    net.l2_weights[bucket][i * L2_OUT * 2 + j] = self.l2_weights[i][bucket][j];
                 }
             }
 
             // transfer the L2 biases
-            for i in 0..L3_SIZE * 2 {
+            for i in 0..L2_OUT * 2 {
                 net.l2_bias[bucket][i] = self.l2_biases[bucket][i];
             }
 
             // transfer the L3 weights
-            for i in 0..L3_SIZE {
+            for i in 0..L3_IN {
                 for head in 0..HEADS {
                     net.l3_weights[bucket][head][i] = self.l3_weights[i][bucket][head];
                 }
@@ -710,60 +720,58 @@ impl QuantisedNetwork {
 }
 
 fn repermute_l1_weights(
-    sorted: &mut [[[i8; L2_SIZE]; OUTPUT_BUCKETS]],
-    l1_weights: &[[[i8; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
+    sorted: &mut [[[i8; L1_OUT]; OUTPUT_BUCKETS]; L1_IN],
+    l1_weights: &[[[i8; L1_OUT]; OUTPUT_BUCKETS]; L1_IN],
 ) {
     for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
         sorted[tgt_index] = l1_weights[src_index];
     }
     for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
-        sorted[tgt_index + L1_SIZE / 2] = l1_weights[src_index + L1_SIZE / 2];
+        sorted[tgt_index + L1_IN / 2] = l1_weights[src_index + L1_IN / 2];
     }
 }
 
-fn repermute_ft_bias(feature_bias: &mut [i16; L1_SIZE], unsorted: &[i16]) {
+fn repermute_l0_bias(feature_bias: &mut [i16; L0_OUT], unsorted: &[i16; L0_OUT]) {
     for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
         feature_bias[tgt_index] = unsorted[src_index];
     }
     for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
-        feature_bias[tgt_index + L1_SIZE / 2] = unsorted[src_index + L1_SIZE / 2];
+        feature_bias[tgt_index + L1_IN / 2] = unsorted[src_index + L1_IN / 2];
     }
 }
 
-fn repermute_ft_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
+fn repermute_l0_psqt_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
     // for each input feature,
     for i in 0..PSQT_FEATURES {
+        let feature = i * L0_OUT;
         // for each neuron in the layer,
         for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
             // get the neuron's corresponding weight in the unsorted bucket,
             // and write it to the same feature (but the new position) in the target bucket.
-            let feature = i * L1_SIZE;
             tgt_bucket[feature + tgt_index] = unsorted[feature + src_index];
         }
         for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
-            let tgt_index = tgt_index + L1_SIZE / 2;
-            let src_index = src_index + L1_SIZE / 2;
+            let tgt_index = tgt_index + L1_IN / 2;
+            let src_index = src_index + L1_IN / 2;
             // get the neuron's corresponding weight in the unsorted bucket,
             // and write it to the same feature (but the new position) in the target bucket.
-            let feature = i * L1_SIZE;
             tgt_bucket[feature + tgt_index] = unsorted[feature + src_index];
         }
     }
 }
 
-fn repermute_threat_weights(
-    tgt: &mut Align<[i8; AUX_FEATURES * L1_SIZE]>,
-    unsorted: &[i8; AUX_FEATURES * L1_SIZE],
+fn repermute_l0_aux(
+    tgt: &mut Align<[i8; AUX_FEATURES * L0_OUT]>,
+    unsorted: &[i8; AUX_FEATURES * L0_OUT],
 ) {
     for i in 0..AUX_FEATURES {
+        let feature = i * L0_OUT;
         for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
-            let feature = i * L1_SIZE;
             tgt[feature + tgt_index] = unsorted[feature + src_index];
         }
         for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
-            let tgt_index = tgt_index + L1_SIZE / 2;
-            let src_index = src_index + L1_SIZE / 2;
-            let feature = i * L1_SIZE;
+            let tgt_index = tgt_index + L1_IN / 2;
+            let src_index = src_index + L1_IN / 2;
             tgt[feature + tgt_index] = unsorted[feature + src_index];
         }
     }
@@ -1079,13 +1087,13 @@ impl NNUEParams {
         }
     }
 
-    pub fn select_feature_weights(&self, bucket: usize) -> &Align<[i16; PSQT_FEATURES * L1_SIZE]> {
+    pub fn select_feature_weights(&self, bucket: usize) -> &Align<[i16; PSQT_FEATURES * L0_OUT]> {
         // handle mirroring
         let bucket = bucket % BUCKETS;
-        let start = bucket * PSQT_FEATURES * L1_SIZE;
-        let end = start + PSQT_FEATURES * L1_SIZE;
+        let start = bucket * PSQT_FEATURES * L0_OUT;
+        let end = start + PSQT_FEATURES * L0_OUT;
         let slice = &self.l0_weights[start..end];
-        // SAFETY: The resulting slice is indeed INPUT * LAYER_1_SIZE long,
+        // SAFETY: The resulting slice is indeed INPUT × L0_OUT long,
         // and we check that the slice is aligned to 64 bytes.
         // additionally, we're generating the reference from our own data,
         // so we know that the lifetime is valid.
@@ -1285,7 +1293,7 @@ impl UpdateBuffer {
 pub struct BucketAccumulatorCache {
     // both of these are BUCKETS * 2, rather than just BUCKETS,
     // because we use a horizontally-mirrored architecture.
-    accs: [[Align<[i16; L1_SIZE]>; 2]; BUCKETS * 2],
+    accs: [[Align<[i16; ACC_LEN]>; 2]; BUCKETS * 2],
     board_states: [[PieceLayout; BUCKETS * 2]; 2],
 }
 
@@ -1760,8 +1768,8 @@ impl NNUEState {
             ]
         };
 
-        let mut l1_outputs = Align([0.0; L2_SIZE]);
-        let mut l2_outputs = Align([0.0; L3_SIZE]);
+        let mut l2_inputs = Align([0.0; L2_IN]);
+        let mut l3_inputs = Align([0.0; L3_IN]);
 
         layers::activate_ft_and_propagate_l1(
             stm_psqt,
@@ -1770,20 +1778,20 @@ impl NNUEState {
             ntm_thrt,
             &nn.l1_weights[out],
             &nn.l1_bias[out],
-            &mut l1_outputs,
+            &mut l2_inputs,
         );
         layers::propagate_l2(
-            &l1_outputs,
+            &l2_inputs,
             &nn.l2_weights[out],
             &nn.l2_bias[out],
-            &mut l2_outputs,
+            &mut l3_inputs,
         );
 
         if HEADS == 1 {
             let mut l3_output = 0.0;
 
             layers::propagate_l3(
-                &l2_outputs,
+                &l3_inputs,
                 &nn.l3_weights[out][0],
                 nn.l3_bias[out][0],
                 &mut l3_output,
@@ -1798,7 +1806,7 @@ impl NNUEState {
                 .zip(nn.l3_bias[out])
                 .zip(&mut l3_output_logits)
             {
-                layers::propagate_l3(&l2_outputs, w, b, o);
+                layers::propagate_l3(&l3_inputs, w, b, o);
             }
 
             // softmax
@@ -1850,7 +1858,7 @@ pub fn visualise_nnue() -> anyhow::Result<()> {
     let path = std::path::PathBuf::from("nnue-visualisations");
     std::fs::create_dir_all(&path)
         .with_context(|| "Failed to create NNUE visualisations folder.")?;
-    for neuron in 0..crate::nnue::network::L1_SIZE {
+    for neuron in 0..L0_OUT {
         nnue_params.visualise_neuron(neuron, &path);
     }
     nnue_params.composite_neurons(&path);
@@ -1872,7 +1880,7 @@ impl NNUEParams {
         #![allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         // remap pieces to keep opposite colours together
         static PIECE_REMAPPING: [usize; 12] = [0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11];
-        assert!(neuron < L1_SIZE);
+        assert!(neuron < L0_OUT);
         let starting_idx = neuron;
         let mut slice = Vec::with_capacity(768);
         for colour in Colour::all() {
@@ -1884,7 +1892,7 @@ impl NNUEParams {
                         piece: Piece::new(colour, piece_type),
                     };
                     let feature_index = feature::psqt_index(Colour::White, white_king, f);
-                    let index = feature_index.index() * L1_SIZE + starting_idx;
+                    let index = feature_index.index() * L0_OUT + starting_idx;
                     slice.push(self.l0_weights[index]);
                 }
             }
@@ -1934,26 +1942,26 @@ impl NNUEParams {
         const TILE_H: usize = 8 * 2 + IMAGE_SPACING;
 
         // aiming for a 16:9 aspect ratio
-        let cols = (1..=L1_SIZE)
+        let cols = (1..=L0_OUT)
             .min_by_key(|&c| {
-                let rows = L1_SIZE.div_ceil(c);
+                let rows = L0_OUT.div_ceil(c);
                 let w = c * (TILE_W + IMAGE_SPACING);
                 let h = rows * (TILE_H + IMAGE_SPACING);
                 // minimise |w/h - 16/9|, i.e. |9w - 16h|
                 (9 * w).abs_diff(16 * h)
             })
             .unwrap();
-        let rows = L1_SIZE.div_ceil(cols);
+        let rows = L0_OUT.div_ceil(cols);
         let img_w = cols * TILE_W + (cols - 1) * IMAGE_SPACING;
         let img_h = rows * TILE_H + (rows - 1) * IMAGE_SPACING;
 
         #[expect(clippy::cast_possible_truncation)]
-        let neuron_order = (0..L1_SIZE as u16).collect::<ArrayVec<u16, L1_SIZE>>();
+        let neuron_order = (0..L0_OUT as u16).collect::<ArrayVec<u16, L0_OUT>>();
         // the sorting is nice, but doesn’t look quite so pretty.
         // neuron_order.sort_by_key(|&n| {
         //     let start = n;
         //     let mean_abs: u64 = (0..INPUT)
-        //         .map(|i| u64::from(self.l0_weights[i * L1_SIZE + start as usize].unsigned_abs()))
+        //         .map(|i| u64::from(self.l0_weights[i * L0_OUT + start as usize].unsigned_abs()))
         //         .sum();
         //     mean_abs
         // });
