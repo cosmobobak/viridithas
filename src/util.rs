@@ -91,6 +91,7 @@ impl<T, const SIZE: usize> DerefMut for Align<[T; SIZE]> {
 }
 
 impl<T, const SIZE: usize> Align<[T; SIZE]> {
+    #[expect(unused, reason = "useful for skip connexions")]
     pub fn shorten<const SHORT: usize>(&self) -> &Align<[T; SHORT]> {
         const {
             assert!(SHORT < SIZE);
@@ -100,6 +101,7 @@ impl<T, const SIZE: usize> Align<[T; SIZE]> {
         unsafe { &*std::ptr::from_ref(self).cast::<Align<[T; SHORT]>>() }
     }
 
+    #[expect(unused, reason = "useful for skip connexions")]
     pub fn shorten_mut<const SHORT: usize>(&mut self) -> &mut Align<[T; SHORT]> {
         const {
             assert!(SHORT < SIZE);

@@ -94,17 +94,6 @@ mod simd {
                     simd::store_i16(dst, *reg);
                 }
             }
-            // the (bypass) tail not covered by the unrolled loop
-            for i in ((ACC_LEN / UNROLL * UNROLL)..ACC_LEN).step_by(I16_CHUNK) {
-                let mut reg = simd::load_i16(input.as_ptr().add(i));
-                for &sub_block in &sub_blocks {
-                    reg = simd::sub_i16(reg, simd::load_i16(sub_block.as_ptr().add(i)));
-                }
-                for &add_block in &add_blocks {
-                    reg = simd::add_i16(reg, simd::load_i16(add_block.as_ptr().add(i)));
-                }
-                simd::store_i16(input.as_mut_ptr().add(i), reg);
-            }
         }
     }
 
@@ -178,19 +167,6 @@ mod simd {
                     let dst = dst_acc.as_mut_ptr().add(unroll_offset + r_idx * I16_CHUNK);
                     simd::store_i16(dst, *reg);
                 }
-            }
-            // the (bypass) tail not covered by the unrolled loop
-            for i in ((ACC_LEN / UNROLL * UNROLL)..ACC_LEN).step_by(I16_CHUNK) {
-                let mut reg = simd::load_i16(src_acc.as_ptr().add(i));
-                for &sub_block in &sub_blocks {
-                    let src = (*weights).as_ptr().add(sub_block as usize + i);
-                    reg = simd::sub_i16(reg, simd::load_extend_i8(src));
-                }
-                for &add_block in &add_blocks {
-                    let src = (*weights).as_ptr().add(add_block as usize + i);
-                    reg = simd::add_i16(reg, simd::load_extend_i8(src));
-                }
-                simd::store_i16(dst_acc.as_mut_ptr().add(i), reg);
             }
         }
     }
@@ -480,15 +456,6 @@ mod simd {
                     let dst = acc.as_mut_ptr().add(unroll_offset + r_idx * I16_CHUNK);
                     simd::store_i16(dst, *reg);
                 }
-            }
-            // the (bypass) tail not covered by the unrolled loop
-            for i in ((ACC_LEN / UNROLL * UNROLL)..ACC_LEN).step_by(I16_CHUNK) {
-                let mut reg = simd::zero_i16();
-                for &block in &indexes {
-                    let src = (*weights).as_ptr().add(block as usize + i);
-                    reg = simd::add_i16(reg, simd::load_extend_i8(src));
-                }
-                simd::store_i16(acc.as_mut_ptr().add(i), reg);
             }
         }
     }

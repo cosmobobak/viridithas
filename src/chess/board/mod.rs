@@ -868,10 +868,10 @@ impl Board {
             {
                 if side == Colour::White {
                     self.state.ep_square = from.add(8);
-                    debug_assert!(self.state.ep_square.unwrap().rank() == Rank::Three);
+                    debug_assert_eq!(self.state.ep_square.unwrap().rank(), Rank::Three);
                 } else {
                     self.state.ep_square = from.sub(8);
-                    debug_assert!(self.state.ep_square.unwrap().rank() == Rank::Six);
+                    debug_assert_eq!(self.state.ep_square.unwrap().rank(), Rank::Six);
                 }
             }
         }
@@ -1172,7 +1172,7 @@ impl Board {
         if !(b'1'..=b'8').contains(&san_bytes[3]) {
             return Err(InvalidToSquareRank(san_bytes[3] as char));
         }
-        if san_bytes.len() == 5 && ![b'n', b'b', b'r', b'q', b'k'].contains(&san_bytes[4]) {
+        if san_bytes.len() == 5 && !b"nbrqk".contains(&san_bytes[4]) {
             return Err(InvalidPromotionPiece(san_bytes[4] as char));
         }
 
