@@ -5,8 +5,6 @@ name: Release binaries
 on:
   workflow_dispatch:
   push:
-    branches:
-      - "20.0.0" # TEMP
     tags:
       - "v*"
 
