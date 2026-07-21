@@ -61,6 +61,12 @@ jobs:
             features: ""
             flags: ""
             bench: true
+          - artifact: viridithas-aarch64-dotprod
+            os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+            features: ""
+            flags: "-C target-feature=+dotprod"
+            bench: true
 
     steps:
       - uses: actions/checkout@v6
