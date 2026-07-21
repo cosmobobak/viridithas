@@ -58,7 +58,8 @@ static SET_TERM: Once = Once::new();
 static STDIN_READER_THREAD_KEEP_RUNNING: AtomicBool = AtomicBool::new(true);
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub fn main_loop() -> Result<(), UciError> {
-    let version_extension = if cfg!(feature = "final-release") {
+    // hack, do not merge back to main branch.
+    let version_extension = if true || cfg!(feature = "final-release") {
         ""
     } else {
         "-dev"
