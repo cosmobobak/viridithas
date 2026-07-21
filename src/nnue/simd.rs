@@ -983,6 +983,7 @@ mod neon {
         // Assembly implementation of vdotq_s32 very generously provided by
         // sp00ph (https://github.com/Sp00ph), tysm <3.
         #[inline(always)]
+        #[cfg(target_feature = "dotprod")]
         unsafe fn vdotq_s32(a: int32x4_t, b: int8x16_t, c: int8x16_t) -> int32x4_t {
             let r: int32x4_t;
             unsafe {
@@ -995,6 +996,34 @@ mod neon {
                 );
             }
             r
+        }
+        #[allow(unused)]
+        #[inline(always)]
+        #[cfg(not(target_feature = "dotprod"))]
+        unsafe fn dot_bytes(u8s: int8x16_t, i8s: int8x16_t) -> int32x4_t {
+            unsafe {
+                let u8s = vreinterpretq_u8_s8(u8s);
+
+                let products_low = vmulq_s16(
+                    vreinterpretq_s16_u16(vmovl_u8(vget_low_u8(u8s))),
+                    vmovl_s8(vget_low_s8(i8s)),
+                );
+                let products_high = vmulq_s16(
+                    vreinterpretq_s16_u16(vmovl_u8(vget_high_u8(u8s))),
+                    vmovl_s8(vget_high_s8(i8s)),
+                );
+
+                let sums_low = vpaddlq_s16(products_low);
+                let sums_high = vpaddlq_s16(products_high);
+
+                vpaddq_s32(sums_low, sums_high)
+            }
+        }
+        #[allow(unused)]
+        #[inline(always)]
+        #[cfg(not(target_feature = "dotprod"))]
+        unsafe fn vdotq_s32(i32s: int32x4_t, u8s: int8x16_t, i8s: int8x16_t) -> int32x4_t {
+            unsafe { vaddq_s32(i32s, dot_bytes(u8s, i8s)) }
         }
         unsafe {
             return VecI32::from_raw(vdotq_s32(sum.inner(), vec0.inner(), vec1.inner()));

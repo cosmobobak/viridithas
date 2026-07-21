@@ -1,0 +1,131 @@
+# This file takes heavy inspiration from the CI in Stockfish.
+
+name: Release binaries
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "20.0.0" # TEMP
+    tags:
+      - "v*"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: ${{ matrix.artifact }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write # allow "attach to release" to create/update the release on tag pushes
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ---- x86-64 Linux -------------------------------------------------
+          - artifact: viridithas-linux-x86_64-v3
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            features: syzygy,zstd
+            flags: "-C target-feature=+crt-static -C target-cpu=x86-64-v3"
+            bench: true
+          - artifact: viridithas-linux-x86_64-v4
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            features: syzygy,zstd
+            flags: "-C target-feature=+crt-static,+gfni,+avx512bw,+avx512vl,+avx512vbmi,+avx512vbmi2,+avx512vnni,+avx512bitalg -C target-cpu=x86-64-v4"
+            bench: false
+          # ---- x86-64 Windows -----------------------------------------------
+          - artifact: viridithas-windows-x86_64-v3.exe
+            os: windows-2022
+            target: x86_64-pc-windows-msvc
+            features: syzygy,zstd
+            flags: "-C target-feature=+crt-static -C target-cpu=x86-64-v3"
+            bench: true
+          - artifact: viridithas-windows-x86_64-v4.exe
+            os: windows-2022
+            target: x86_64-pc-windows-msvc
+            features: syzygy,zstd
+            flags: "-C target-feature=+crt-static,+gfni,+avx512bw,+avx512vl,+avx512vbmi,+avx512vbmi2,+avx512vnni,+avx512bitalg -C target-cpu=x86-64-v4"
+            bench: false
+          # ---- Apple Silicon macOS ------------------------------------------
+          - artifact: viridithas-macos-aarch64
+            os: macos-15
+            target: aarch64-apple-darwin
+            features: syzygy,zstd
+            flags: ""
+            bench: true
+          # ---- Generic static aarch64 ---------------------------------------
+          - artifact: viridithas-aarch64
+            os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+            features: ""
+            flags: ""
+            bench: true
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: install rust target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: install musl tools
+        if: endsWith(matrix.target, 'musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: fetch network
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          url=$(curl -sSL --fail \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/cosmobobak/viridithas-networks/releases/latest" \
+            | grep -o '"browser_download_url": "[^"]*' | awk -F'"' '{print $4}' | head -n1)
+          echo "network url: $url"
+          test -n "$url"
+          curl -sSL --fail --retry 3 --retry-delay 5 "$url" -o viridithas.nnue.zst
+          size=$(wc -c < viridithas.nnue.zst | tr -d '[:space:]')
+          echo "downloaded $size bytes"
+          test "$size" -gt 1000000
+          echo "EVALFILE=viridithas.nnue.zst" >> "$GITHUB_ENV"
+
+      - name: build
+        shell: bash
+        env:
+          RUSTFLAGS: ${{ matrix.flags }}
+        run: |
+          if [ -n "${{ matrix.features }}" ]; then
+            cargo build --release --target ${{ matrix.target }} --features "${{ matrix.features }}"
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
+
+      - name: bench
+        if: matrix.bench
+        shell: bash
+        run: |
+          bin=viridithas
+          [ "${{ runner.os }}" = "Windows" ] && bin=viridithas.exe
+          "./target/${{ matrix.target }}/release/$bin" bench
+
+      - name: stage artifact
+        shell: bash
+        run: |
+          bin=viridithas
+          [ "${{ runner.os }}" = "Windows" ] && bin=viridithas.exe
+          cp "target/${{ matrix.target }}/release/$bin" "${{ matrix.artifact }}"
+
+      - name: upload artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+      - name: attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.artifact }}
