@@ -65,7 +65,7 @@ jobs:
             bench: true
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: install rust target
         run: rustup target add ${{ matrix.target }}
@@ -119,7 +119,7 @@ jobs:
           cp "target/${{ matrix.target }}/release/$bin" "${{ matrix.artifact }}"
 
       - name: upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
