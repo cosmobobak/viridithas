@@ -232,7 +232,7 @@ mod simd {
                         let elem = elem.assume_init();
                         let nnz = elem != 0;
                         if nnz {
-                            super::NNZ_COUNTS[i % (L1_SIZE / 2)][j % (L1_SIZE / 2)]
+                            super::NNZ_COUNTS[i % (L1_IN / 2)][j % (L1_IN / 2)]
                                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         }
                     }
@@ -244,7 +244,7 @@ mod simd {
                 use std::io::Write;
 
                 let ptr = std::ptr::from_ref(&ft_outputs);
-                let ft_outputs = &*ptr.cast::<[u8; L1_SIZE]>();
+                let ft_outputs = &*ptr.cast::<[u8; L1_IN]>();
 
                 super::FT_OUTPUT_FILE
                     .lock()
@@ -274,7 +274,7 @@ mod simd {
         // into the `ft_outputs` array. This is in bounds, as `ft_outputs` has length L1_PAIR_COUNT * 2.
         // 2. SIMD instructions: All of our loads and stores are aligned.
         unsafe {
-            // &Align64<[MaybeUninit<u8>; L1_SIZE]>) -> &Align64<[i32; L1_SIZE / 4]>
+            // &Align64<[MaybeUninit<u8>; L1_IN]>) -> &Align64<[i32; L1_IN / 4]>
             let input32 = reinterpret_as_i32s(ft_outputs);
 
             // note to a future cosmonaut: the auxiliary accumulator helps
@@ -292,7 +292,7 @@ mod simd {
             {
                 NNZ_COUNT.fetch_add(nnz_count, Ordering::Relaxed);
                 // each active block is four activations, so we divide by 4.
-                NNZ_DENOM.fetch_add(L1_SIZE / 4, Ordering::Relaxed);
+                NNZ_DENOM.fetch_add(L1_IN / 4, Ordering::Relaxed);
             }
 
             let tail_start = nnz_count - (nnz_count % 4);
@@ -471,7 +471,7 @@ use super::{QA, QB};
 
 // logging for permutation
 #[cfg(feature = "nnz-counts")]
-pub static NNZ_COUNTS: [[std::sync::atomic::AtomicU64; super::L1_SIZE / 2]; super::L1_SIZE / 2] = const {
+pub static NNZ_COUNTS: [[std::sync::atomic::AtomicU64; super::L1_IN / 2]; super::L1_IN / 2] = const {
     // Safety: AtomicU64 is repr-compatible with u64.
-    unsafe { std::mem::transmute([[0u64; super::L1_SIZE / 2]; super::L1_SIZE / 2]) }
+    unsafe { std::mem::transmute([[0u64; super::L1_IN / 2]; super::L1_IN / 2]) }
 };
