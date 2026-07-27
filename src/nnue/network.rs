@@ -68,7 +68,7 @@ pub const L3_IN: usize = 32;
 /// The amount to scale the output of the network by.
 /// This is to allow for the sigmoid activation to differentiate positions with
 /// a small difference in evaluation.
-pub const SCALE: i32 = 240;
+pub const SCALE: i32 = 200;
 /// The number of output heads.
 pub const HEADS: usize = 1;
 /// The quantisation factor for the feature transformer weights.
