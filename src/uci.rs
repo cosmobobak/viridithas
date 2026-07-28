@@ -175,7 +175,8 @@ pub fn main_loop() -> Result<(), UciError> {
                 let eval = if t.board.in_check() {
                     0
                 } else {
-                    t.nnue.evaluate(t.nnue_params, &t.board)
+                    t.nnue
+                        .evaluate(t.nnue_params, &t.board, t.info.conf.nnue_scale)
                 };
                 println!("{eval}");
                 Ok(())

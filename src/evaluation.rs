@@ -111,7 +111,9 @@ impl Board {
 
 pub fn evaluate_nnue(t: &ThreadData) -> i32 {
     // get the raw network output
-    let v = t.nnue.evaluate(t.nnue_params, &t.board);
+    let v = t
+        .nnue
+        .evaluate(t.nnue_params, &t.board, t.info.conf.nnue_scale);
 
     // clamp the value into the valid range.
     // this basically never comes up, but the network will
@@ -194,7 +196,7 @@ pub fn eval_stats(
         }
 
         nnue.reïnit_from(&board, nnue_params);
-        let eval = nnue.evaluate(nnue_params, &board);
+        let eval = nnue.evaluate(nnue_params, &board, network::SCALE);
 
         count += 1;
         total += i128::from(eval);

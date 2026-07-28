@@ -37,7 +37,7 @@ use crate::{
     },
     datagen::dataformat::Game,
     evaluation::{is_decisive, is_mate_score},
-    nnue::network::{NNUEParams, NNUEState},
+    nnue::network::{self, NNUEParams, NNUEState},
     search::{parameters::Config, search_position, static_exchange_eval},
     searchinfo::Control,
     tablebases::{self, probe::WDL},
@@ -1122,7 +1122,7 @@ fn relabel_binpacks(
             let new_value = if is_decisive(value * 2) {
                 value
             } else {
-                let pov_eval = nnue_state.evaluate(nnue_params, &rollout);
+                let pov_eval = nnue_state.evaluate(nnue_params, &rollout, network::SCALE);
                 // viriformat uses white-relative evaluations throughout.
                 if rollout.turn() == Colour::Black {
                     -pov_eval

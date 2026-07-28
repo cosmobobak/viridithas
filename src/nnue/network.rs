@@ -1181,7 +1181,7 @@ pub fn dry_run() -> anyhow::Result<()> {
     println!("[#] Generating network state");
     let state = NNUEState::new(&start_pos, &nnue_params);
     println!("[#] Running forward pass");
-    let eval = state.evaluate(&nnue_params, &start_pos);
+    let eval = state.evaluate(&nnue_params, &start_pos, SCALE);
     std::hint::black_box(eval);
     Ok(())
 }
@@ -1733,8 +1733,8 @@ impl NNUEState {
 
     /// Evaluate the final layer on the partial activations.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-    pub fn evaluate(&self, nn: &NNUEParams, board: &Board) -> i32 {
-        const K: f32 = SCALE as f32;
+    pub fn evaluate(&self, nn: &NNUEParams, board: &Board, scale: i32) -> i32 {
+        let k = scale as f32;
 
         debug_assert!(
             self.psqt_correct[self.current_acc][0] && self.psqt_correct[self.current_acc][1]
@@ -1796,7 +1796,7 @@ impl NNUEState {
                 &mut l3_output,
             );
 
-            (l3_output * SCALE as f32) as i32
+            (l3_output * k) as i32
         } else if HEADS == 3 {
             let mut l3_output_logits = [0.0; 3];
 
@@ -1827,7 +1827,7 @@ impl NNUEState {
 
             let score = draw.mul_add(0.5, win).clamp(0.0, 1.0);
 
-            (-K * (1.0 / score - 1.0).ln()) as i32
+            (-k * (1.0 / score - 1.0).ln()) as i32
         } else {
             panic!("Unsupported number of heads: {HEADS}");
         }
@@ -1843,6 +1843,7 @@ pub fn inference_benchmark(state: &NNUEState, nnue_params: &NNUEParams) {
         std::hint::black_box(std::hint::black_box(state).evaluate(
             std::hint::black_box(nnue_params),
             std::hint::black_box(&board),
+            std::hint::black_box(SCALE),
         ));
     }
     let elapsed = start.elapsed();

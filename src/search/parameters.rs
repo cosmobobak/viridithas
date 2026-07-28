@@ -7,6 +7,7 @@ use crate::{
         MATERIAL_SCALE_BASE, SEE_BISHOP_VALUE, SEE_KNIGHT_VALUE, SEE_PAWN_VALUE, SEE_QUEEN_VALUE,
         SEE_ROOK_VALUE,
     },
+    nnue::network::SCALE as NNUE_SCALE,
     search::{
         ASPIRATION_EVAL_DIVISOR, CONT1_HISTORY, CONT1_STAT_SCORE_MUL, CONT2_HISTORY,
         CONT2_STAT_SCORE_MUL, CONT4_HISTORY, CONT4_STAT_SCORE_MUL, CONTINUATION_12_CORRHIST_WEIGHT,
@@ -151,6 +152,7 @@ pub struct Config {
     pub eval_policy_update_max: i32,
     pub probcut_see_scale: i32,
     pub ttpv_lmr_depth_mul: i32,
+    pub nnue_scale: i32,
 }
 
 impl Config {
@@ -241,6 +243,7 @@ impl Config {
             eval_policy_update_max: EVAL_POLICY_UPDATE_MAX,
             probcut_see_scale: PROBCUT_SEE_SCALE,
             ttpv_lmr_depth_mul: TTPV_LMR_DEPTH_MUL,
+            nnue_scale: NNUE_SCALE,
         }
     }
 }
@@ -400,7 +403,8 @@ impl Config {
             OPTIMISM_MATERIAL_BASE = [self.optimism_mat_base],
             EVAL_POLICY_UPDATE_MAX = [self.eval_policy_update_max],
             PROBCUT_SEE_SCALE = [self.probcut_see_scale],
-            TTPV_LMR_DEPTH_MUL = [self.ttpv_lmr_depth_mul]
+            TTPV_LMR_DEPTH_MUL = [self.ttpv_lmr_depth_mul],
+            NNUE_SCALE = [self.nnue_scale]
         ]
     }
 
@@ -530,7 +534,8 @@ impl Config {
             OPTIMISM_MATERIAL_BASE = [self.optimism_mat_base, 1, 8192, 256],
             EVAL_POLICY_UPDATE_MAX = [self.eval_policy_update_max, 1, 4096, 8],
             PROBCUT_SEE_SCALE = [self.probcut_see_scale, 1, 1024, 16],
-            TTPV_LMR_DEPTH_MUL = [self.ttpv_lmr_depth_mul, 1, 2048, 48]
+            TTPV_LMR_DEPTH_MUL = [self.ttpv_lmr_depth_mul, 1, 2048, 48],
+            NNUE_SCALE = [self.nnue_scale, 16, 1024, 40]
         ]
     }
 
