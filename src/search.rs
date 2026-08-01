@@ -127,6 +127,7 @@ const EVAL_POLICY_UPDATE_MAX: i32 = 94;
 const PROBCUT_SEE_SCALE: i32 = 266;
 const PROBCUT_ADA_OFFSET: i32 = 50;
 const PROBCUT_ADA_DIV: i32 = 300;
+const QUIET_CHECK_SEE_MARGIN: i32 = 175;
 
 pub trait NodeType {
     /// Whether this node is on the principal variation.
