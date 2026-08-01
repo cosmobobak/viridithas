@@ -616,6 +616,9 @@ pub fn quiescence<NT: NodeType>(t: &mut ThreadData, mut alpha: i32, beta: i32) -
     }
 
     if stand_pat >= beta {
+        if is_decisive(stand_pat) {
+            return stand_pat;
+        }
         return i32::midpoint(stand_pat, beta);
     }
 

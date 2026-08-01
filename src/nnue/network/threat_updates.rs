@@ -436,7 +436,7 @@ pub fn on_mutate(
     let new_outgoing = geometry::outgoing_threats(new_piece, closest & non_king);
     let incoming = geometry::incoming_attackers(bits, closest);
 
-    debug_assert!(old_piece.piece_type() != PieceType::King);
+    debug_assert_ne!(old_piece.piece_type(), PieceType::King);
     // Safety: `perm.indexes` & rays have valid bit-patterns.
     unsafe {
         push_focus::<Sub, Outgoing>(updates, perm.indexes, rays, old_outgoing, old_piece, sq);
@@ -532,7 +532,10 @@ mod tests {
             board::{Board, movegen::attacks_by_type},
             piece::PieceType,
         },
-        nnue::{accumulator, network::UpdateBuffer},
+        nnue::{
+            accumulator,
+            network::{ACC_LEN, UpdateBuffer},
+        },
     };
 
     use super::*;
@@ -745,7 +748,7 @@ mod tests {
     use crate::{
         chess::piece::Colour,
         nnue::network::{
-            L1_SIZE, NNUEParams, PAWN_TUPLE_FEATURES,
+            NNUEParams, PAWN_TUPLE_FEATURES,
             feature::{pawn_pawn_index, threat_index},
             pawn_updates::PAWN_PAWN_MASKS,
         },
@@ -870,10 +873,10 @@ mod tests {
         for colour in [Colour::White, Colour::Black] {
             // compute expected accumulator by summing weight rows
             let indexes = aux_indexes(&board, colour);
-            let mut expected = Align([0i16; L1_SIZE]);
+            let mut expected = Align([0i16; ACC_LEN]);
             for &idx in &indexes {
-                let start = idx as usize * L1_SIZE;
-                let row = &nnue_params.l0_aux[start..start + L1_SIZE];
+                let start = idx as usize * ACC_LEN;
+                let row = &nnue_params.l0_aux[start..start + ACC_LEN];
                 for (e, &r) in expected.0.iter_mut().zip(row) {
                     *e += i16::from(r);
                 }
@@ -881,7 +884,7 @@ mod tests {
 
             // compute actual accumulator via refresh_threats
             let mut acc = crate::nnue::accumulator::Accumulator {
-                halves: [Align([0i16; L1_SIZE]), Align([0i16; L1_SIZE])],
+                halves: [Align([0i16; ACC_LEN]), Align([0i16; ACC_LEN])],
             };
             accumulator::refresh_aux(&nnue_params.l0_aux, &mut acc.halves[colour], &board, colour);
 
