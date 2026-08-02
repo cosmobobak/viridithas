@@ -32,7 +32,7 @@ pub static FT_OUTPUT_FILE: std::sync::LazyLock<
 mod simd {
     use crate::nnue::{
         network::{
-            Align, L1_CHUNK_PER_32, L1_IN, L1_OUT, L2_IN, L2_OUT, L3_IN, QA,
+            Align, L1_CHUNK_PER_32, L1_IN, L1_OUT, L2_IN, L2_OUT, L3_IN, QA, QAUX,
             layers::{AVX512CHUNK, FT_SHIFT, L1_MUL, SWISH_K},
         },
         simd::{self, F32_CHUNK, I16_CHUNK, S, U8_CHUNK, VecI32},
@@ -116,6 +116,10 @@ mod simd {
         // this is effectively a shift by another bit, so we shift by one fewer.
         const SHIFT: S = 16 - FT_SHIFT as S - cfg!(target_feature = "neon") as S;
 
+        // the auxiliary weights are quantised at QAUX rather than QA.
+        const AUX_SHIFT: S = 1;
+        const { assert!(QAUX << AUX_SHIFT >= QA, "aux scale must not undershoot QA") };
+
         // SAFETY: Breaking it down by unsafe operations:
         // 1. get_unchecked[_mut] / .as[_mut]_ptr().add(): We only ever index at most
         // div_ceil(L1_PAIR_COUNT - 1, I16_CHUNK * 2) + I16_CHUNK + L1_PAIR_COUNT
@@ -156,8 +160,8 @@ mod simd {
                     let input0bt = simd::load_i16(thrt_ptr.add(i + 1 * I16_CHUNK));
 
                     // combine PSQT and threat preäctivations
-                    let input0a = simd::add_i16(input0ap, input0at);
-                    let input0b = simd::add_i16(input0bp, input0bt);
+                    let input0a = simd::add_i16(input0ap, simd::shl_i16::<AUX_SHIFT>(input0at));
+                    let input0b = simd::add_i16(input0bp, simd::shl_i16::<AUX_SHIFT>(input0bt));
 
                     // load the right-hand pair inputs
                     let j = i + L1_PAIR_COUNT;
@@ -167,8 +171,8 @@ mod simd {
                     let input1bt = simd::load_i16(thrt_ptr.add(j + 1 * I16_CHUNK));
 
                     // combine PSQT and threat preäctivations
-                    let input1a = simd::add_i16(input1ap, input1at);
-                    let input1b = simd::add_i16(input1bp, input1bt);
+                    let input1a = simd::add_i16(input1ap, simd::shl_i16::<AUX_SHIFT>(input1at));
+                    let input1b = simd::add_i16(input1bp, simd::shl_i16::<AUX_SHIFT>(input1bt));
 
                     // crelu the left-hand inputs
                     let clipped0a = simd::min_i16(simd::max_i16(input0a, ft_zero), ft_one);

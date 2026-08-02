@@ -77,6 +77,10 @@ const QA: i16 = 255;
 const QB: i16 = 127;
 /// The weight clip applied to the L1 layer during training.
 const L1_TRAIN_CLIP: f32 = 0.99;
+/// The quantisation factor for the auxiliary feature transformer weights.
+const QAUX: i16 = 128;
+/// The weight clip applied to the auxiliary FT weights during training.
+const AUX_TRAIN_CLIP: f32 = 0.99;
 /// Chunking constant for l1
 pub const L1_CHUNK_PER_32: usize = size_of::<i32>() / size_of::<i8>();
 /// The structure of the king-buckets.
@@ -445,7 +449,12 @@ impl MergedNetwork {
             "QB is too large for the L1 training clip"
         );
 
-        const AUX_BOUND: f32 = i8::MAX as f32;
+        const AUX_BOUND: f32 = AUX_TRAIN_CLIP * QAUX as f32;
+
+        const _: () = assert!(
+            AUX_BOUND <= i8::MAX as f32,
+            "QAUX is too large for the auxiliary training clip"
+        );
 
         let mut net = QuantisedNetwork::zeroed();
         // quantise the feature transformer weights.
@@ -500,7 +509,7 @@ impl MergedNetwork {
         let mut aux_saturated = 0u64;
         let mut aux_worst = 0.0f32;
         for (src, tgt) in self.l0_aux.iter().zip(net.l0_aux.iter_mut()) {
-            let scaled = *src * f32::from(QA);
+            let scaled = *src * f32::from(QAUX);
             if scaled.abs() > AUX_BOUND {
                 aux_saturated += 1;
                 aux_worst = f32::max(aux_worst, scaled.abs());
@@ -515,7 +524,7 @@ impl MergedNetwork {
                  bound of {AUX_BOUND} (worst = {aux_worst:.1}). Clip the auxiliary weights to \
                  ±{:.4} during training to avoid this.",
                 aux_saturated as f64 / total * 100.0,
-                AUX_BOUND / f32::from(QA),
+                AUX_BOUND / f32::from(QAUX),
             );
         }
 
