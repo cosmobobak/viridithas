@@ -74,7 +74,9 @@ pub const HEADS: usize = 1;
 /// The quantisation factor for the feature transformer weights.
 const QA: i16 = 255;
 /// The quantisation factor for the L1 weights.
-const QB: i16 = 64;
+const QB: i16 = 127;
+/// The weight clip applied to the L1 layer during training.
+const L1_TRAIN_CLIP: f32 = 0.99;
 /// Chunking constant for l1
 pub const L1_CHUNK_PER_32: usize = size_of::<i32>() / size_of::<i8>();
 /// The structure of the king-buckets.
@@ -123,6 +125,8 @@ pub fn nnue_checksum() -> u64 {
     for index in REPERMUTE_INDICES {
         hasher.write_usize(index);
     }
+    hasher.write_i16(QA);
+    hasher.write_i16(QB);
     hasher.finish()
 }
 
@@ -436,7 +440,14 @@ impl MergedNetwork {
     #[allow(clippy::cast_possible_truncation, clippy::assertions_on_constants)]
     fn quantise(&self) -> Box<QuantisedNetwork> {
         const QA_BOUND: f32 = 1.98 * QA as f32;
-        const QB_BOUND: f32 = 1.98 * QB as f32;
+        const QB_BOUND: f32 = L1_TRAIN_CLIP * QB as f32;
+
+        const _: () = assert!(
+            QB_BOUND <= i8::MAX as f32,
+            "QB is too large for the L1 training clip"
+        );
+
+        const AUX_BOUND: f32 = i8::MAX as f32;
 
         let mut net = QuantisedNetwork::zeroed();
         // quantise the feature transformer weights.
@@ -488,13 +499,26 @@ impl MergedNetwork {
         }
 
         // transfer the threat plane weights:
+        let mut aux_saturated = 0u64;
+        let mut aux_worst = 0.0f32;
         for (src, tgt) in self.l0_aux.iter().zip(net.l0_aux.iter_mut()) {
             let scaled = *src * f32::from(QA);
-            if scaled.abs() > QA_BOUND {
-                eprintln!("threat plane weight {scaled} is too large (max = {QA_BOUND})");
+            if scaled.abs() > AUX_BOUND {
+                aux_saturated += 1;
+                aux_worst = f32::max(aux_worst, scaled.abs());
             }
             // directly hard-quantised to i8.
             *tgt = scaled.clamp(f32::from(i8::MIN), f32::from(i8::MAX)).round() as i8;
+        }
+        if aux_saturated > 0 {
+            let total = self.l0_aux.len() as f64;
+            eprintln!(
+                "info error {aux_saturated} auxiliary FT weights ({:.4}%) saturated the i8 storage \
+                 bound of {AUX_BOUND} (worst = {aux_worst:.1}). Clip the auxiliary weights to \
+                 ±{:.4} during training to avoid this.",
+                aux_saturated as f64 / total * 100.0,
+                AUX_BOUND / f32::from(QA),
+            );
         }
 
         // quantise the FT biases
