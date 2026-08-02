@@ -1,10 +1,20 @@
 use std::env;
 
 fn main() {
+    emit_rerun_triggers();
     prep_net();
     build_dependencies();
     generate_bindings();
     emit_git_info();
+}
+
+fn emit_rerun_triggers() {
+    println!("cargo:rerun-if-env-changed=EVALFILE");
+    println!("cargo:rerun-if-changed=src");
+    println!("cargo:rerun-if-changed=Cargo.toml");
+    if std::path::Path::new(".git/HEAD").exists() {
+        println!("cargo:rerun-if-changed=.git/HEAD");
+    }
 }
 
 fn emit_git_info() {
@@ -26,6 +36,10 @@ fn emit_git_info() {
 
 fn prep_net() {
     let net_path = env::var("EVALFILE").unwrap_or_else(|_| "viridithas.nnue.zst".into());
+    // Rebuild if the net itself is replaced
+    if std::path::Path::new(&net_path).exists() {
+        println!("cargo:rerun-if-changed={net_path}");
+    }
     if net_path == "viridithas.nnue.zst" {
         // check if net exists
         if let Err(e) = std::fs::metadata(net_path) {
