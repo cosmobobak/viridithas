@@ -18,4 +18,5 @@ pub struct StackFrame {
     pub ttpv: bool,
     pub ch_idx: ContHistIndex,
     pub reduction: i32,
+    pub cutoff_count: i32,
 }

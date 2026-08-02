@@ -98,6 +98,7 @@ const LMR_CHECK_MUL: i32 = 1361;
 const LMR_CORR_MUL: i32 = 448;
 const LMR_ALPHA_RAISE_MUL: i32 = 384;
 const LMR_BASE_OFFSET: i32 = 226;
+const LMR_CUTOFF_CNT_MUL: i32 = 553;
 const TTPV_LMR_DEPTH_MUL: i32 = 768;
 const MAIN_HISTORY: HistoryConfig = HistoryConfig::new(357, 226, 2241, 111, 561, 915);
 const CONT1_HISTORY: HistoryConfig = HistoryConfig::new(287, 150, 3729, 270, 267, 1178);
@@ -1032,6 +1033,8 @@ pub fn alpha_beta<NT: NodeType>(
     // clear out the next killer move.
     t.killer_move_table[height + 1] = None;
 
+    t.ss[height + 2].cutoff_count = 0;
+
     let tt_move = cached.and_then(|e| e.mov);
     let tt_capture = tt_move.filter(|m| t.board.is_tactical(*m));
 
@@ -1471,6 +1474,8 @@ pub fn alpha_beta<NT: NodeType>(
                 r -= correction.abs() * t.info.conf.lmr_corr_mul / 16384;
                 // reduce more for moves tried after several alpha-raises
                 r += alpha_raises * t.info.conf.lmr_alpha_raise_mul;
+                // reduce more when children keep failing high
+                r += i32::from(t.ss[height + 1].cutoff_count > 2) * t.info.conf.lmr_cutoff_cnt_mul;
 
                 t.ss[height].reduction = r;
                 r / 1024
@@ -1557,6 +1562,7 @@ pub fn alpha_beta<NT: NodeType>(
             if alpha >= beta {
                 #[cfg(feature = "stats")]
                 t.info.log_fail_high::<false>(moves_made - 1);
+                t.ss[height].cutoff_count += 1;
                 break;
             }
         }

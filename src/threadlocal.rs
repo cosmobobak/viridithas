@@ -198,6 +198,9 @@ impl<'a> ThreadData<'a> {
 
     pub fn set_up_for_search(&mut self) {
         self.killer_move_table.fill(None);
+        for se in &mut self.ss {
+            se.cutoff_count = 0;
+        }
         self.root_depth = 0;
         self.completed = 0;
         self.pvs.fill_with(PVariation::new);
