@@ -98,7 +98,8 @@ const LMR_CHECK_MUL: i32 = 1361;
 const LMR_CORR_MUL: i32 = 448;
 const LMR_ALPHA_RAISE_MUL: i32 = 384;
 const LMR_BASE_OFFSET: i32 = 226;
-const TTPV_LMR_DEPTH_MUL: i32 = 768;
+const TTPV_LMR_DEPTH_MUL: i32 = 2057;
+const LMR_DEPTH_OFFSET: i32 = -400;
 const MAIN_HISTORY: HistoryConfig = HistoryConfig::new(357, 226, 2241, 111, 561, 915);
 const CONT1_HISTORY: HistoryConfig = HistoryConfig::new(287, 150, 3729, 270, 267, 1178);
 const CONT2_HISTORY: HistoryConfig = HistoryConfig::new(177, 178, 1596, 280, 130, 943);
@@ -1338,9 +1339,6 @@ pub fn alpha_beta<NT: NodeType>(
             continue;
         }
 
-        let mut lmr_reduction = t.info.lm_table.lm_reduction(depth, moves_made);
-        lmr_reduction += t.info.conf.ttpv_lmr_depth_mul * i32::from(t.ss[height].ttpv);
-        let lmr_depth = std::cmp::max(depth - lmr_reduction / 1024, 0);
         let is_quiet = !t.board.is_tactical(m);
 
         let from = m.from();
@@ -1354,6 +1352,42 @@ pub fn alpha_beta<NT: NodeType>(
         } else {
             get_tactical_history(t, hist_to, moved, to_threat, m) / 32
         };
+
+        // calculation of LMR stuff.
+        let mut lmr_reduction = t.info.lm_table.lm_reduction(depth, moves_made + 1);
+        // tunable base offset
+        lmr_reduction += t.info.conf.lmr_base_offset;
+        // reduce more on non-PV nodes
+        lmr_reduction += i32::from(!NT::PV) * t.info.conf.lmr_non_pv_mul;
+        lmr_reduction -= i32::from(t.ss[height].ttpv) * t.info.conf.lmr_ttpv_mul;
+        // reduce more for ttpv positions whose cached score is <= alpha
+        lmr_reduction += i32::from(
+            t.ss[height].ttpv
+                && cached.is_some_and(|ce| ce.value != VALUE_NONE && ce.value <= alpha),
+        ) * t.info.conf.lmr_ttpv_fail_low_mul;
+        // reduce more on cut nodes
+        lmr_reduction += i32::from(cut_node) * t.info.conf.lmr_cut_node_mul;
+        // extend/reduce using the stat_score of the move
+        lmr_reduction -= stat_score * 1024 / t.info.conf.history_lmr_divisor;
+        // reduce refutation moves less
+        lmr_reduction -= i32::from(Some(m) == killer) * t.info.conf.lmr_refutation_mul;
+        // reduce more if not improving
+        lmr_reduction += i32::from(!improving) * t.info.conf.lmr_non_improving_mul;
+        // reduce more if the move from the transposition table is tactical
+        lmr_reduction += i32::from(tt_capture.is_some()) * t.info.conf.lmr_tt_capture_mul;
+        // reduce less when the static eval is way off-base
+        lmr_reduction -= correction.abs() * t.info.conf.lmr_corr_mul / 16384;
+        // reduce more for moves tried after several alpha-raises
+        lmr_reduction += alpha_raises * t.info.conf.lmr_alpha_raise_mul;
+
+        let lmr_depth = std::cmp::max(
+            depth
+                - (lmr_reduction
+                    + t.info.conf.ttpv_lmr_depth_mul * i32::from(t.ss[height].ttpv)
+                    + t.info.conf.lmr_depth_offset)
+                    / 1024,
+            0,
+        );
 
         // lmp & fp.
         if !NT::ROOT && !NT::PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
@@ -1442,35 +1476,10 @@ pub fn alpha_beta<NT: NodeType>(
             if NT::PV {
                 t.pv_scratch[height + 1].moves.clear();
             }
-            // calculation of LMR stuff
+            // finish off the LMR calculation started before the move was made:
             let r = if depth > 2 && moves_made > (1 + usize::from(NT::ROOT)) {
-                let mut r = t.info.lm_table.lm_reduction(depth, moves_made);
-                // tunable base offset
-                r += t.info.conf.lmr_base_offset;
-                // reduce more on non-PV nodes
-                r += i32::from(!NT::PV) * t.info.conf.lmr_non_pv_mul;
-                r -= i32::from(t.ss[height].ttpv) * t.info.conf.lmr_ttpv_mul;
-                // reduce more for ttpv positions whose cached score is <= alpha
-                r += i32::from(
-                    t.ss[height].ttpv
-                        && cached.is_some_and(|ce| ce.value != VALUE_NONE && ce.value <= alpha),
-                ) * t.info.conf.lmr_ttpv_fail_low_mul;
-                // reduce more on cut nodes
-                r += i32::from(cut_node) * t.info.conf.lmr_cut_node_mul;
-                // extend/reduce using the stat_score of the move
-                r -= stat_score * 1024 / t.info.conf.history_lmr_divisor;
-                // reduce refutation moves less
-                r -= i32::from(Some(m) == killer) * t.info.conf.lmr_refutation_mul;
-                // reduce more if not improving
-                r += i32::from(!improving) * t.info.conf.lmr_non_improving_mul;
-                // reduce more if the move from the transposition table is tactical
-                r += i32::from(tt_capture.is_some()) * t.info.conf.lmr_tt_capture_mul;
-                // reduce less if the move gives check
-                r -= i32::from(t.board.in_check()) * t.info.conf.lmr_check_mul;
-                // reduce less when the static eval is way off-base
-                r -= correction.abs() * t.info.conf.lmr_corr_mul / 16384;
-                // reduce more for moves tried after several alpha-raises
-                r += alpha_raises * t.info.conf.lmr_alpha_raise_mul;
+                // reduce less if the move gives check.
+                let r = lmr_reduction - i32::from(t.board.in_check()) * t.info.conf.lmr_check_mul;
 
                 t.ss[height].reduction = r;
                 r / 1024
