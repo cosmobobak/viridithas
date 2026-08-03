@@ -16,10 +16,10 @@ use crate::{
         EVAL_POLICY_UPDATE_MAX, FUTILITY_COEFF_0, FUTILITY_COEFF_1, HINDSIGHT_EXT_DEPTH,
         HINDSIGHT_RED_DEPTH, HINDSIGHT_RED_EVAL, HISTORY_LMR_DIVISOR, HISTORY_PRUNING_MARGIN,
         LMR_ALPHA_RAISE_MUL, LMR_BASE, LMR_BASE_OFFSET, LMR_CHECK_MUL, LMR_CORR_MUL,
-        LMR_CUT_NODE_MUL, LMR_DIVISION, LMR_NON_IMPROVING_MUL, LMR_NON_PV_MUL, LMR_REFUTATION_MUL,
-        LMR_TT_CAPTURE_MUL, LMR_TTPV_FAIL_LOW_MUL, LMR_TTPV_MUL, MAIN_HISTORY, MAIN_SEE_BOUND,
-        MAIN_STAT_SCORE_MUL, MAJOR_CORRHIST_WEIGHT, MINOR_CORRHIST_WEIGHT, NMP_DEPTH_MUL,
-        NMP_IMPROVING_MARGIN, NMP_REDUCTION_EVAL_DIVISOR, NONPAWN_CORRHIST_WEIGHT,
+        LMR_CUT_NODE_MUL, LMR_DEPTH_OFFSET, LMR_DIVISION, LMR_NON_IMPROVING_MUL, LMR_NON_PV_MUL,
+        LMR_REFUTATION_MUL, LMR_TT_CAPTURE_MUL, LMR_TTPV_FAIL_LOW_MUL, LMR_TTPV_MUL, MAIN_HISTORY,
+        MAIN_SEE_BOUND, MAIN_STAT_SCORE_MUL, MAJOR_CORRHIST_WEIGHT, MINOR_CORRHIST_WEIGHT,
+        NMP_DEPTH_MUL, NMP_IMPROVING_MARGIN, NMP_REDUCTION_EVAL_DIVISOR, NONPAWN_CORRHIST_WEIGHT,
         OPTIMISM_MATERIAL_BASE, OPTIMISM_OFFSET, PAWN_CORRHIST_WEIGHT, PAWN_HISTORY,
         PROBCUT_ADA_DIV, PROBCUT_ADA_OFFSET, PROBCUT_EVAL_DIV, PROBCUT_IMPROVING_MARGIN,
         PROBCUT_MARGIN, PROBCUT_SEE_SCALE, QS_FUTILITY, QS_SEE_BOUND, QUIET_CHECK_SEE_MARGIN,
@@ -152,6 +152,7 @@ pub struct Config {
     pub probcut_see_scale: i32,
     pub ttpv_lmr_depth_mul: i32,
     pub quiet_check_see_margin: i32,
+    pub lmr_depth_offset: i32,
 }
 
 impl Config {
@@ -243,6 +244,7 @@ impl Config {
             probcut_see_scale: PROBCUT_SEE_SCALE,
             ttpv_lmr_depth_mul: TTPV_LMR_DEPTH_MUL,
             quiet_check_see_margin: QUIET_CHECK_SEE_MARGIN,
+            lmr_depth_offset: LMR_DEPTH_OFFSET,
         }
     }
 }
@@ -403,7 +405,8 @@ impl Config {
             EVAL_POLICY_UPDATE_MAX = [self.eval_policy_update_max],
             PROBCUT_SEE_SCALE = [self.probcut_see_scale],
             TTPV_LMR_DEPTH_MUL = [self.ttpv_lmr_depth_mul],
-            QUIET_CHECK_SEE_MARGIN = [self.quiet_check_see_margin]
+            QUIET_CHECK_SEE_MARGIN = [self.quiet_check_see_margin],
+            LMR_DEPTH_OFFSET = [self.lmr_depth_offset]
         ]
     }
 
@@ -533,8 +536,9 @@ impl Config {
             OPTIMISM_MATERIAL_BASE = [self.optimism_mat_base, 1, 8192, 256],
             EVAL_POLICY_UPDATE_MAX = [self.eval_policy_update_max, 1, 4096, 8],
             PROBCUT_SEE_SCALE = [self.probcut_see_scale, 1, 1024, 16],
-            TTPV_LMR_DEPTH_MUL = [self.ttpv_lmr_depth_mul, 1, 2048, 48],
-            QUIET_CHECK_SEE_MARGIN = [self.quiet_check_see_margin, 0, 512, 25]
+            TTPV_LMR_DEPTH_MUL = [self.ttpv_lmr_depth_mul, 1, 4096, 48],
+            QUIET_CHECK_SEE_MARGIN = [self.quiet_check_see_margin, 0, 512, 25],
+            LMR_DEPTH_OFFSET = [self.lmr_depth_offset, -4096, 4096, 96]
         ]
     }
 
