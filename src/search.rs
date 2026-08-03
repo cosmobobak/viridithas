@@ -725,7 +725,7 @@ pub fn quiescence<NT: NodeType>(t: &mut ThreadData, mut alpha: i32, beta: i32) -
         key,
         height,
         best_move,
-        best_score,
+        best_score.clamp(-MATE_SCORE, MATE_SCORE),
         raw_eval,
         flag,
         0,
