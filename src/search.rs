@@ -736,6 +736,38 @@ pub fn quiescence<NT: NodeType>(t: &mut ThreadData, mut alpha: i32, beta: i32) -
     best_score
 }
 
+// Idea from Stockfish.
+/// Verify a TT cutoff against the child’s TT entry.
+fn tt_cutoff_child_disagrees(t: &mut ThreadData, hit: &CacheResult, beta: i32, depth: i32) -> bool {
+    const MIN_VERIFY_DEPTH: i32 = 7;
+
+    if depth < MIN_VERIFY_DEPTH || is_decisive(hit.value) {
+        return false;
+    }
+
+    let Some(m) = hit.mov else {
+        return false;
+    };
+
+    t.board.make_move_simple(m);
+    let child_key =
+        t.board.state.keys.zobrist ^ HM_CLOCK_KEYS[t.board.state.fifty_move_counter as usize];
+    let child = t
+        .cache
+        .probe(child_key, t.board.height(), t.board.fifty_move_counter());
+    t.board.unmake_move_base();
+
+    let Some(child) = child else {
+        return false;
+    };
+
+    if child.value == VALUE_NONE || is_decisive(child.value) {
+        return false;
+    }
+
+    (hit.value >= beta) != (-child.value >= beta)
+}
+
 /// Perform alpha-beta minimax search.
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub fn alpha_beta<NT: NodeType>(
@@ -830,6 +862,7 @@ pub fn alpha_beta<NT: NodeType>(
             && (hit.bound == Bound::Exact
                 || (hit.bound == Bound::Lower && hit.value >= beta)
                 || (hit.bound == Bound::Upper && hit.value <= alpha))
+            && !tt_cutoff_child_disagrees(t, &hit, beta, depth)
         {
             // add to the history of a quiet move that fails high here.
             if let Some(m) = hit.mov
