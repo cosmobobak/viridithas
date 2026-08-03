@@ -22,10 +22,10 @@ use crate::{
         NMP_DEPTH_MUL, NMP_IMPROVING_MARGIN, NMP_REDUCTION_EVAL_DIVISOR, NONPAWN_CORRHIST_WEIGHT,
         OPTIMISM_MATERIAL_BASE, OPTIMISM_OFFSET, PAWN_CORRHIST_WEIGHT, PAWN_HISTORY,
         PROBCUT_ADA_DIV, PROBCUT_ADA_OFFSET, PROBCUT_EVAL_DIV, PROBCUT_IMPROVING_MARGIN,
-        PROBCUT_MARGIN, PROBCUT_SEE_SCALE, QS_FUTILITY, QS_SEE_BOUND, RAZORING_COEFF_0,
-        RAZORING_COEFF_1, RFP_IMPROVING_MARGIN, RFP_MARGIN, SEE_QUIET_MARGIN, SEE_STAT_SCORE_MUL,
-        SEE_TACTICAL_MARGIN, TACT_STAT_SCORE_MUL, TACTICAL_HISTORY, TRIPLE_EXTENSION_MARGIN,
-        TTPV_LMR_DEPTH_MUL,
+        PROBCUT_MARGIN, PROBCUT_SEE_SCALE, QS_FUTILITY, QS_SEE_BOUND, QUIET_CHECK_SEE_MARGIN,
+        RAZORING_COEFF_0, RAZORING_COEFF_1, RFP_IMPROVING_MARGIN, RFP_MARGIN, SEE_QUIET_MARGIN,
+        SEE_STAT_SCORE_MUL, SEE_TACTICAL_MARGIN, TACT_STAT_SCORE_MUL, TACTICAL_HISTORY,
+        TRIPLE_EXTENSION_MARGIN, TTPV_LMR_DEPTH_MUL,
     },
     timemgmt::{
         DEFAULT_MOVES_TO_GO, FAIL_LOW_TM_BONUS, HARD_WINDOW_FRAC, INCREMENT_FRAC,
@@ -151,6 +151,7 @@ pub struct Config {
     pub eval_policy_update_max: i32,
     pub probcut_see_scale: i32,
     pub ttpv_lmr_depth_mul: i32,
+    pub quiet_check_see_margin: i32,
     pub lmr_depth_offset: i32,
 }
 
@@ -242,6 +243,7 @@ impl Config {
             eval_policy_update_max: EVAL_POLICY_UPDATE_MAX,
             probcut_see_scale: PROBCUT_SEE_SCALE,
             ttpv_lmr_depth_mul: TTPV_LMR_DEPTH_MUL,
+            quiet_check_see_margin: QUIET_CHECK_SEE_MARGIN,
             lmr_depth_offset: LMR_DEPTH_OFFSET,
         }
     }
@@ -403,6 +405,7 @@ impl Config {
             EVAL_POLICY_UPDATE_MAX = [self.eval_policy_update_max],
             PROBCUT_SEE_SCALE = [self.probcut_see_scale],
             TTPV_LMR_DEPTH_MUL = [self.ttpv_lmr_depth_mul],
+            QUIET_CHECK_SEE_MARGIN = [self.quiet_check_see_margin],
             LMR_DEPTH_OFFSET = [self.lmr_depth_offset]
         ]
     }
@@ -534,6 +537,7 @@ impl Config {
             EVAL_POLICY_UPDATE_MAX = [self.eval_policy_update_max, 1, 4096, 8],
             PROBCUT_SEE_SCALE = [self.probcut_see_scale, 1, 1024, 16],
             TTPV_LMR_DEPTH_MUL = [self.ttpv_lmr_depth_mul, 1, 4096, 48],
+            QUIET_CHECK_SEE_MARGIN = [self.quiet_check_see_margin, 0, 512, 25],
             LMR_DEPTH_OFFSET = [self.lmr_depth_offset, -4096, 4096, 96]
         ]
     }
