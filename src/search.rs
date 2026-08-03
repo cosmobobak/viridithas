@@ -1271,8 +1271,7 @@ pub fn alpha_beta<NT: NodeType>(
     let mut move_picker = MovePicker::new(tt_move, killer, t.info.conf.main_see_bound);
 
     let mut quiets_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
-    // there are never more than 32 captures in a position.
-    let mut tacticals_tried = ArrayVec::<_, 32>::new();
+    let mut tacticals_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
 
     let sext;
     if NT::ROOT {
