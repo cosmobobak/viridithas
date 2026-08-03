@@ -165,7 +165,8 @@ pub fn main_loop() -> Result<(), UciError> {
                     0
                 } else {
                     let eval = evaluate(t, 0);
-                    adj_shuffle(t, eval, t.board.fifty_move_counter())
+                    adj_shuffle(t, eval, t.board.fifty_move_counter(), 0)
+
                 };
                 println!("{eval}");
                 Ok(())

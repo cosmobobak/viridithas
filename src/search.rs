@@ -22,8 +22,8 @@ use crate::{
         types::{ContHistIndex, Square},
     },
     evaluation::{
-        MATE_SCORE, MINIMUM_TB_WIN_SCORE, evaluate, is_decisive, mate_in, mated_in, see_value,
-        tb_loss_in, tb_win_in,
+        MATE_SCORE, MAX_HEURISTIC_SCORE, MINIMUM_TB_WIN_SCORE, evaluate, is_decisive, mate_in,
+        mated_in, see_value, tb_loss_in, tb_win_in,
     },
     history::{self, caphist_piece_type},
     historytable::history_bonus,
@@ -583,7 +583,7 @@ pub fn quiescence<NT: NodeType>(t: &mut ThreadData, mut alpha: i32, beta: i32) -
             // if the cached eval is not VALUE_NONE, use it.
             raw_eval = ce.eval;
         }
-        let adj_eval = adj_shuffle(t, raw_eval, clock) + t.correction();
+        let adj_eval = adj_shuffle(t, raw_eval, clock, t.correction());
 
         // try correcting via search score from TT.
         // notably, this doesn't work for main search for ~reasons.
@@ -613,7 +613,7 @@ pub fn quiescence<NT: NodeType>(t: &mut ThreadData, mut alpha: i32, beta: i32) -
             t.ss[height].ttpv,
         );
 
-        stand_pat = adj_shuffle(t, raw_eval, clock) + t.correction();
+        stand_pat = adj_shuffle(t, raw_eval, clock, t.correction());
     }
 
     if stand_pat >= beta {
@@ -944,7 +944,7 @@ pub fn alpha_beta<NT: NodeType>(
                 t.nnue.hint_common_access(&t.board, t.nnue_params);
             }
         }
-        static_eval = adj_shuffle(t, raw_eval, clock) + correction;
+        static_eval = adj_shuffle(t, raw_eval, clock, correction);
         if ce.value != VALUE_NONE
             && match ce.bound {
                 Bound::Upper => ce.value < static_eval,
@@ -974,7 +974,7 @@ pub fn alpha_beta<NT: NodeType>(
             t.ss[height].ttpv,
         );
 
-        static_eval = adj_shuffle(t, raw_eval, clock) + correction;
+        static_eval = adj_shuffle(t, raw_eval, clock, correction);
         eval = static_eval;
     }
 
@@ -1646,7 +1646,7 @@ pub fn alpha_beta<NT: NodeType>(
         );
         // if we're not in check, and we don't have a tactical best-move,
         // and the static eval needs moving in a direction, then update corrhist.
-        let fresh_eval = adj_shuffle(t, raw_eval, clock) + t.correction();
+        let fresh_eval = adj_shuffle(t, raw_eval, clock, t.correction());
         if !(in_check
             || best_move.is_some_and(|m| {
                 t.board.is_tactical(m) && static_exchange_eval(&t.board, &t.info.conf, m, 0)
@@ -1867,26 +1867,28 @@ pub fn static_exchange_eval(board: &Board, conf: &Config, m: Move, threshold: i3
     board.turn() != colour
 }
 
-pub fn adj_shuffle(t: &ThreadData, raw_eval: i32, clock: u8) -> i32 {
-    if cfg!(feature = "datagen") {
+pub fn adj_shuffle(t: &ThreadData, raw_eval: i32, clock: u8, correction: i32) -> i32 {
+    let eval = if cfg!(feature = "datagen") {
         // during datagen, we want to use raw evals only.
         // source: chef.
-        return raw_eval;
-    }
+        raw_eval
+    } else {
+        // scale down the value estimate when there's not much
+        // material left - this will incentivize keeping material
+        // on the board if we have winning chances, and trading
+        // material off if the position is worse for us.
+        let material = t.board.material(&t.info);
+        let mat_mul = t.info.conf.material_scale_base + material;
+        let opt_mul = t.info.conf.optimism_mat_base + material;
+        let raw_eval = (raw_eval * mat_mul + t.optimism[t.board.turn()] * opt_mul / 32) / 1024;
 
-    // scale down the value estimate when there's not much
-    // material left - this will incentivize keeping material
-    // on the board if we have winning chances, and trading
-    // material off if the position is worse for us.
-    let material = t.board.material(&t.info);
-    let mat_mul = t.info.conf.material_scale_base + material;
-    let opt_mul = t.info.conf.optimism_mat_base + material;
-    let raw_eval = (raw_eval * mat_mul + t.optimism[t.board.turn()] * opt_mul / 32) / 1024;
+        // scale down the value when the fifty-move counter is high.
+        // this goes some way toward making viri realise when he's not
+        // making progress in a position.
+        raw_eval * (200 - i32::from(clock)) / 200
+    };
 
-    // scale down the value when the fifty-move counter is high.
-    // this goes some way toward making viri realise when he's not
-    // making progress in a position.
-    raw_eval * (200 - i32::from(clock)) / 200
+    (eval + correction).clamp(-MAX_HEURISTIC_SCORE, MAX_HEURISTIC_SCORE)
 }
 
 pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadData<'a> {
