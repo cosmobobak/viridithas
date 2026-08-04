@@ -78,6 +78,7 @@ impl Histories {
     }
 
     /// Update the continuation history counters for a single move.
+    #[expect(clippy::too_many_arguments)]
     pub fn update_cont_hist_single(
         &mut self,
         ctx: UpdateCtx,

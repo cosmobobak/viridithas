@@ -39,8 +39,8 @@ impl Move {
     const PROMO_SHIFT: usize = 12;
 
     pub fn new_with_promo(from: Square, to: Square, promotion: PieceType) -> Self {
-        debug_assert!(u16::from(from) & Self::SQ_MASK == u16::from(from));
-        debug_assert!(u16::from(to) & Self::SQ_MASK == u16::from(to));
+        debug_assert_eq!(u16::from(from) & Self::SQ_MASK, u16::from(from));
+        debug_assert_eq!(u16::from(to) & Self::SQ_MASK, u16::from(to));
         debug_assert_ne!(
             promotion,
             PieceType::Pawn,
@@ -67,8 +67,8 @@ impl Move {
             MoveFlags::Promotion,
             "promotion flag set without piece type"
         );
-        debug_assert!(u16::from(from) & Self::SQ_MASK == u16::from(from));
-        debug_assert!(u16::from(to) & Self::SQ_MASK == u16::from(to));
+        debug_assert_eq!(u16::from(from) & Self::SQ_MASK, u16::from(from));
+        debug_assert_eq!(u16::from(to) & Self::SQ_MASK, u16::from(to));
         debug_assert_ne!(from, to);
         let data = u16::from(from) | (u16::from(to) << Self::TO_SHIFT) | flags as u16;
         // SAFETY: data is always OR-ed with a MoveFlag, which are all non-zero, and so is always non-zero.
@@ -77,8 +77,8 @@ impl Move {
     }
 
     pub fn new(from: Square, to: Square) -> Self {
-        debug_assert!(u16::from(from) & Self::SQ_MASK == u16::from(from));
-        debug_assert!(u16::from(to) & Self::SQ_MASK == u16::from(to));
+        debug_assert_eq!(u16::from(from) & Self::SQ_MASK, u16::from(from));
+        debug_assert_eq!(u16::from(to) & Self::SQ_MASK, u16::from(to));
         debug_assert_ne!(from, to);
         let data = u16::from(from) | (u16::from(to) << Self::TO_SHIFT);
         // SAFETY: this function is only called from within the movegen routines,

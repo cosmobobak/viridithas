@@ -34,7 +34,7 @@ import seaborn as sns
 
 # sns.set_style("whitegrid")
 
-plt.rcParams["font.family"] = "TeX Gyre Heros"
+plt.rcParams["font.family"] = "TX-02"
 
 
 def load_histogram_data(csv_path: Path) -> tuple[np.ndarray, np.ndarray]:
@@ -54,6 +54,9 @@ def load_histogram_data(csv_path: Path) -> tuple[np.ndarray, np.ndarray]:
             bin_start, count = line.split(",")
             bins.append(int(bin_start))
             counts.append(int(count))
+
+    bins = bins[1:]
+    counts = counts[1:]
 
     return np.array(bins), np.array(counts)
 
