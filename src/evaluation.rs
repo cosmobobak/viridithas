@@ -60,6 +60,9 @@ pub const MINIMUM_MATE_SCORE: i32 = MATE_SCORE - 2 * MAX_DEPTH as i32 - 44;
 #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 pub const MINIMUM_TB_WIN_SCORE: i32 = TB_WIN_SCORE - 2 * MAX_DEPTH as i32 - 44;
 
+/// A threshold below which scores must be heuristic.
+pub const MAX_HEURISTIC_SCORE: i32 = MINIMUM_TB_WIN_SCORE - 1;
+
 pub const fn is_mate_score(score: i32) -> bool {
     score.abs() >= MINIMUM_MATE_SCORE
 }

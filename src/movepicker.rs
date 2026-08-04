@@ -14,7 +14,7 @@ use crate::{
     },
     history,
     historytable::{HASH_HISTORY_SIZE, MAX_HISTORY},
-    search::static_exchange_eval,
+    search::{parameters::Config, static_exchange_eval},
     stack::StackFrame,
     threadlocal::{Histories, ThreadData},
     util::MAX_DEPTH,
@@ -136,7 +136,7 @@ impl MovePicker {
                 let start = self.moves.len();
                 t.board.generate_quiets(&mut self.moves);
                 let quiets = &mut self.moves[start..];
-                Self::score_quiets(&t.board, &t.histories, &t.ss, quiets);
+                Self::score_quiets(&t.board, &t.info.conf, &t.histories, &t.ss, quiets);
             }
         }
         if self.stage == Stage::YieldRemaining {
@@ -202,6 +202,7 @@ impl MovePicker {
 
     pub fn score_quiets(
         board: &Board,
+        conf: &Config,
         histories: &Histories,
         ss: &[StackFrame; MAX_DEPTH + 1],
         ms: &mut [MoveListEntry],
@@ -245,7 +246,11 @@ impl MovePicker {
             }
             score += i32::from(histories.pawn[pawn_index][piece][to]);
 
-            score += 10_000 * i32::from(board.gives_check(m.mov));
+            if board.gives_check(m.mov)
+                && static_exchange_eval(board, conf, m.mov, -conf.quiet_check_see_margin)
+            {
+                score += 10_000;
+            }
 
             match piece.piece_type() {
                 PieceType::Pawn => {
