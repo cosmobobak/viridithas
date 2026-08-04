@@ -1768,6 +1768,10 @@ pub fn static_exchange_eval(board: &Board, conf: &Config, m: Move, threshold: i3
     let to = m.to();
     let bbs = &board.state.bbs;
 
+    if m.is_castle() {
+        return 0 >= threshold;
+    }
+
     let mut next_victim = m
         .promotion_type()
         .unwrap_or_else(|| board.state.mailbox[from].unwrap().piece_type());
