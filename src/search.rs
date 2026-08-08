@@ -100,6 +100,7 @@ const LMR_ALPHA_RAISE_MUL: i32 = 384;
 const LMR_BASE_OFFSET: i32 = 226;
 const TTPV_LMR_DEPTH_MUL: i32 = 2057;
 const LMR_DEPTH_OFFSET: i32 = -400;
+const LMR_SEXT_MUL: i32 = 512;
 const MAIN_HISTORY: HistoryConfig = HistoryConfig::new(357, 226, 2241, 111, 561, 915);
 const CONT1_HISTORY: HistoryConfig = HistoryConfig::new(287, 150, 3729, 270, 267, 1178);
 const CONT2_HISTORY: HistoryConfig = HistoryConfig::new(177, 178, 1596, 280, 130, 943);
@@ -1352,6 +1353,8 @@ pub fn alpha_beta<NT: NodeType>(
             get_tactical_history(t, hist_to, moved, to_threat, m) / 32
         };
 
+        let extension = if tt_move == Some(m) { sext } else { 0 };
+
         // calculation of LMR stuff.
         let mut lmr_reduction = t.info.lm_table.lm_reduction(depth, moves_made + 1);
         // tunable base offset
@@ -1378,6 +1381,8 @@ pub fn alpha_beta<NT: NodeType>(
         lmr_reduction -= correction.abs() * t.info.conf.lmr_corr_mul / 16384;
         // reduce more for moves tried after several alpha-raises
         lmr_reduction += alpha_raises * t.info.conf.lmr_alpha_raise_mul;
+        // reduce more when a move is extended that isn’t this one.
+        lmr_reduction += i32::from(sext > 0 && Some(m) != tt_move) * t.info.conf.lmr_sext_mul;
 
         let lmr_depth = std::cmp::max(
             depth
@@ -1450,8 +1455,6 @@ pub fn alpha_beta<NT: NodeType>(
         let nodes_before_search = t.info.nodes.get_local();
         t.info.nodes.increment();
         moves_made += 1;
-
-        let extension = if tt_move == Some(m) { sext } else { 0 };
 
         if extension >= 2 {
             t.ss[height].dextensions += 1;
