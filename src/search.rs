@@ -587,7 +587,6 @@ pub fn quiescence<NT: NodeType>(t: &mut ThreadData, mut alpha: i32, beta: i32) -
         let adj_eval = adj_shuffle(t, raw_eval, clock, t.correction());
 
         // try correcting via search score from TT.
-        // notably, this doesn't work for main search for ~reasons.
         if !is_decisive(ce.value)
             && (ce.bound == Bound::Exact
                 || ce.bound == Bound::Upper && ce.value < adj_eval

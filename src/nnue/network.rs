@@ -193,10 +193,10 @@ pub struct NNUEParams {
     pub l3_bias:           [[f32; HEADS]; OUTPUT_BUCKETS],
 }
 
-// const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = {
-//     let mut indices = [0; L1_SIZE / 2];
+// const REPERMUTE_INDICES: [usize; L1_IN / 2] = {
+//     let mut indices = [0; L1_IN / 2];
 //     let mut i = 0;
-//     while i < L1_SIZE / 2 {
+//     while i < L1_IN / 2 {
 //         indices[i] = i;
 //         i += 1;
 //     }
