@@ -24,15 +24,21 @@ fn emit_git_info() {
     println!("cargo:rustc-env=VIRIDITHAS_GIT_DIRTY={}", u8::from(dirty));
 }
 
+const LOCAL_NET_FALLBACK: &str = "/home/cosmo/viridithas/nemmerle-s2-b400.nnue.zst";
+
 fn prep_net() {
     let net_path = env::var("EVALFILE").unwrap_or_else(|_| "viridithas.nnue.zst".into());
     if net_path == "viridithas.nnue.zst" {
         // check if net exists
-        if let Err(e) = std::fs::metadata(net_path) {
+        if let Err(e) = std::fs::metadata(&net_path) {
             eprintln!("Couldn't read default net during build script! {e}");
-            eprintln!(
-                "Note: viri looks for a zstd-compressed default net in the project root called \"viridithas.nnue.zst\"."
-            );
+            eprintln!("Falling back to {LOCAL_NET_FALLBACK}");
+            if let Err(e) = std::fs::copy(LOCAL_NET_FALLBACK, &net_path) {
+                eprintln!("Couldn't copy the fallback net either! {e}");
+                eprintln!(
+                    "Note: viri looks for a zstd-compressed default net in the project root called \"viridithas.nnue.zst\"."
+                );
+            }
         }
         return;
     }
