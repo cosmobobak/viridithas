@@ -77,6 +77,28 @@ const QA: i16 = 255;
 const QB: i16 = 64;
 /// Chunking constant for l1
 pub const L1_CHUNK_PER_32: usize = size_of::<i32>() / size_of::<i8>();
+
+#[cfg(target_feature = "avx512f")]
+pub const PACK_REGS: usize = 8;
+#[cfg(target_feature = "neon")]
+pub const PACK_REGS: usize = 2;
+#[cfg(not(any(target_feature = "avx512f", target_feature = "neon")))]
+pub const PACK_REGS: usize = 4;
+
+const _: () = assert!(PACK_REGS * 8 == nnue::simd::I16_CHUNK * 2);
+
+pub const PACK_ORDER: [usize; PACK_REGS] = {
+    let mut order = [0; PACK_REGS];
+    let half = PACK_REGS / 2;
+    let mut i = 0;
+    while i < half {
+        order[i] = 2 * i;
+        order[half + i] = 2 * i + 1;
+        i += 1;
+    }
+    order
+};
+
 /// The structure of the king-buckets.
 #[rustfmt::skip]
 const HALF_BUCKET_MAP: [usize; 32] = [
@@ -121,6 +143,9 @@ pub fn nnue_checksum() -> u64 {
     let mut hasher = fxhash::FxHasher::default();
     hasher.write(EMBEDDED_NNUE);
     for index in REPERMUTE_INDICES {
+        hasher.write_usize(index);
+    }
+    for index in PACK_ORDER {
         hasher.write_usize(index);
     }
     hasher.finish()
@@ -568,34 +593,8 @@ impl QuantisedNetwork {
                 .collect();
             let num_chunks = size_of::<PermChunk<i16>>() / size_of::<i16>();
 
-            #[cfg(target_feature = "avx512f")]
-            let num_regs = 8;
-            #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-            let num_regs = 4;
-            #[cfg(all(
-                target_arch = "x86_64",
-                not(target_feature = "avx2"),
-                not(target_feature = "avx512f")
-            ))]
-            let num_regs = 2;
-            #[cfg(target_feature = "neon")]
-            let num_regs = 2;
-            #[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
-            let num_regs = 1;
-            #[cfg(target_feature = "avx512f")]
-            let order = [0, 2, 4, 6, 1, 3, 5, 7];
-            #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-            let order = [0, 2, 1, 3];
-            #[cfg(all(
-                target_arch = "x86_64",
-                not(target_feature = "avx2"),
-                not(target_feature = "avx512f")
-            ))]
-            let order = [0, 1];
-            #[cfg(target_feature = "neon")]
-            let order = [0, 1];
-            #[cfg(not(any(target_arch = "x86_64", target_feature = "neon")))]
-            let order = [0];
+            let num_regs = PACK_REGS;
+            let order = PACK_ORDER;
 
             let mut regs = vec![[0i16; 8]; num_regs];
 
