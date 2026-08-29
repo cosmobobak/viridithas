@@ -1507,7 +1507,9 @@ pub fn alpha_beta<NT: NodeType>(
                     1024 * (1 + i32::from(do_shallower_search) - i32::from(do_deeper_search));
                 // check if we're actually going to do a deeper search than before
                 // (no point if the re-search is the same as the normal one lol)
-                if new_depth - 1 > reduced_depth {
+                // we also don’t re-search if the score is decisively winning,
+                // as there’s not much of a point.
+                if new_depth - 1 > reduced_depth && score < MINIMUM_TB_WIN_SCORE {
                     score = -alpha_beta::<OffPV>(t, new_depth - 1, -alpha - 1, -alpha, !cut_node);
                 }
                 t.ss[height].reduction = 1024;
@@ -1528,8 +1530,7 @@ pub fn alpha_beta<NT: NodeType>(
             }
             // if we failed completely, then do full-window search
             let outside_window = score > alpha && score < beta;
-            // decisive scores can’t be wrong
-            if outside_window && !is_decisive(score) {
+            if outside_window && score < MINIMUM_TB_WIN_SCORE {
                 // this is a new best move, so it *is* PV.
                 score = -alpha_beta::<NT::Next>(t, new_depth - 1, -beta, -alpha, false);
             }
