@@ -821,10 +821,17 @@ pub fn alpha_beta<NT: NodeType>(
             .mov
             .is_some_and(|m| !t.board.is_pseudo_legal(m) || !t.board.is_legal(m));
 
+        // mate scores can be trusted even at low depth
+        let proven = hit.value != VALUE_NONE
+            && ((hit.value >= MINIMUM_TB_WIN_SCORE && hit.bound.is_lower() && hit.value >= beta)
+                || (hit.value <= -MINIMUM_TB_WIN_SCORE
+                    && hit.bound.is_upper()
+                    && hit.value <= alpha));
+
         if !NT::PV
             && !illegal
             && hit.value != VALUE_NONE
-            && hit.depth >= depth + i32::from(hit.value >= beta)
+            && (proven || hit.depth >= depth + i32::from(hit.value >= beta))
             && clock < 90
             && (hit.bound == Bound::Exact
                 || (hit.bound == Bound::Lower && hit.value >= beta)
@@ -1529,8 +1536,7 @@ pub fn alpha_beta<NT: NodeType>(
                 new_depth -= 1;
             }
             // if we failed completely, then do full-window search
-            let outside_window = score > alpha && score < beta;
-            if outside_window && score < MINIMUM_TB_WIN_SCORE {
+            if score > alpha && score < beta {
                 // this is a new best move, so it *is* PV.
                 score = -alpha_beta::<NT::Next>(t, new_depth - 1, -beta, -alpha, false);
             }
