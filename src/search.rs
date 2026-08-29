@@ -1527,7 +1527,9 @@ pub fn alpha_beta<NT: NodeType>(
                 new_depth -= 1;
             }
             // if we failed completely, then do full-window search
-            if score > alpha && score < beta {
+            let outside_window = score > alpha && score < beta;
+            // decisive scores can’t be wrong
+            if outside_window && !is_decisive(score) {
                 // this is a new best move, so it *is* PV.
                 score = -alpha_beta::<NT::Next>(t, new_depth - 1, -beta, -alpha, false);
             }
