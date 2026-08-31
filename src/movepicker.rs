@@ -105,7 +105,7 @@ impl MovePicker {
         }
         if self.stage == Stage::YieldGoodCaptures {
             if let Some(m) = self.yield_once(t) {
-                if m.score >= WINNING_CAPTURE_BONUS {
+                if m.score >= MIN_WINNING_SEE_SCORE {
                     return Some(m.mov);
                 }
                 // the move was not winning, so we're going to
