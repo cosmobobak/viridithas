@@ -1093,7 +1093,7 @@ impl Board {
             self.state.bbs.pieces[PieceType::Pawn] & self.state.bbs.colours[Colour::Black];
         nnue.moves[nnue.current_acc] = MovedPiece {
             from: m.from(),
-            to: m.to(),
+            to: m.history_to_square(),
             piece,
         };
         nnue.psqt_correct[nnue.current_acc + 1] = [false; 2];
