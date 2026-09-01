@@ -1670,6 +1670,25 @@ impl NNUEState {
         }
     }
 
+    /// Shunt the top of the acc stack to the bottom.
+    #[cfg(feature = "datagen")]
+    pub fn collapse_stack(&mut self) {
+        assert_eq!(self.psqt_correct[self.current_acc], [true; 2]);
+        assert_eq!(self.threat_correct[self.current_acc], [true; 2]);
+
+        if self.current_acc == 0 {
+            return;
+        }
+
+        let (bottom, top) = self.psqt_accumulators.split_at_mut(self.current_acc);
+        bottom[0].halves.clone_from(&top[0].halves);
+        let (bottom, top) = self.threat_accumulators.split_at_mut(self.current_acc);
+        bottom[0].halves.clone_from(&top[0].halves);
+        self.psqt_correct[0] = [true; 2];
+        self.threat_correct[0] = [true; 2];
+        self.current_acc = 0;
+    }
+
     pub fn hint_common_access(&mut self, pos: &Board, nnue_params: &NNUEParams) {
         self.hint_common_access_for_perspective::<White>(pos, nnue_params);
         self.hint_common_access_for_perspective::<Black>(pos, nnue_params);
