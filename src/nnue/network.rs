@@ -1578,7 +1578,7 @@ impl NNUEState {
     }
 
     /// Shunt the top of the acc stack to the bottom.
-    #[cfg(any(test, feature = "datagen"))]
+    #[cfg(feature = "datagen")]
     pub fn collapse_stack(&mut self) {
         assert_eq!(self.psqt_correct[self.current_acc], [true; 2]);
         assert_eq!(self.threat_correct[self.current_acc], [true; 2]);

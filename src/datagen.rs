@@ -1297,6 +1297,9 @@ fn relabel_batch(
 
             rollout.make_move(*mv, nnue_state);
             nnue_state.force(&rollout, nnue_params);
+            // We have to collapse the accumulator stack
+            // as games can last thousands of moves, but
+            // the accumulator arrays only go for ~128.
             nnue_state.collapse_stack();
             positions += 1;
         }
