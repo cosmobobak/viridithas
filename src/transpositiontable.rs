@@ -27,7 +27,6 @@ impl Bound {
         self as u8 & 0b10 != 0
     }
 
-    #[expect(unused)]
     pub fn is_upper(self) -> bool {
         self as u8 & 0b01 != 0
     }

@@ -821,10 +821,17 @@ pub fn alpha_beta<NT: NodeType>(
             .mov
             .is_some_and(|m| !t.board.is_pseudo_legal(m) || !t.board.is_legal(m));
 
+        // mate scores can be trusted even at low depth
+        let proven = hit.value != VALUE_NONE
+            && ((hit.value >= MINIMUM_TB_WIN_SCORE && hit.bound.is_lower() && hit.value >= beta)
+                || (hit.value <= -MINIMUM_TB_WIN_SCORE
+                    && hit.bound.is_upper()
+                    && hit.value <= alpha));
+
         if !NT::PV
             && !illegal
             && hit.value != VALUE_NONE
-            && hit.depth >= depth + i32::from(hit.value >= beta)
+            && (proven || hit.depth >= depth + i32::from(hit.value >= beta))
             && clock < 90
             && (hit.bound == Bound::Exact
                 || (hit.bound == Bound::Lower && hit.value >= beta)
@@ -1507,7 +1514,9 @@ pub fn alpha_beta<NT: NodeType>(
                     1024 * (1 + i32::from(do_shallower_search) - i32::from(do_deeper_search));
                 // check if we're actually going to do a deeper search than before
                 // (no point if the re-search is the same as the normal one lol)
-                if new_depth - 1 > reduced_depth {
+                // we also don’t re-search if the score is decisively winning,
+                // as there’s not much of a point.
+                if new_depth - 1 > reduced_depth && score < MINIMUM_TB_WIN_SCORE {
                     score = -alpha_beta::<OffPV>(t, new_depth - 1, -alpha - 1, -alpha, !cut_node);
                 }
                 t.ss[height].reduction = 1024;
