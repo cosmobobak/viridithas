@@ -1264,6 +1264,7 @@ fn relabel_batch(
 
     for game in &mut games {
         let mut rollout = game.initial_position();
+        nnue_state.reïnit_from(&rollout, nnue_params);
         for (mv, slot) in game.buffer_mut() {
             // we preserve decisive evaluations.
             // the ×2 is because we have changed the mate value
@@ -1275,11 +1276,6 @@ fn relabel_batch(
             let new_value = if is_decisive(value * 2) {
                 value
             } else {
-                // why reïnitialise every time?
-                // we cannot use efficient incremental updates,
-                // as games can run for >1000 ply, which is much
-                // beyond the 128 ply limit that we have at time of writing.
-                nnue_state.reïnit_from(&rollout, nnue_params);
                 // the raw output can be far outside the heuristic range (and
                 // even outside i16) in positions with insane material
                 // imbalances, so we clamp it.
@@ -1299,7 +1295,12 @@ fn relabel_batch(
 
             slot.set(new_value);
 
-            rollout.make_move_simple(*mv);
+            rollout.make_move(*mv, nnue_state);
+            nnue_state.force(&rollout, nnue_params);
+            // We have to collapse the accumulator stack
+            // as games can last thousands of moves, but
+            // the accumulator arrays only go for ~128.
+            nnue_state.collapse_stack();
             positions += 1;
         }
 
