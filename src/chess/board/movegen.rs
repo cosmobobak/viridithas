@@ -29,6 +29,16 @@ pub const MAX_POSITION_MOVES: usize = 218;
 pub struct MoveListEntry {
     pub score: i32,
     pub mov: Move,
+    pad: u16,
+}
+
+const _: () = assert!(std::mem::size_of::<MoveListEntry>() == 8);
+const _: () = assert!(std::mem::offset_of!(MoveListEntry, score) == 0);
+
+impl MoveListEntry {
+    pub const fn new(mov: Move, score: i32) -> Self {
+        Self { score, mov, pad: 0 }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -44,7 +54,7 @@ impl MoveList {
     }
 
     fn push(&mut self, m: Move) {
-        self.inner.push(MoveListEntry { mov: m, score: 0 });
+        self.inner.push(MoveListEntry::new(m, 0));
     }
 
     pub fn iter_moves(&self) -> impl Iterator<Item = &Move> {

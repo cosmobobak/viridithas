@@ -45,22 +45,78 @@ pub struct MovePicker {
     see_threshold: i32,
 }
 
+#[cfg(target_feature = "avx512f")]
 fn fast_select(entries: &[Cell<MoveListEntry>]) -> Option<&Cell<MoveListEntry>> {
-    #![allow(clippy::cast_possible_truncation)]
-    fn to_u64(e: MoveListEntry) -> u64 {
-        #![allow(clippy::cast_sign_loss)]
-        let widened = i64::from(e.score);
-        let offset = widened - i64::from(i32::MIN);
-        (offset as u64) << 32
+    use crate::nnue::simd;
+
+    if entries.is_empty() {
+        return None;
     }
-    let best = entries
-        .iter()
-        .enumerate()
-        .map(|(i, e)| to_u64(e.get()) | i as u64)
-        .max()?;
-    let best_idx = best & 0xFFFF_FFFF;
-    // SAFETY: best_idx is guaranteed to be in-bounds.
-    unsafe { Some(entries.get_unchecked(best_idx as usize)) }
+
+    // SAFETY: This is largely an explicit rewrite of the intended
+    // vectorisation of the old version of this function, which can
+    // be found here:
+    // https://github.com/cosmobobak/viridithas/blob/e605537c8a0ffe78e250d9419924ff6b23e98bad/src/movepicker.rs#L48
+    //
+    // We do load OOB, but mask.
+    let best = unsafe {
+        // base ptr
+        #[expect(clippy::cast_ptr_alignment, reason = "unaligned loads are fine")]
+        let base = entries.as_ptr().cast::<u64>();
+        let sign = simd::splat_u64(1 << 63);
+        let step = simd::splat_u64(simd::U64_CHUNK as u64);
+        // indexes for mixing in to scores.
+        // starts at [0, 1, 2, 3, …]
+        let mut index = simd::iota_u64();
+        // accumulator for maximal elements
+        let mut best = simd::zero_u64();
+        let mut i = 0;
+        while i < entries.len() {
+            // mask off a potential OOB tail:
+            let remaining = entries.len() - i;
+            let mask = if remaining >= simd::U64_CHUNK {
+                u8::MAX
+            } else {
+                (1 << remaining) - 1
+            };
+            // load elements
+            let loaded = simd::maskz_loadu_u64(mask, base.add(i));
+            // we want this:
+            // > key = (score - i32::MIN) << 32 | index
+            // subtracting i32::MIN shifts the i32 range up
+            // into the u32 range, which makes it safe to use
+            // as the top bits of our comparison target.
+            // N.B. we XOR by 1 << 63 instead of subtracting
+            // i32::MIN, which does the same thing.
+            let keys = simd::or_u64(simd::xor_u64(simd::shl_u64::<32>(loaded), sign), index);
+            // max the valid lanes
+            best = simd::mask_max_u64(best, mask, best, keys);
+            // increments
+            index = simd::add_u64(index, step);
+            i += simd::U64_CHUNK;
+        }
+        simd::reduce_max_u64(best)
+    };
+
+    #[expect(clippy::cast_possible_truncation)]
+    let best_idx = (best & 0xFFFF_FFFF) as usize;
+    // SAFETY: by construction, the low bits are a valid index.
+    unsafe { Some(entries.get_unchecked(best_idx)) }
+}
+
+#[cfg(not(target_feature = "avx512f"))]
+fn fast_select(entries: &[Cell<MoveListEntry>]) -> Option<&Cell<MoveListEntry>> {
+    let (first, rest) = entries.split_first()?;
+    let mut best = first;
+    let mut best_score = first.get().score;
+    for entry in rest {
+        let score = entry.get().score;
+        if score >= best_score {
+            best_score = score;
+            best = entry;
+        }
+    }
+    Some(best)
 }
 
 impl MovePicker {
@@ -172,10 +228,10 @@ impl MovePicker {
                 && !static_exchange_eval(&t.board, &t.info.conf, best.mov, self.see_threshold)
             {
                 // if it fails SEE, then we want to try the next best move, and de-mark this one.
-                best_entry_ref.set(MoveListEntry {
-                    score: best.score - WINNING_CAPTURE_BONUS,
-                    mov: best.mov,
-                });
+                best_entry_ref.set(MoveListEntry::new(
+                    best.mov,
+                    best.score - WINNING_CAPTURE_BONUS,
+                ));
                 continue;
             }
 
