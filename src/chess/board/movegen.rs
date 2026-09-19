@@ -24,7 +24,7 @@ use crate::{
 
 pub const MAX_POSITION_MOVES: usize = 218;
 
-#[repr(C)]
+#[repr(C, align(8))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MoveListEntry {
     pub score: i32,
