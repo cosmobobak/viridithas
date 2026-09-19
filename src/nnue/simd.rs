@@ -402,12 +402,80 @@ mod avx512 {
         }
     }
 
+    #[inline(always)]
+    pub unsafe fn zero_u64() -> VecI64 {
+        unsafe {
+            return VecI64::from_raw(_mm512_setzero_si512());
+        }
+    }
+    #[inline(always)]
+    pub unsafe fn splat_u64(n: u64) -> VecI64 {
+        #![allow(clippy::cast_possible_wrap)]
+        unsafe {
+            return VecI64::from_raw(_mm512_set1_epi64(n as i64));
+        }
+    }
+    #[inline(always)]
+    pub unsafe fn iota_u64() -> VecI64 {
+        unsafe {
+            return VecI64::from_raw(_mm512_setr_epi64(0, 1, 2, 3, 4, 5, 6, 7));
+        }
+    }
+    #[inline(always)]
+    pub unsafe fn add_u64(vec0: VecI64, vec1: VecI64) -> VecI64 {
+        unsafe {
+            return VecI64::from_raw(_mm512_add_epi64(vec0.inner(), vec1.inner()));
+        }
+    }
+    #[inline(always)]
+    pub unsafe fn shl_u64<const N: u32>(vec: VecI64) -> VecI64 {
+        unsafe {
+            return VecI64::from_raw(_mm512_slli_epi64::<N>(vec.inner()));
+        }
+    }
+    #[inline(always)]
+    pub unsafe fn xor_u64(vec0: VecI64, vec1: VecI64) -> VecI64 {
+        unsafe {
+            return VecI64::from_raw(_mm512_xor_si512(vec0.inner(), vec1.inner()));
+        }
+    }
+    #[inline(always)]
+    pub unsafe fn or_u64(vec0: VecI64, vec1: VecI64) -> VecI64 {
+        unsafe {
+            return VecI64::from_raw(_mm512_or_si512(vec0.inner(), vec1.inner()));
+        }
+    }
+    #[inline(always)]
+    pub unsafe fn maskz_loadu_u64(mask: u8, src: *const u64) -> VecI64 {
+        unsafe {
+            return VecI64::from_raw(_mm512_maskz_loadu_epi64(mask, src.cast()));
+        }
+    }
+    #[inline(always)]
+    pub unsafe fn mask_max_u64(src: VecI64, mask: u8, vec0: VecI64, vec1: VecI64) -> VecI64 {
+        unsafe {
+            return VecI64::from_raw(_mm512_mask_max_epu64(
+                src.inner(),
+                mask,
+                vec0.inner(),
+                vec1.inner(),
+            ));
+        }
+    }
+    #[inline(always)]
+    pub unsafe fn reduce_max_u64(vec: VecI64) -> u64 {
+        unsafe {
+            return _mm512_reduce_max_epu64(vec.inner());
+        }
+    }
+
     pub const U8_CHUNK: usize = std::mem::size_of::<VecI8>() / std::mem::size_of::<u8>();
     pub const I8_CHUNK_I32: usize = std::mem::size_of::<i32>() / std::mem::size_of::<u8>();
     pub const I8_CHUNK: usize = std::mem::size_of::<VecI8>() / std::mem::size_of::<i8>();
     pub const I16_CHUNK: usize = std::mem::size_of::<VecI16>() / std::mem::size_of::<i16>();
     pub const I32_CHUNK: usize = std::mem::size_of::<VecI32>() / std::mem::size_of::<i32>();
     pub const F32_CHUNK: usize = std::mem::size_of::<VecF32>() / std::mem::size_of::<f32>();
+    pub const U64_CHUNK: usize = std::mem::size_of::<VecI64>() / std::mem::size_of::<u64>();
 }
 
 #[cfg(not(any(target_feature = "neon", target_feature = "avx512f")))]
