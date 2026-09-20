@@ -859,6 +859,26 @@ pub fn alpha_beta<NT: NodeType>(
                 );
             }
 
+            // update corrhist
+            if !in_check
+                && hit.eval != VALUE_NONE
+                && !is_decisive(hit.value)
+                && !hit.mov.is_some_and(|m| {
+                    t.board.is_tactical(m) && static_exchange_eval(&t.board, &t.info.conf, m, 0)
+                })
+            {
+                let adj = adj_shuffle(t, hit.eval, clock, t.correction());
+                let valid = match hit.bound {
+                    Bound::Exact => true,
+                    Bound::Lower => hit.value > adj,
+                    Bound::Upper => hit.value < adj,
+                    Bound::Empty => false,
+                };
+                if valid {
+                    t.update_correction_history(hit.depth.min(depth), 0, hit.value - adj);
+                }
+            }
+
             return hit.value;
         }
 
