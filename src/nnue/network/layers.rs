@@ -32,7 +32,7 @@ pub static FT_OUTPUT_FILE: std::sync::LazyLock<
 mod simd {
     use crate::nnue::{
         network::{
-            Align, L1_CHUNK_PER_32, L1_IN, L1_OUT, L2_IN, L2_OUT, L3_IN, QA,
+            Align, L1_CHUNK_PER_32, L1_IN, L1_OUT, L2_IN, L2_OUT, L3_IN, L3_OUT, L4_IN, QA,
             layers::{AVX512CHUNK, FT_SHIFT, L1_MUL, SWISH_K},
         },
         simd::{self, F32_CHUNK, I16_CHUNK, S, U8_CHUNK, VecI32},
@@ -380,7 +380,7 @@ mod simd {
     }
 
     #[allow(clippy::needless_range_loop, clippy::cast_ptr_alignment)]
-    pub fn propagate_l2(
+    pub fn propagate_glu(
         inputs: &Align<[f32; L2_IN]>,
         weights: &Align<[f32; L2_IN * L2_OUT * 2]>,
         biases: &Align<[f32; L2_OUT * 2]>,
@@ -388,6 +388,7 @@ mod simd {
     ) {
         // skip connection safety:
         const { assert!(L2_IN == L2_OUT) };
+        const { assert!(L3_IN == L2_IN && L3_OUT == L2_OUT) };
         // SAFETY: Breaking it down by unsafe operations:
         // 1. get_unchecked[_mut] / .as[_mut]_ptr().add(): We only ever index at most (L2_OUT * 2 / F32_CHUNK - 1) * F32_CHUNK
         // into the `sums` and `biases` arrays. This is in bounds, as `sums` has length L2_OUT * 2 and
@@ -435,9 +436,9 @@ mod simd {
     }
 
     #[allow(clippy::modulo_one)]
-    pub fn propagate_l3(
-        inputs: &Align<[f32; L3_IN]>,
-        weights: &Align<[f32; L3_IN]>,
+    pub fn propagate_l4(
+        inputs: &Align<[f32; L4_IN]>,
+        weights: &Align<[f32; L4_IN]>,
         bias: f32,
         output: &mut f32,
     ) {
@@ -446,15 +447,15 @@ mod simd {
         // We multiply the weights by the inputs, and sum them up
         const NUM_SUMS: usize = AVX512CHUNK / F32_CHUNK;
         // SAFETY: Breaking it down by unsafe operations:
-        // 1. get_unchecked[_mut] / .as[_mut]_ptr().add(): We only ever index at most (L3_SIZE / F32_CHUNK - 1) * F32_CHUNK
-        // into the `weights` and `inputs` arrays. This is in bounds, as `weights` has length L3_SIZE and
-        // `inputs` has length L3_SIZE.
+        // 1. get_unchecked[_mut] / .as[_mut]_ptr().add(): We only ever index at most (L4_IN / F32_CHUNK - 1) * F32_CHUNK
+        // into the `weights` and `inputs` arrays. This is in bounds, as `weights` has length L4_IN and
+        // `inputs` has length L4_IN.
         // 2. SIMD instructions: All of our loads and stores are aligned.
         unsafe {
             let mut sum_vecs = [simd::zero_f32(); NUM_SUMS];
 
             // affine transform
-            for i in 0..L3_IN / F32_CHUNK {
+            for i in 0..L4_IN / F32_CHUNK {
                 let act = simd::load_f32(inputs.as_ptr().add(i * F32_CHUNK));
                 let weight = simd::load_f32(weights.as_ptr().add(i * F32_CHUNK));
                 sum_vecs[i % NUM_SUMS] = simd::madd_f32(act, weight, sum_vecs[i % NUM_SUMS]);
