@@ -213,9 +213,11 @@ impl Cache {
     pub fn resize(&mut self, bytes: usize, threads: &[threadpool::WorkerThread]) {
         let start = std::time::Instant::now();
 
+        // free old table
         self.table = Table::empty();
 
         let new_len = bytes / size_of::<RawCacheSet>();
+
         self.table = Table::new(new_len, threads);
 
         println!(
