@@ -70,11 +70,11 @@ fxhash = "0.2.1"
 term_size = "0.3.2"
 vec1 = "1.12.1"
 
-# for allocation management on linux
+# for hugepages on linux
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2"
 
-# for terminal output and allocation management on windows
+# for terminal output and hugepages on windows
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 version = "0.61"
 features = [
