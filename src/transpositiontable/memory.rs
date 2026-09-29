@@ -7,21 +7,19 @@ use crate::threadpool::WorkerThread;
 
 #[derive(Debug)]
 pub(super) struct Table {
-    ptr: NonNull<RawCacheSet>,
-    len: usize,
+    ptr: NonNull<[RawCacheSet]>,
 }
 
-// Safety: Table uniquely owns its allocation.
+// SAFETY: Table uniquely owns its allocation.
 unsafe impl Send for Table {}
 
-// Safety: Shared access exposes only atomic entries.
+// SAFETY: Shared access exposes only atomic entries.
 unsafe impl Sync for Table {}
 
 impl Table {
     pub const fn empty() -> Self {
         Self {
-            ptr: NonNull::dangling(),
-            len: 0,
+            ptr: NonNull::slice_from_raw_parts(NonNull::dangling(), 0),
         }
     }
 
@@ -35,11 +33,13 @@ impl Table {
         let ptr = NonNull::new(platform::allocate(layout).cast())
             .unwrap_or_else(|| std::alloc::handle_alloc_error(layout));
 
-        let table = Self { ptr, len };
+        let table = Self {
+            ptr: NonNull::slice_from_raw_parts(ptr, len),
+        };
 
         assert!(!threads.is_empty());
 
-        // Safety: Zero initialize every atomic entry before any slice is exposed.
+        // SAFETY: Zeroed memory is a legal bitpattern for AtomicUXX.
         unsafe { threaded_memset_zero(table.ptr.as_ptr().cast(), layout.size(), threads) };
 
         table
@@ -50,106 +50,19 @@ impl Deref for Table {
     type Target = [RawCacheSet];
 
     fn deref(&self) -> &Self::Target {
-        // Safety: We own the initialized entries or an aligned dangling empty slice
-        unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.len) }
+        // SAFETY: Slice is empty or an allocation owned by Table.
+        unsafe { self.ptr.as_ref() }
     }
 }
 
 impl Drop for Table {
     fn drop(&mut self) {
-        if self.len != 0 {
-            let layout = Layout::array::<RawCacheSet>(self.len).unwrap();
+        if !self.ptr.is_empty() {
+            let layout = Layout::array::<RawCacheSet>(self.ptr.len()).unwrap();
 
-            // Safety: This allocation belongs to us, and RawCacheSet needs no drop.
+            // SAFETY: RawCacheSet is POD and allocation is owned by Table.
             unsafe { platform::deallocate(self.ptr.as_ptr().cast(), layout) };
         }
-    }
-}
-
-#[cfg(target_os = "linux")]
-mod platform {
-    use std::{alloc::Layout, ptr, sync::OnceLock};
-
-    fn page_sizes() -> (usize, usize) {
-        static SIZES: OnceLock<(usize, usize)> = OnceLock::new();
-        *SIZES.get_or_init(|| {
-            // Safety: sysconf has no pointer arguments.
-            let page = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
-
-            assert!(page > 0, "Cannot determine system page size");
-
-            let page = page as usize;
-            let huge =
-                std::fs::read_to_string("/sys/kernel/mm/transparent_hugepage/hpage_pmd_size")
-                    .ok()
-                    .and_then(|s| s.trim().parse::<usize>().ok())
-                    .filter(|&size| size >= page && size.is_power_of_two())
-                    .unwrap_or(page);
-
-            (page, huge)
-        })
-    }
-
-    pub fn allocate(layout: Layout) -> *mut u8 {
-        let (page, alignment) = page_sizes();
-
-        assert!(layout.align() <= page);
-
-        let Some(size) = layout.size().checked_next_multiple_of(page) else {
-            return ptr::null_mut();
-        };
-
-        // Safety: All mappings are private, writable, and anonymous; trimming removes only the
-        //         whole pages outside the retained allocation.
-        unsafe {
-            let map = |bytes| {
-                libc::mmap(
-                    ptr::null_mut(),
-                    bytes,
-                    libc::PROT_READ | libc::PROT_WRITE,
-                    libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
-                    -1,
-                    0,
-                )
-            };
-
-            let mut memory = libc::MAP_FAILED;
-            if let Some(reserved) = size.checked_add(alignment) {
-                let mapping = map(reserved);
-                if mapping != libc::MAP_FAILED {
-                    let offset = (alignment - mapping.addr() % alignment) % alignment;
-                    let aligned = mapping.cast::<u8>().add(offset);
-
-                    if offset != 0 && libc::munmap(mapping, offset) != 0 {
-                        std::process::abort();
-                    }
-
-                    if libc::munmap(aligned.add(size).cast(), alignment - offset) != 0 {
-                        std::process::abort();
-                    }
-
-                    memory = aligned.cast();
-                }
-            }
-
-            if memory == libc::MAP_FAILED {
-                memory = map(size);
-            }
-
-            if memory == libc::MAP_FAILED {
-                return ptr::null_mut();
-            }
-
-            libc::madvise(memory, size, libc::MADV_HUGEPAGE);
-
-            memory.cast()
-        }
-    }
-
-    pub unsafe fn deallocate(ptr: *mut u8, layout: Layout) {
-        // Safety: The caller provides the original allocation here. munmap rounds the length to the
-        // nearest page size.
-        unsafe { libc::munmap(ptr.cast(), layout.size()) };
     }
 }
 
@@ -271,17 +184,39 @@ mod platform {
     }
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+#[cfg(not(target_os = "windows"))]
 mod platform {
     use std::alloc::{self, Layout};
 
+    use crate::util::MEGABYTE;
+
+    const HUGE_PAGE: usize = if cfg!(target_os = "linux") {
+        2 * MEGABYTE
+    } else {
+        1
+    };
+
+    fn huge_layout(layout: Layout) -> Layout {
+        layout.align_to(HUGE_PAGE).unwrap().pad_to_align()
+    }
+
     pub fn allocate(layout: Layout) -> *mut u8 {
-        // Safety: Non-empty and valid layouts are allocated.
-        unsafe { alloc::alloc(layout) }
+        let layout = huge_layout(layout);
+
+        // SAFETY: `layout` has a non-zero size.
+        let ptr = unsafe { alloc::alloc(layout) };
+
+        #[cfg(target_os = "linux")]
+        if !ptr.is_null() {
+            // SAFETY: Range correct.
+            unsafe { libc::madvise(ptr.cast(), layout.size(), libc::MADV_HUGEPAGE) };
+        }
+
+        ptr
     }
 
     pub unsafe fn deallocate(ptr: *mut u8, layout: Layout) {
-        // Safety: The caller provides the original allocation here.
-        unsafe { alloc::dealloc(ptr, layout) };
+        // SAFETY: `ptr` and `layout` must be the same as in the original allocation.
+        unsafe { alloc::dealloc(ptr, huge_layout(layout)) };
     }
 }
