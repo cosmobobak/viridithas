@@ -89,7 +89,7 @@ Viridithas is free software, licensed under the [GNU Affero General Public Licen
   dedicated to the public domain under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
 - Viridithas bundles third-party components under their own AGPLv3-compatible terms; see 
   [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
-- Versions prior to 20.0.0 were released under the MIT License and remain available under those terms.
+- Versions up to and including 20.0.0 were released under the MIT License and remain available under those terms.
 
 By contributing to Viridithas, you agree that your contributions will be licensed under the `AGPL-3.0-only` license.
 
