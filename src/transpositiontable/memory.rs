@@ -68,118 +68,88 @@ impl Drop for Table {
 
 #[cfg(target_os = "windows")]
 mod platform {
-    use std::{alloc::Layout, mem::size_of, ptr, sync::Mutex};
+    use std::{alloc::Layout, ptr, sync::OnceLock};
     use windows_sys::Win32::{
-        Foundation::{CloseHandle, ERROR_SUCCESS, GetLastError},
+        Foundation::{CloseHandle, ERROR_SUCCESS, GetLastError, LUID},
         Security::{
-            AdjustTokenPrivileges, LookupPrivilegeValueA, SE_PRIVILEGE_ENABLED,
-            TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY,
+            AdjustTokenPrivileges, LUID_AND_ATTRIBUTES, LookupPrivilegeValueA,
+            SE_PRIVILEGE_ENABLED, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES,
         },
         System::{
             Memory::{
                 GetLargePageMinimum, MEM_COMMIT, MEM_LARGE_PAGES, MEM_RELEASE, MEM_RESERVE,
-                PAGE_READWRITE, VirtualAlloc, VirtualFree,
+                PAGE_READWRITE, VIRTUAL_ALLOCATION_TYPE, VirtualAlloc, VirtualFree,
             },
             Threading::{GetCurrentProcess, OpenProcessToken},
         },
     };
 
-    unsafe fn allocate_huge(bytes: usize) -> *mut u8 {
-        // Safety: Referencing valid local structures and the token is closed after restoring the
-        //         privilege's previous state.
+    fn large_page_size() -> Option<usize> {
+        static SIZE: OnceLock<Option<usize>> = OnceLock::new();
+        *SIZE.get_or_init(|| {
+            // SAFETY: GetLargePageMinimum has no preconditions.
+            let size = unsafe { GetLargePageMinimum() };
+            (size != 0 && enable_lock_memory_privilege()).then_some(size)
+        })
+    }
+
+    fn enable_lock_memory_privilege() -> bool {
+        // SAFETY: All pointers are to valid locals, and the token is closed before returning.
         unsafe {
-            let page = GetLargePageMinimum();
-            if page == 0 || bytes < page {
-                return ptr::null_mut();
-            }
-
-            let Some(size) = bytes.checked_next_multiple_of(page) else {
-                return ptr::null_mut();
-            };
-
-            static LOCK: Mutex<()> = Mutex::new(());
-            let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
-
             let mut token = ptr::null_mut();
-            if OpenProcessToken(
-                GetCurrentProcess(),
-                TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY,
-                &mut token,
-            ) == 0
-            {
-                return ptr::null_mut();
+            if OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES, &raw mut token) == 0 {
+                return false;
             }
 
-            let mut requested: TOKEN_PRIVILEGES = std::mem::zeroed();
-            requested.PrivilegeCount = 1;
-            requested.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
-
-            if LookupPrivilegeValueA(
-                ptr::null(),
-                c"SeLockMemoryPrivilege".as_ptr().cast(),
-                &mut requested.Privileges[0].Luid,
-            ) == 0
-            {
-                CloseHandle(token);
-                return ptr::null_mut();
-            }
-
-            let mut previous: TOKEN_PRIVILEGES = std::mem::zeroed();
-            let mut previous_size = size_of::<TOKEN_PRIVILEGES>() as u32;
-
-            let adjusted = AdjustTokenPrivileges(
-                token,
-                0,
-                &requested,
-                previous_size,
-                &mut previous,
-                &mut previous_size,
-            );
-            let error = GetLastError();
-
-            let memory = if adjusted != 0 && error == ERROR_SUCCESS {
-                VirtualAlloc(
-                    ptr::null(),
-                    size,
-                    MEM_RESERVE | MEM_COMMIT | MEM_LARGE_PAGES,
-                    PAGE_READWRITE,
-                )
-            } else {
-                ptr::null_mut()
+            let mut privileges = TOKEN_PRIVILEGES {
+                PrivilegeCount: 1,
+                Privileges: [LUID_AND_ATTRIBUTES {
+                    Luid: LUID::default(),
+                    Attributes: SE_PRIVILEGE_ENABLED,
+                }],
             };
 
-            if adjusted != 0 && previous.PrivilegeCount != 0 {
-                AdjustTokenPrivileges(token, 0, &previous, 0, ptr::null_mut(), ptr::null_mut());
-            }
+            let name = c"SeLockMemoryPrivilege".as_ptr().cast();
+            let luid = &raw mut privileges.Privileges[0].Luid;
+
+            let enabled = LookupPrivilegeValueA(ptr::null(), name, luid) != 0
+                && AdjustTokenPrivileges(
+                    token,
+                    0,
+                    &raw const privileges,
+                    0,
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                ) != 0
+                && GetLastError() == ERROR_SUCCESS;
 
             CloseHandle(token);
+            enabled
+        }
+    }
 
-            memory.cast()
+    fn virtual_alloc(size: usize, flags: VIRTUAL_ALLOCATION_TYPE) -> *mut u8 {
+        // SAFETY: Allocating fresh memory.
+        unsafe {
+            VirtualAlloc(
+                ptr::null(),
+                size,
+                MEM_RESERVE | MEM_COMMIT | flags,
+                PAGE_READWRITE,
+            )
+            .cast()
         }
     }
 
     pub fn allocate(layout: Layout) -> *mut u8 {
-        // Safety: Either way, private writable memory with sufficient alignment (for RawCacheSet)
-        //         is allocated; VirtualFree will release either kind.
-        unsafe {
-            let memory = allocate_huge(layout.size());
-
-            if memory.is_null() {
-                VirtualAlloc(
-                    ptr::null(),
-                    layout.size(),
-                    MEM_RESERVE | MEM_COMMIT,
-                    PAGE_READWRITE,
-                )
-                .cast()
-            } else {
-                memory
-            }
-        }
+        large_page_size()
+            .map(|page| virtual_alloc(layout.size().next_multiple_of(page), MEM_LARGE_PAGES))
+            .filter(|ptr| !ptr.is_null())
+            .unwrap_or_else(|| virtual_alloc(layout.size(), 0))
     }
 
     pub unsafe fn deallocate(ptr: *mut u8, _: Layout) {
-        // Safety: The caller provides the original allocation here.
+        // SAFETY: `ptr` came from VirtualAlloc.
         unsafe { VirtualFree(ptr.cast(), 0, MEM_RELEASE) };
     }
 }
