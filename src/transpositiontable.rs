@@ -2,7 +2,6 @@
 
 use std::{
     mem::{MaybeUninit, size_of},
-    ptr::slice_from_raw_parts_mut,
     sync::atomic::{AtomicU8, AtomicU64, Ordering},
 };
 
@@ -12,6 +11,10 @@ use crate::{
     threadpool::{self, ScopeExt},
     util::{MEGABYTE, SendPtr, VALUE_NONE},
 };
+
+mod memory;
+
+use memory::Table;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -177,7 +180,7 @@ const _CLUSTER_SIZE: () = assert!(
 /// The cache for Viridithas’s search. SMP threads communicate by reading and writing this.
 #[derive(Debug)]
 pub struct Cache {
-    table: Vec<RawCacheSet>,
+    table: Table,
     age: AtomicU8,
 }
 
@@ -202,27 +205,19 @@ pub struct CacheResult {
 impl Cache {
     pub const fn new() -> Self {
         Self {
-            table: Vec::new(),
+            table: Table::empty(),
             age: AtomicU8::new(0),
         }
     }
 
     pub fn resize(&mut self, bytes: usize, threads: &[threadpool::WorkerThread]) {
         let start = std::time::Instant::now();
+
+        self.table = Table::empty();
+
         let new_len = bytes / size_of::<RawCacheSet>();
-        // dealloc the old table:
-        self.table = Vec::new();
-        // construct a new vec:
-        // SAFETY: zeroed memory is a legal bitpattern for AtomicUXX.
-        unsafe {
-            let layout = std::alloc::Layout::array::<RawCacheSet>(new_len).unwrap();
-            let ptr = std::alloc::alloc(layout);
-            if ptr.is_null() {
-                std::alloc::handle_alloc_error(layout);
-            }
-            threaded_memset_zero(ptr.cast(), new_len * size_of::<RawCacheSet>(), threads);
-            self.table = Box::from_raw(slice_from_raw_parts_mut(ptr.cast(), new_len)).into();
-        }
+        self.table = Table::new(new_len, threads);
+
         println!(
             "info string hash initialisation of {}mb complete in {}ms",
             bytes / MEGABYTE,
