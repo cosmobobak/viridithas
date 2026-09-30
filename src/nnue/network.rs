@@ -26,7 +26,7 @@ use crate::{
     },
     image::{self, Image},
     nnue,
-    util::{Align, MAX_DEPTH},
+    util::{Align, MAX_DEPTH, MEGABYTE},
 };
 
 use super::accumulator::{self, Accumulator};
@@ -777,6 +777,9 @@ fn repermute_l0_aux(
 }
 
 impl NNUEParams {
+    /// Size of the mapped network, padded to 2MB.
+    const WEIGHT_FILE_LEN: usize = size_of::<Self>().next_multiple_of(2 * MEGABYTE);
+
     #[allow(clippy::too_many_lines)]
     pub fn decompress_and_alloc() -> anyhow::Result<&'static Self> {
         #[cfg(not(feature = "zstd"))]
@@ -835,7 +838,7 @@ impl NNUEParams {
         }
 
         let weights_file_name = format!(
-            "viridithas-shared-network-weights-{}-{}-{}-{:X}.bin",
+            "viridithas-shared-network-weights-v2-{}-{}-{}-{:X}.bin",
             std::env::consts::ARCH,
             std::env::consts::OS,
             // target cpu
@@ -914,13 +917,14 @@ impl NNUEParams {
             .with_context(|| format!("Failed to open temporary file at {}", temp_path.display()))?;
 
         // Allocate the file to the right size
-        let size = size_of::<Self>();
-        file.set_len(size as u64).with_context(|| {
-            format!(
-                "Failed to set length of file at {} to {size}",
-                temp_path.display()
-            )
-        })?;
+        file.set_len(Self::WEIGHT_FILE_LEN as u64)
+            .with_context(|| {
+                format!(
+                    "Failed to set length of file at {} to {}",
+                    temp_path.display(),
+                    Self::WEIGHT_FILE_LEN,
+                )
+            })?;
 
         // SAFETY: This file must not be modified while we have a reference to it.
         // we avoid doing this ourselves, but we can't defend against other processes.
@@ -929,6 +933,9 @@ impl NNUEParams {
                 .map_mut(&file)
                 .with_context(|| format!("Failed to map temp file at {}", temp_path.display()))?
         };
+
+        #[cfg(target_os = "linux")]
+        let _ = mmap.advise(memmap2::Advice::HugePage);
 
         // Verify that the pointer is aligned to 64 bytes
         anyhow::ensure!(
@@ -1049,10 +1056,27 @@ impl NNUEParams {
             })?
         };
 
+        #[cfg(target_os = "linux")]
+        {
+            // https://man7.org/linux/man-pages/man2/madvise.2.html
+            // MADV_COLLAPSE (since Linux 6.1)
+            // > Perform a best-effort synchronous collapse of the native
+            // > pages mapped by the memory range into Transparent Huge
+            // > Pages (THPs).  MADV_COLLAPSE operates on the current state
+            // > of memory of the calling process and makes no persistent
+            // > changes or guarantees on how pages will be mapped,
+            // > constructed, or faulted in the future.
+            const MADV_COLLAPSE: libc::c_int = 25;
+            let _ = mmap.advise(memmap2::Advice::HugePage);
+            // SAFETY: AIUI it is hard to misuse madvise().
+            //         We pass a valid range of memory.
+            unsafe { libc::madvise(mmap.as_ptr().cast_mut().cast(), mmap.len(), MADV_COLLAPSE) };
+        }
+
         anyhow::ensure!(
-            mmap.len() == size_of::<Self>(),
+            mmap.len() == Self::WEIGHT_FILE_LEN,
             "Wrong number of bytes: expected {}, got {}",
-            size_of::<Self>(),
+            Self::WEIGHT_FILE_LEN,
             mmap.len()
         );
 
