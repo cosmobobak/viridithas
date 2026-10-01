@@ -401,18 +401,19 @@ impl Board {
         let valid_targets = bbs.colours[!C::COLOUR] & valid_target_squares;
         let promo_rank = [SquareSet::RANK_7, SquareSet::RANK_2][C::COLOUR];
 
-        let attacking_west;
-        let attacking_east;
-
         // to determine which pawns can capture,
         // we shift the opponent's pieces backwards and find the intersection.
-        if C::WHITE {
-            attacking_west = valid_targets.south_east_one() & our_pawns;
-            attacking_east = valid_targets.south_west_one() & our_pawns;
+        let (attacking_west, attacking_east) = if C::WHITE {
+            (
+                valid_targets.south_east_one() & our_pawns,
+                valid_targets.south_west_one() & our_pawns,
+            )
         } else {
-            attacking_west = valid_targets.north_east_one() & our_pawns;
-            attacking_east = valid_targets.north_west_one() & our_pawns;
-        }
+            (
+                valid_targets.north_east_one() & our_pawns,
+                valid_targets.north_west_one() & our_pawns,
+            )
+        };
 
         for from in attacking_west & !promo_rank {
             // SAFETY: masking guarantees a valid square
@@ -489,19 +490,18 @@ impl Board {
         let shifted_valid_squares;
         let double_shifted_valid_squares;
         let pushable_pawns;
-        let double_pushable_pawns;
 
-        if C::WHITE {
+        let double_pushable_pawns = if C::WHITE {
             shifted_valid_squares = valid_target_squares.south_one();
             double_shifted_valid_squares = valid_target_squares.south_one().south_one();
             pushable_pawns = our_pawns & empty.south_one();
-            double_pushable_pawns = pushable_pawns & empty.south_one().south_one() & start_rank;
+            pushable_pawns & empty.south_one().south_one() & start_rank
         } else {
             shifted_valid_squares = valid_target_squares.north_one();
             double_shifted_valid_squares = valid_target_squares.north_one().north_one();
             pushable_pawns = our_pawns & empty.north_one();
-            double_pushable_pawns = pushable_pawns & empty.north_one().north_one() & start_rank;
-        }
+            pushable_pawns & empty.north_one().north_one() & start_rank
+        };
 
         for from in pushable_pawns & !promo_rank & shifted_valid_squares {
             // SAFETY: masking guarantees a valid square
@@ -855,22 +855,22 @@ impl Board {
         let start_rank = SquareSet::RANK_2.relative_to(C::COLOUR);
         let promo_rank = SquareSet::RANK_7.relative_to(C::COLOUR);
 
-        let shifted_empty_squares;
-        let double_shifted_empty;
-        let shifted_valid;
-        let double_shifted_valid;
-
-        if C::WHITE {
-            shifted_empty_squares = bbs.empty().south_one();
-            double_shifted_empty = bbs.empty().south_one().south_one();
-            shifted_valid = valid_target.south_one();
-            double_shifted_valid = valid_target.south_one().south_one();
-        } else {
-            shifted_empty_squares = bbs.empty().north_one();
-            double_shifted_empty = bbs.empty().north_one().north_one();
-            shifted_valid = valid_target.north_one();
-            double_shifted_valid = valid_target.north_one().north_one();
-        }
+        let (shifted_empty_squares, double_shifted_empty, shifted_valid, double_shifted_valid) =
+            if C::WHITE {
+                (
+                    bbs.empty().south_one(),
+                    bbs.empty().south_one().south_one(),
+                    valid_target.south_one(),
+                    valid_target.south_one().south_one(),
+                )
+            } else {
+                (
+                    bbs.empty().north_one(),
+                    bbs.empty().north_one().north_one(),
+                    valid_target.north_one(),
+                    valid_target.north_one().north_one(),
+                )
+            };
 
         let pushable = bbs.pieces[Pawn] & bbs.colours[C::COLOUR] & shifted_empty_squares;
         for from in pushable & !promo_rank & shifted_valid {

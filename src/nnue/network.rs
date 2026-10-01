@@ -26,7 +26,7 @@ use crate::{
     },
     image::{self, Image},
     nnue,
-    util::{Align, MAX_DEPTH},
+    util::{Align, ArrayChunks, MAX_DEPTH},
 };
 
 use super::accumulator::{self, Accumulator};
@@ -266,18 +266,19 @@ impl UnquantisedNetwork {
         #![allow(clippy::similar_names)]
 
         let mut net = MergedNetwork::zeroed();
-        let mut buckets = self.l0_weights.chunks_exact(12 * 64 * L0_OUT);
-        let factoriser;
+        let buckets = self.l0_weights.chunks_exact_const::<{ 12 * 64 * L0_OUT }>();
+
         let alternate_buffer;
-        if UNQUANTISED_HAS_FACTORISER {
-            factoriser = buckets.next().unwrap();
+        let (factoriser, buckets) = if UNQUANTISED_HAS_FACTORISER {
+            buckets.split_first().unwrap()
         } else {
             alternate_buffer = vec![0.0; 12 * 64 * L0_OUT];
-            factoriser = &alternate_buffer;
-        }
-        for (src_bucket, tgt_bucket) in
-            buckets.zip(net.l0_weights.chunks_exact_mut(12 * 64 * L0_OUT))
-        {
+            (alternate_buffer.as_array().unwrap(), buckets)
+        };
+        let target_buckets = net
+            .l0_weights
+            .chunks_exact_const_mut::<{ 12 * 64 * L0_OUT }>();
+        for (src_bucket, tgt_bucket) in buckets.iter().zip(target_buckets) {
             for piece in Piece::all() {
                 for sq in Square::all() {
                     let i = feature::psqt_index_full(
@@ -465,11 +466,12 @@ impl MergedNetwork {
 
         let mut net = QuantisedNetwork::zeroed();
         // quantise the feature transformer weights.
-        let buckets = self.l0_weights.chunks_exact(12 * 64 * L0_OUT);
+        let buckets = self.l0_weights.chunks_exact_const::<{ 12 * 64 * L0_OUT }>();
+        let target_buckets = net
+            .l0_weights
+            .chunks_exact_const_mut::<{ PSQT_FEATURES * L0_OUT }>();
 
-        for (bucket_idx, (src_bucket, tgt_bucket)) in buckets
-            .zip(net.l0_weights.chunks_exact_mut(PSQT_FEATURES * L0_OUT))
-            .enumerate()
+        for (bucket_idx, (src_bucket, tgt_bucket)) in buckets.iter().zip(target_buckets).enumerate()
         {
             // for repermuting the weights.
             let mut things_written = 0;
@@ -566,9 +568,9 @@ impl QuantisedNetwork {
     fn permute(&self, use_simd: bool) -> Box<NNUEParams> {
         let mut net = NNUEParams::zeroed();
         // permute the feature transformer weights
-        let src_buckets = self.l0_weights.chunks_exact(PSQT_FEATURES * L0_OUT);
-        let tgt_buckets = net.l0_weights.chunks_exact_mut(PSQT_FEATURES * L0_OUT);
-        for (src_bucket, tgt_bucket) in src_buckets.zip(tgt_buckets) {
+        let src_buckets = self.l0_weights.chunks_exact_const();
+        let tgt_buckets = net.l0_weights.chunks_exact_const_mut();
+        for (src_bucket, tgt_bucket) in src_buckets.iter().zip(tgt_buckets) {
             repermute_l0_psqt_bucket(tgt_bucket, src_bucket);
         }
 
@@ -582,16 +584,10 @@ impl QuantisedNetwork {
         if use_simd {
             type PermChunk<I> = [I; 8];
             // reinterpret as data of size __m128i
-            let mut weights: Vec<&mut PermChunk<i16>> = net
-                .l0_weights
-                .chunks_exact_mut(8)
-                .map(|a| a.try_into().unwrap())
-                .collect();
-            let mut biases: Vec<&mut PermChunk<i16>> = net
-                .l0_biases
-                .chunks_exact_mut(8)
-                .map(|a| a.try_into().unwrap())
-                .collect();
+            let mut weights: Vec<&mut PermChunk<i16>> =
+                net.l0_weights.chunks_exact_const_mut().iter_mut().collect();
+            let mut biases: Vec<&mut PermChunk<i16>> =
+                net.l0_biases.chunks_exact_const_mut().iter_mut().collect();
             let num_chunks = size_of::<PermChunk<i16>>() / size_of::<i16>();
 
             let num_regs = PACK_REGS;
@@ -628,7 +624,7 @@ impl QuantisedNetwork {
 
             // now the same for the threat plane weights
             let mut threat_weights: Vec<&mut PermChunk<i8>> =
-                net.l0_aux.as_chunks_mut::<8>().0.iter_mut().collect();
+                net.l0_aux.chunks_exact_const_mut().iter_mut().collect();
             for row in 0..AUX_FEATURES {
                 let base = row * L0_OUT / num_chunks;
                 for i in (0..L1_IN / num_chunks).step_by(num_regs) {
@@ -739,7 +735,10 @@ fn repermute_l0_bias(feature_bias: &mut [i16; L0_OUT], unsorted: &[i16; L0_OUT])
     }
 }
 
-fn repermute_l0_psqt_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
+fn repermute_l0_psqt_bucket(
+    tgt_bucket: &mut [i16; PSQT_FEATURES * L0_OUT],
+    unsorted: &[i16; PSQT_FEATURES * L0_OUT],
+) {
     // for each input feature,
     for i in 0..PSQT_FEATURES {
         let feature = i * L0_OUT;

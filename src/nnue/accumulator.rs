@@ -32,7 +32,7 @@ mod simd {
         chess::{
             board::{Board, movegen::attacks_by_type},
             piece::{Colour, PieceType},
-            types::{File, Square},
+            types::Square,
         },
         nnue::{
             network::{
