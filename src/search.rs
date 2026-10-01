@@ -778,6 +778,7 @@ pub fn alpha_beta<NT: NodeType>(
     };
 
     let in_check = t.board.in_check();
+    let clock = t.board.fifty_move_counter();
 
     if !NT::ROOT {
         // check draw
@@ -804,14 +805,20 @@ pub fn alpha_beta<NT: NodeType>(
 
         // upcoming repetition detection
         if alpha < 0 && t.board.has_game_cycle(height) {
+            if !in_check {
+                let raw_eval = evaluate(t, t.info.nodes.get_local());
+                let fresh_eval = adj_shuffle(t, raw_eval, clock, t.correction());
+                if fresh_eval < 0 {
+                    t.update_correction_history(depth, 0, -fresh_eval);
+                }
+            }
+
             alpha = 0;
             if alpha >= beta {
                 return alpha;
             }
         }
     }
-
-    let clock = t.board.fifty_move_counter();
 
     let excluded = t.ss[height].excluded;
     let cached = if excluded.is_none()
