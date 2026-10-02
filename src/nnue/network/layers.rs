@@ -95,13 +95,15 @@ mod simd {
         clippy::cast_ptr_alignment,
         clippy::cast_possible_wrap,
         clippy::needless_range_loop,
-        clippy::similar_names
+        clippy::similar_names,
+        clippy::too_many_arguments
     )]
     pub fn activate_ft_and_propagate_l1(
         stm_psqt: &Align<[i16; L1_IN]>,
         ntm_psqt: &Align<[i16; L1_IN]>,
         stm_thrt: &Align<[i16; L1_IN]>,
         ntm_thrt: &Align<[i16; L1_IN]>,
+        material: &Align<[i16; L1_IN]>,
         weights: &Align<[i8; L1_IN * L1_OUT]>,
         biases: &Align<[f32; L1_OUT]>,
         output: &mut Align<[f32; L1_OUT]>,
@@ -139,6 +141,8 @@ mod simd {
             let mut base = simd::v128_zero();
             let increment = simd::v128_splat(8);
 
+            let material_ptr = material.as_ptr();
+
             let mut offset = 0;
             for [psqt, thrt] in [[stm_psqt, stm_thrt], [ntm_psqt, ntm_thrt]] {
                 // separate accumulators are maintained for the two input feature-sets, as
@@ -155,9 +159,12 @@ mod simd {
                     let input0at = simd::load_i16(thrt_ptr.add(i + 0 * I16_CHUNK));
                     let input0bt = simd::load_i16(thrt_ptr.add(i + 1 * I16_CHUNK));
 
-                    // combine PSQT and threat preäctivations
-                    let input0a = simd::add_i16(input0ap, input0at);
-                    let input0b = simd::add_i16(input0bp, input0bt);
+                    let input0am = simd::load_i16(material_ptr.add(i + 0 * I16_CHUNK));
+                    let input0bm = simd::load_i16(material_ptr.add(i + 1 * I16_CHUNK));
+
+                    // combine PSQT, threat, and material preäctivations
+                    let input0a = simd::add_i16(simd::add_i16(input0ap, input0at), input0am);
+                    let input0b = simd::add_i16(simd::add_i16(input0bp, input0bt), input0bm);
 
                     // load the right-hand pair inputs
                     let j = i + L1_PAIR_COUNT;
@@ -166,9 +173,12 @@ mod simd {
                     let input1at = simd::load_i16(thrt_ptr.add(j + 0 * I16_CHUNK));
                     let input1bt = simd::load_i16(thrt_ptr.add(j + 1 * I16_CHUNK));
 
-                    // combine PSQT and threat preäctivations
-                    let input1a = simd::add_i16(input1ap, input1at);
-                    let input1b = simd::add_i16(input1bp, input1bt);
+                    let input1am = simd::load_i16(material_ptr.add(j + 0 * I16_CHUNK));
+                    let input1bm = simd::load_i16(material_ptr.add(j + 1 * I16_CHUNK));
+
+                    // combine PSQT, threat, and material preäctivations
+                    let input1a = simd::add_i16(simd::add_i16(input1ap, input1at), input1am);
+                    let input1b = simd::add_i16(simd::add_i16(input1bp, input1bt), input1bm);
 
                     // crelu the left-hand inputs
                     let clipped0a = simd::min_i16(simd::max_i16(input0a, ft_zero), ft_one);

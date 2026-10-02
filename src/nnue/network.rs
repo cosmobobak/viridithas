@@ -74,7 +74,7 @@ pub const HEADS: usize = 1;
 /// The quantisation factor for the feature transformer weights.
 const QA: i16 = 255;
 /// The quantisation factor for the L1 weights.
-const QB: i16 = 64;
+const QB: i16 = 128;
 /// Chunking constant for l1
 pub const L1_CHUNK_PER_32: usize = size_of::<i32>() / size_of::<i8>();
 
@@ -114,7 +114,7 @@ const HALF_BUCKET_MAP: [usize; 32] = [
 /// The number of buckets in the feature transformer.
 pub const BUCKETS: usize = max!(HALF_BUCKET_MAP) + 1;
 /// The number of output buckets
-pub const OUTPUT_BUCKETS: usize = 8;
+pub const MATERIAL_BUCKETS: usize = 8;
 /// The mapping from square to bucket.
 const BUCKET_MAP: [usize; 64] = {
     let mut map = [0; 64];
@@ -135,7 +135,7 @@ const BUCKET_MAP: [usize; 64] = {
 /// Get index into the output layer given a board state.
 pub fn output_bucket(pos: &Board) -> usize {
     #![allow(clippy::cast_possible_truncation)]
-    const DIVISOR: usize = usize::div_ceil(32, OUTPUT_BUCKETS);
+    const DIVISOR: usize = usize::div_ceil(32, MATERIAL_BUCKETS);
     (pos.state.bbs.occupied().count() as usize - 2) / DIVISOR
 }
 
@@ -159,16 +159,13 @@ struct UnquantisedNetwork {
     // extra bucket for the feature-factoriser.
     l0_weights:    [f32; 12 * 64 * L0_OUT * (BUCKETS + UNQUANTISED_HAS_FACTORISER as usize)],
     l0_biases:     [f32; L0_OUT],
-    l1_weights:  [[[f32; L1_OUT]; OUTPUT_BUCKETS]; L1_IN],
-    l1_biases:    [[f32; L1_OUT]; OUTPUT_BUCKETS],
-    l2x_weights: [[[f32; L2_OUT * 2]; OUTPUT_BUCKETS]; L2_IN],
-    l2f_weights:  [[f32; L2_OUT * 2]; L2_IN],
-    l2x_biases:   [[f32; L2_OUT * 2]; OUTPUT_BUCKETS],
-    l2f_biases:    [f32; L2_OUT * 2],
-    l3x_weights: [[[f32; HEADS]; OUTPUT_BUCKETS]; L3_IN],
-    l3f_weights:  [[f32; HEADS]; L3_IN],
-    l3x_biases:   [[f32; HEADS]; OUTPUT_BUCKETS],
-    l3f_biases:    [f32; HEADS],
+    l0_material:  [[f32; L0_OUT]; MATERIAL_BUCKETS],
+    l1_weights:   [[f32; L1_OUT]; L1_IN],
+    l1_biases:     [f32; L1_OUT],
+    l2_weights:   [[f32; L2_OUT * 2]; L2_IN],
+    l2_biases:     [f32; L2_OUT * 2],
+    l3_weights:   [[f32; HEADS]; L3_IN],
+    l3_biases:     [f32; HEADS],
 }
 
 /// The floating-point parameters of the network, after de-factorisation.
@@ -178,12 +175,13 @@ struct MergedNetwork {
     l0_aux:       [f32; AUX_FEATURES * L0_OUT],
     l0_weights:   [f32; 12 * 64 * L0_OUT * BUCKETS],
     l0_biases:    [f32; L0_OUT],
-    l1_weights: [[[f32; L1_OUT]; OUTPUT_BUCKETS]; L1_IN],
-    l1_biases:   [[f32; L1_OUT]; OUTPUT_BUCKETS],
-    l2_weights: [[[f32; L2_OUT * 2]; OUTPUT_BUCKETS]; L2_IN],
-    l2_biases:   [[f32; L2_OUT * 2]; OUTPUT_BUCKETS],
-    l3_weights: [[[f32; HEADS]; OUTPUT_BUCKETS]; L3_IN],
-    l3_biases:   [[f32; HEADS]; OUTPUT_BUCKETS],
+    l0_material: [[f32; L0_OUT]; MATERIAL_BUCKETS],
+    l1_weights:  [[f32; L1_OUT]; L1_IN],
+    l1_biases:    [f32; L1_OUT],
+    l2_weights:  [[f32; L2_OUT * 2]; L2_IN],
+    l2_biases:    [f32; L2_OUT * 2],
+    l3_weights:  [[f32; HEADS]; L3_IN],
+    l3_biases:    [f32; HEADS],
 }
 
 /// A quantised network file, for compressed embedding.
@@ -194,12 +192,13 @@ struct QuantisedNetwork {
     l0_aux:       [ i8; AUX_FEATURES * L0_OUT],
     l0_weights:   [i16; PSQT_FEATURES * L0_OUT * BUCKETS],
     l0_biases:    [i16; L0_OUT],
-    l1_weights: [[[ i8; L1_OUT]; OUTPUT_BUCKETS]; L1_IN],
-    l1_biases:   [[f32; L1_OUT]; OUTPUT_BUCKETS],
-    l2_weights: [[[f32; L2_OUT * 2]; OUTPUT_BUCKETS]; L2_IN],
-    l2_biases:   [[f32; L2_OUT * 2]; OUTPUT_BUCKETS],
-    l3_weights: [[[f32; HEADS]; OUTPUT_BUCKETS]; L3_IN],
-    l3_biases:   [[f32; HEADS]; OUTPUT_BUCKETS],
+    l0_material: [[i16; L0_OUT]; MATERIAL_BUCKETS],
+    l1_weights:  [[ i8; L1_OUT]; L1_IN],
+    l1_biases:    [f32; L1_OUT],
+    l2_weights:  [[f32; L2_OUT * 2]; L2_IN],
+    l2_biases:    [f32; L2_OUT * 2],
+    l3_weights:  [[f32; HEADS]; L3_IN],
+    l3_biases:    [f32; HEADS],
 }
 
 /// The parameters of viri's neural network, quantised and permuted
@@ -210,12 +209,13 @@ pub struct NNUEParams {
     pub l0_aux:       Align<[ i8; AUX_FEATURES * L0_OUT]>,
     pub l0_weights:   Align<[i16; PSQT_FEATURES * L0_OUT * BUCKETS]>,
     pub l0_biases:    Align<[i16; L0_OUT]>,
-    pub l1_weights:  [Align<[ i8; L1_IN * L1_OUT]>; OUTPUT_BUCKETS],
-    pub l1_bias:     [Align<[f32; L1_OUT]>; OUTPUT_BUCKETS],
-    pub l2_weights:  [Align<[f32; L2_IN * (L2_OUT * 2)]>; OUTPUT_BUCKETS],
-    pub l2_bias:     [Align<[f32; L2_OUT * 2]>; OUTPUT_BUCKETS],
-    pub l3_weights: [[Align<[f32; L3_IN]>; HEADS]; OUTPUT_BUCKETS],
-    pub l3_bias:           [[f32; HEADS]; OUTPUT_BUCKETS],
+    pub l0_material: [Align<[i16; L0_OUT]>; MATERIAL_BUCKETS],
+    pub l1_weights:   Align<[ i8; L1_IN * L1_OUT]>,
+    pub l1_bias:      Align<[f32; L1_OUT]>,
+    pub l2_weights:   Align<[f32; L2_IN * (L2_OUT * 2)]>,
+    pub l2_bias:      Align<[f32; L2_OUT * 2]>,
+    pub l3_weights:  [Align<[f32; L3_IN]>; HEADS],
+    pub l3_bias:           [f32; HEADS],
 }
 
 // const REPERMUTE_INDICES: [usize; L1_IN / 2] = {
@@ -229,39 +229,38 @@ pub struct NNUEParams {
 // };
 
 const REPERMUTE_INDICES: [usize; L1_IN / 2] = [
-    90, 389, 169, 129, 124, 128, 379, 114, 494, 444, 137, 434, 26, 175, 176, 102, 432, 280, 205,
-    301, 17, 84, 316, 439, 451, 226, 349, 103, 314, 442, 69, 483, 75, 89, 250, 290, 331, 367, 144,
-    376, 21, 344, 406, 273, 225, 59, 195, 373, 201, 450, 362, 480, 165, 358, 131, 185, 459, 281,
-    346, 497, 319, 166, 475, 110, 403, 390, 383, 53, 399, 423, 481, 147, 11, 70, 268, 345, 435,
-    308, 125, 3, 467, 14, 413, 421, 337, 52, 107, 16, 429, 242, 153, 369, 93, 33, 158, 159, 355,
-    469, 414, 188, 350, 247, 168, 321, 347, 46, 86, 339, 510, 463, 445, 447, 130, 200, 212, 172,
-    461, 19, 151, 315, 266, 34, 239, 400, 81, 441, 473, 80, 285, 306, 471, 57, 49, 395, 386, 424,
-    412, 139, 112, 501, 291, 233, 279, 249, 48, 240, 375, 1, 115, 479, 465, 325, 364, 307, 31, 51,
-    23, 189, 335, 64, 78, 504, 28, 104, 370, 245, 45, 334, 220, 366, 8, 254, 122, 464, 161, 305,
-    236, 440, 120, 40, 484, 109, 378, 410, 72, 187, 73, 98, 385, 472, 478, 329, 145, 271, 324, 258,
-    384, 371, 388, 24, 113, 320, 323, 415, 407, 146, 164, 394, 365, 63, 162, 106, 216, 160, 311,
-    409, 68, 156, 490, 270, 121, 36, 65, 7, 96, 336, 500, 192, 136, 453, 278, 431, 436, 261, 213,
-    38, 487, 356, 174, 149, 433, 190, 299, 198, 132, 259, 374, 506, 351, 138, 456, 437, 382, 180,
-    488, 341, 489, 303, 154, 263, 118, 155, 231, 134, 148, 330, 2, 10, 243, 246, 206, 20, 244, 142,
-    283, 248, 211, 126, 256, 179, 222, 260, 295, 502, 44, 99, 276, 430, 402, 79, 310, 42, 232, 508,
-    74, 202, 267, 101, 457, 462, 507, 470, 217, 416, 237, 343, 214, 0, 92, 492, 312, 503, 18, 401,
-    50, 181, 218, 408, 304, 35, 177, 326, 396, 193, 182, 178, 25, 327, 499, 292, 398, 238, 170,
-    264, 71, 454, 184, 317, 309, 253, 380, 91, 333, 348, 425, 88, 491, 173, 163, 511, 141, 194,
-    485, 105, 97, 466, 392, 476, 100, 9, 241, 6, 300, 322, 191, 37, 29, 405, 443, 30, 287, 223,
-    391, 41, 360, 458, 397, 83, 13, 419, 452, 95, 313, 468, 352, 234, 219, 62, 54, 208, 255, 135,
-    393, 277, 22, 252, 140, 474, 477, 338, 224, 152, 377, 297, 361, 67, 482, 197, 85, 87, 460, 455,
-    428, 262, 229, 486, 449, 282, 127, 368, 186, 411, 15, 60, 298, 354, 509, 183, 269, 272, 123,
-    294, 150, 332, 493, 498, 94, 167, 209, 47, 353, 116, 496, 446, 227, 505, 342, 265, 77, 340, 76,
-    448, 55, 207, 363, 108, 82, 418, 210, 251, 427, 4, 215, 143, 196, 420, 61, 381, 286, 318, 422,
-    171, 32, 417, 119, 359, 43, 204, 228, 387, 157, 275, 66, 284, 438, 426, 274, 5, 27, 257, 296,
-    289, 372, 328, 357, 133, 404, 235, 293, 302, 288, 230, 111, 39, 12, 58, 495, 203, 56, 221, 199,
-    117,
+    102, 123, 81, 66, 430, 442, 298, 435, 426, 161, 153, 176, 277, 74, 120, 235, 460, 465, 396,
+    363, 387, 346, 77, 188, 270, 150, 53, 311, 234, 106, 320, 343, 469, 359, 445, 354, 267, 376,
+    228, 179, 331, 482, 226, 476, 25, 91, 487, 419, 9, 122, 451, 501, 349, 50, 215, 365, 100, 504,
+    323, 315, 134, 202, 329, 335, 59, 371, 214, 293, 206, 375, 275, 303, 128, 22, 502, 393, 101,
+    174, 353, 405, 377, 458, 42, 475, 278, 186, 219, 425, 129, 417, 38, 338, 132, 108, 14, 394,
+    262, 35, 144, 360, 325, 421, 68, 225, 466, 114, 319, 119, 265, 130, 213, 272, 208, 351, 352,
+    69, 28, 149, 344, 477, 464, 170, 103, 334, 327, 306, 64, 428, 276, 89, 83, 268, 312, 364, 92,
+    381, 216, 259, 4, 481, 133, 209, 185, 392, 44, 310, 31, 456, 434, 348, 189, 12, 437, 95, 61,
+    439, 155, 285, 159, 423, 229, 463, 256, 370, 178, 304, 230, 139, 217, 87, 138, 441, 386, 395,
+    294, 40, 78, 264, 362, 356, 198, 136, 222, 231, 255, 54, 416, 11, 85, 46, 258, 3, 414, 192, 84,
+    98, 243, 20, 432, 88, 55, 49, 152, 109, 116, 462, 410, 33, 118, 0, 492, 210, 56, 124, 58, 447,
+    137, 496, 203, 187, 72, 19, 337, 27, 308, 97, 23, 509, 151, 201, 5, 368, 263, 62, 316, 400,
+    110, 193, 183, 163, 51, 43, 24, 336, 397, 127, 7, 269, 495, 282, 143, 172, 233, 37, 440, 273,
+    507, 121, 211, 474, 510, 391, 333, 260, 194, 75, 380, 450, 300, 384, 164, 506, 332, 369, 415,
+    76, 281, 2, 489, 96, 483, 99, 461, 252, 406, 299, 498, 196, 212, 168, 10, 413, 261, 383, 457,
+    39, 47, 223, 485, 318, 36, 140, 305, 291, 287, 427, 459, 357, 113, 508, 238, 374, 158, 199,
+    175, 480, 446, 71, 297, 236, 424, 274, 382, 408, 237, 154, 340, 443, 115, 505, 29, 497, 407,
+    302, 339, 180, 422, 484, 284, 65, 292, 286, 182, 330, 177, 245, 18, 322, 242, 257, 147, 146,
+    195, 324, 453, 48, 401, 94, 60, 490, 431, 73, 494, 197, 455, 438, 409, 283, 220, 34, 165, 279,
+    107, 250, 156, 367, 290, 296, 444, 173, 111, 493, 145, 80, 491, 248, 309, 63, 142, 317, 321,
+    398, 191, 26, 181, 204, 79, 21, 347, 499, 200, 355, 105, 328, 253, 473, 468, 361, 266, 227, 30,
+    500, 57, 41, 454, 289, 479, 16, 117, 314, 232, 467, 67, 162, 418, 472, 171, 169, 254, 429, 378,
+    135, 104, 112, 403, 86, 131, 342, 389, 388, 412, 452, 511, 246, 90, 93, 82, 350, 411, 13, 404,
+    448, 433, 125, 326, 379, 241, 307, 167, 126, 205, 471, 8, 385, 449, 148, 1, 478, 486, 288, 341,
+    390, 190, 157, 17, 166, 6, 345, 32, 52, 470, 372, 224, 402, 70, 247, 420, 221, 249, 301, 184,
+    207, 399, 358, 244, 251, 366, 280, 240, 239, 218, 503, 295, 15, 488, 271, 160, 141, 436, 313,
+    373, 45,
 ];
 
 impl UnquantisedNetwork {
     /// Convert a parameter file generated by bullet into a merged parameter set,
     /// for further processing or for resuming training in a more efficient format.
-    #[expect(clippy::too_many_lines)]
     fn merge(&self) -> Box<MergedNetwork> {
         #![allow(clippy::similar_names)]
 
@@ -307,50 +306,14 @@ impl UnquantisedNetwork {
 
         // copy the biases
         net.l0_biases.copy_from_slice(&self.l0_biases);
-        // copy the L1 weights
-        for i in 0..L1_IN {
-            for bucket in 0..OUTPUT_BUCKETS {
-                for j in 0..L1_OUT {
-                    net.l1_weights[i][bucket][j] = self.l1_weights[i][bucket][j];
-                }
-            }
-        }
-        // copy the L1 biases
-        for i in 0..L1_OUT {
-            for bucket in 0..OUTPUT_BUCKETS {
-                net.l1_biases[bucket][i] = self.l1_biases[bucket][i];
-            }
-        }
-        // copy the L2 weights
-        for i in 0..L2_IN {
-            for bucket in 0..OUTPUT_BUCKETS {
-                for j in 0..L2_OUT * 2 {
-                    net.l2_weights[i][bucket][j] =
-                        self.l2x_weights[i][bucket][j] + self.l2f_weights[i][j];
-                }
-            }
-        }
-        // copy the L2 biases
-        for i in 0..L2_OUT * 2 {
-            for bucket in 0..OUTPUT_BUCKETS {
-                net.l2_biases[bucket][i] = self.l2x_biases[bucket][i] + self.l2f_biases[i];
-            }
-        }
-        // copy the L3 weights
-        for i in 0..L3_IN {
-            for bucket in 0..OUTPUT_BUCKETS {
-                for head in 0..HEADS {
-                    net.l3_weights[i][bucket][head] =
-                        self.l3x_weights[i][bucket][head] + self.l3f_weights[i][head];
-                }
-            }
-        }
-        // copy the L3 biases
-        for head in 0..HEADS {
-            for i in 0..OUTPUT_BUCKETS {
-                net.l3_biases[i][head] = self.l3x_biases[i][head] + self.l3f_biases[head];
-            }
-        }
+        net.l0_material = self.l0_material;
+
+        net.l1_weights = self.l1_weights;
+        net.l1_biases = self.l1_biases;
+        net.l2_weights = self.l2_weights;
+        net.l2_biases = self.l2_biases;
+        net.l3_weights = self.l3_weights;
+        net.l3_biases = self.l3_biases;
 
         let range = |slice: &[f32]| {
             let init = (f32::INFINITY, f32::NEG_INFINITY);
@@ -362,25 +325,27 @@ impl UnquantisedNetwork {
 
         let (l0w_min, l0w_max) = range(&net.l0_weights);
         let (l0b_min, l0b_max) = range(&net.l0_biases);
+        let (l0m_min, l0m_max) = range(net.l0_material.as_flattened());
         println!("L0 weight range: [{l0w_min}, {l0w_max}]");
         println!("L0 bias range: [{l0b_min}, {l0b_max}]");
+        println!("L0 material range: [{l0m_min}, {l0m_max}]");
 
-        let l1_weights_flat = net.l1_weights.as_flattened().as_flattened();
-        let l1_biases_flat = net.l1_biases.as_flattened();
+        let l1_weights_flat = net.l1_weights.as_flattened();
+        let l1_biases_flat = &net.l1_biases;
         let (l1w_min, l1w_max) = range(l1_weights_flat);
         let (l1b_min, l1b_max) = range(l1_biases_flat);
         println!("L1 weight range: [{l1w_min}, {l1w_max}]");
         println!("L1 bias range: [{l1b_min}, {l1b_max}]");
 
-        let l2_weights_flat = net.l2_weights.as_flattened().as_flattened();
-        let l2_biases_flat = net.l2_biases.as_flattened();
+        let l2_weights_flat = net.l2_weights.as_flattened();
+        let l2_biases_flat = &net.l2_biases;
         let (l2w_min, l2w_max) = range(l2_weights_flat);
         let (l2b_min, l2b_max) = range(l2_biases_flat);
         println!("L2 weight range: [{l2w_min}, {l2w_max}]");
         println!("L2 bias range: [{l2b_min}, {l2b_max}]");
 
-        let l3_weights_flat = net.l3_weights.as_flattened().as_flattened();
-        let l3_biases_flat = net.l3_biases.as_flattened();
+        let l3_weights_flat = net.l3_weights.as_flattened();
+        let l3_biases_flat = &net.l3_biases;
         let (l3w_min, l3w_max) = range(l3_weights_flat);
         let (l3b_min, l3b_max) = range(l3_biases_flat);
         println!("L3 weight range: [{l3w_min}, {l3w_max}]");
@@ -448,6 +413,7 @@ impl MergedNetwork {
 
         dump_layer!("l0w", self.l0_weights);
         dump_layer!("l0b", self.l0_biases);
+        dump_layer!("l0m", self.l0_material);
         dump_layer!("l1w", self.l1_weights);
         dump_layer!("l1b", self.l1_biases);
         dump_layer!("l2w", self.l2_weights);
@@ -461,7 +427,7 @@ impl MergedNetwork {
     #[allow(clippy::cast_possible_truncation, clippy::assertions_on_constants)]
     fn quantise(&self) -> Box<QuantisedNetwork> {
         const QA_BOUND: f32 = 1.98 * QA as f32;
-        const QB_BOUND: f32 = 1.98 * QB as f32;
+        const QB_BOUND: f32 = i8::MAX as f32;
 
         let mut net = QuantisedNetwork::zeroed();
         // quantise the feature transformer weights.
@@ -531,17 +497,25 @@ impl MergedNetwork {
             *tgt = scaled.clamp(-QA_BOUND, QA_BOUND).round() as i16;
         }
 
+        // quantise the material biases
+        let material = self.l0_material.as_flattened();
+        for (src, tgt) in material.iter().zip(net.l0_material.as_flattened_mut()) {
+            let scaled = *src * f32::from(QA);
+            if scaled.abs() > QA_BOUND {
+                eprintln!("material bias {scaled} is too large (max = {QA_BOUND})");
+            }
+            *tgt = scaled.clamp(-QA_BOUND, QA_BOUND).round() as i16;
+        }
+
         // quantise the l1 weights
         for i in 0..L1_IN {
-            for bucket in 0..OUTPUT_BUCKETS {
-                for j in 0..L1_OUT {
-                    let v = self.l1_weights[i][bucket][j] * f32::from(QB);
-                    if v.abs() > QB_BOUND {
-                        eprintln!("L1 weight {v} is too large (max = {QB_BOUND})");
-                    }
-                    let v = v.clamp(-QB_BOUND, QB_BOUND).round() as i8;
-                    net.l1_weights[i][bucket][j] = v;
+            for j in 0..L1_OUT {
+                let v = self.l1_weights[i][j] * f32::from(QB);
+                if v.abs() > QB_BOUND {
+                    eprintln!("L1 weight {v} is too large (max = {QB_BOUND})");
                 }
+                let v = v.clamp(-QB_BOUND, QB_BOUND).round() as i8;
+                net.l1_weights[i][j] = v;
             }
         }
 
@@ -574,6 +548,9 @@ impl QuantisedNetwork {
 
         // permute the feature transformer biases
         repermute_l0_bias(&mut net.l0_biases, &self.l0_biases);
+        for (tgt, src) in net.l0_material.iter_mut().zip(&self.l0_material) {
+            repermute_l0_bias(tgt, src);
+        }
 
         // repermute the threat plane weights
         repermute_l0_aux(&mut net.l0_aux, &self.l0_aux);
@@ -624,6 +601,23 @@ impl QuantisedNetwork {
                 }
             }
 
+            // transpose material biases, which are added to the accumulator before packing
+            for bucket in &mut net.l0_material {
+                let mut material: Vec<&mut PermChunk<i16>> = bucket
+                    .chunks_exact_mut(8)
+                    .map(|a| a.try_into().unwrap())
+                    .collect();
+                for i in (0..L1_IN / num_chunks).step_by(num_regs) {
+                    for j in 0..num_regs {
+                        regs[j] = *material[i + j];
+                    }
+
+                    for j in 0..num_regs {
+                        *material[i + j] = regs[order[j]];
+                    }
+                }
+            }
+
             let mut i8_regs = vec![[0i8; 8]; num_regs];
 
             // now the same for the threat plane weights
@@ -644,55 +638,48 @@ impl QuantisedNetwork {
         }
 
         // transpose the L{1,2,3} weights and biases
-        let mut sorted = vec![[[0i8; L1_OUT]; OUTPUT_BUCKETS]; L1_IN];
+        let mut sorted = vec![[0i8; L1_OUT]; L1_IN];
         repermute_l1_weights(sorted.as_mut_array().unwrap(), &self.l1_weights);
-        for bucket in 0..OUTPUT_BUCKETS {
-            // quant the L1 weights
-            if use_simd {
-                for i in 0..L1_IN / L1_CHUNK_PER_32 {
-                    for j in 0..L1_OUT {
-                        for k in 0..L1_CHUNK_PER_32 {
-                            net.l1_weights[bucket]
-                                [i * L1_CHUNK_PER_32 * L1_OUT + j * L1_CHUNK_PER_32 + k] =
-                                sorted[i * L1_CHUNK_PER_32 + k][bucket][j];
-                        }
-                    }
-                }
-            } else {
-                for i in 0..L1_IN {
-                    for j in 0..L1_OUT {
-                        net.l1_weights[bucket][j * L1_IN + i] = sorted[i][bucket][j];
+        // quant the L1 weights
+        if use_simd {
+            for i in 0..L1_IN / L1_CHUNK_PER_32 {
+                for j in 0..L1_OUT {
+                    for k in 0..L1_CHUNK_PER_32 {
+                        net.l1_weights[i * L1_CHUNK_PER_32 * L1_OUT + j * L1_CHUNK_PER_32 + k] =
+                            sorted[i * L1_CHUNK_PER_32 + k][j];
                     }
                 }
             }
-
-            // transfer the L1 biases
-            for i in 0..L1_OUT {
-                net.l1_bias[bucket][i] = self.l1_biases[bucket][i];
-            }
-
-            // transpose the L2 weights
-            for i in 0..L2_IN {
-                for j in 0..L2_OUT * 2 {
-                    net.l2_weights[bucket][i * L2_OUT * 2 + j] = self.l2_weights[i][bucket][j];
+        } else {
+            for i in 0..L1_IN {
+                for j in 0..L1_OUT {
+                    net.l1_weights[j * L1_IN + i] = sorted[i][j];
                 }
             }
-
-            // transfer the L2 biases
-            for i in 0..L2_OUT * 2 {
-                net.l2_bias[bucket][i] = self.l2_biases[bucket][i];
-            }
-
-            // transfer the L3 weights
-            for i in 0..L3_IN {
-                for head in 0..HEADS {
-                    net.l3_weights[bucket][head][i] = self.l3_weights[i][bucket][head];
-                }
-            }
-
-            // transfer the L3 biases
-            net.l3_bias[bucket] = self.l3_biases[bucket];
         }
+
+        // transfer the L1 biases
+        net.l1_bias.0 = self.l1_biases;
+
+        // transpose the L2 weights
+        for i in 0..L2_IN {
+            for j in 0..L2_OUT * 2 {
+                net.l2_weights[i * L2_OUT * 2 + j] = self.l2_weights[i][j];
+            }
+        }
+
+        // transfer the L2 biases
+        net.l2_bias.0 = self.l2_biases;
+
+        // transfer the L3 weights
+        for i in 0..L3_IN {
+            for head in 0..HEADS {
+                net.l3_weights[head][i] = self.l3_weights[i][head];
+            }
+        }
+
+        // transfer the L3 biases
+        net.l3_bias = self.l3_biases;
 
         net
     }
@@ -718,10 +705,7 @@ impl QuantisedNetwork {
     }
 }
 
-fn repermute_l1_weights(
-    sorted: &mut [[[i8; L1_OUT]; OUTPUT_BUCKETS]; L1_IN],
-    l1_weights: &[[[i8; L1_OUT]; OUTPUT_BUCKETS]; L1_IN],
-) {
+fn repermute_l1_weights(sorted: &mut [[i8; L1_OUT]; L1_IN], l1_weights: &[[i8; L1_OUT]; L1_IN]) {
     for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
         sorted[tgt_index] = l1_weights[src_index];
     }
@@ -1818,34 +1802,26 @@ impl NNUEState {
             ntm_psqt,
             stm_thrt,
             ntm_thrt,
-            &nn.l1_weights[out],
-            &nn.l1_bias[out],
+            &nn.l0_material[out],
+            &nn.l1_weights,
+            &nn.l1_bias,
             &mut l2_inputs,
         );
-        layers::propagate_l2(
-            &l2_inputs,
-            &nn.l2_weights[out],
-            &nn.l2_bias[out],
-            &mut l3_inputs,
-        );
+        layers::propagate_l2(&l2_inputs, &nn.l2_weights, &nn.l2_bias, &mut l3_inputs);
 
         if HEADS == 1 {
             let mut l3_output = 0.0;
 
-            layers::propagate_l3(
-                &l3_inputs,
-                &nn.l3_weights[out][0],
-                nn.l3_bias[out][0],
-                &mut l3_output,
-            );
+            layers::propagate_l3(&l3_inputs, &nn.l3_weights[0], nn.l3_bias[0], &mut l3_output);
 
             (l3_output * SCALE as f32) as i32
         } else if HEADS == 3 {
             let mut l3_output_logits = [0.0; 3];
 
-            for ((w, b), o) in nn.l3_weights[out]
+            for ((w, b), o) in nn
+                .l3_weights
                 .iter()
-                .zip(nn.l3_bias[out])
+                .zip(nn.l3_bias)
                 .zip(&mut l3_output_logits)
             {
                 layers::propagate_l3(&l3_inputs, w, b, o);
