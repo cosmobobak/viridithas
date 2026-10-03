@@ -1361,12 +1361,12 @@ impl Board {
         let occ = self.state.bbs.occupied();
         let original_key = self.state.keys.zobrist;
 
-        let mut other = !(original_key ^ old_key(1));
+        let mut other = original_key ^ old_key(1) ^ SIDE_KEY;
 
         for i in (3..=end).step_by(2) {
             let curr_key = old_key(i);
 
-            other ^= !(curr_key ^ old_key(i - 1));
+            other ^= curr_key ^ old_key(i - 1) ^ SIDE_KEY;
             if other != 0 {
                 continue;
             }
