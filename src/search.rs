@@ -1142,6 +1142,16 @@ pub fn alpha_beta<NT: NodeType>(
                     if is_decisive(null_score) {
                         return beta;
                     }
+
+                    let fresh_eval = adj_shuffle(t, raw_eval, clock, t.correction());
+                    if null_score > fresh_eval {
+                        t.update_correction_history(
+                            nm_depth,
+                            tt_complexity,
+                            null_score - fresh_eval,
+                        );
+                    }
+
                     return null_score;
                 }
                 // verify that pruning makes sense by doing a search with NMP disabled.
@@ -1153,6 +1163,15 @@ pub fn alpha_beta<NT: NodeType>(
                 let veri_score = alpha_beta::<OffPV>(t, nm_depth, beta - 1, beta, false);
                 t.unban_nmp_for(t.board.turn());
                 if veri_score >= beta {
+                    let fresh_eval = adj_shuffle(t, raw_eval, clock, t.correction());
+                    if veri_score > fresh_eval {
+                        t.update_correction_history(
+                            nm_depth,
+                            tt_complexity,
+                            veri_score - fresh_eval,
+                        );
+                    }
+
                     return veri_score;
                 }
             }
