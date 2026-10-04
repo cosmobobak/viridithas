@@ -535,7 +535,7 @@ pub fn quiescence<NT: NodeType>(t: &mut ThreadData, mut alpha: i32, beta: i32) -
     }
 
     // upcoming repetition detection
-    if alpha < 0 && t.board.has_game_cycle(height) {
+    if alpha < 0 && t.board.upcoming_repetition(height) {
         alpha = 0;
         if alpha >= beta {
             return alpha;
@@ -804,7 +804,7 @@ pub fn alpha_beta<NT: NodeType>(
         }
 
         // upcoming repetition detection
-        if alpha < 0 && t.board.has_game_cycle(height) {
+        if alpha < 0 && t.board.upcoming_repetition(height) {
             if !in_check {
                 let raw_eval = evaluate(t, t.info.nodes.get_local());
                 let fresh_eval = adj_shuffle(t, raw_eval, clock, t.correction());
