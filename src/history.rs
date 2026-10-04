@@ -8,8 +8,7 @@ use crate::{
         types::Square,
     },
     historytable::{
-        CORRECTION_HISTORY_MAX, HASH_HISTORY_SIZE, history_delta, update_cont_history,
-        update_correction, update_history,
+        HASH_HISTORY_SIZE, history_delta, update_cont_history, update_correction, update_history,
     },
     lookups::PIECE_KEYS,
     searchinfo::SearchInfo,
@@ -244,9 +243,6 @@ impl ThreadData<'_> {
         let dc = i64::from(err) * i64::from(gain);
         // scale s.t. we attempt to recover some proportion of the error
         let bonus = (dc * (CORR_READ_SCALE / CORR_GAIN_ONE) / (12 * i64::from(weight_sum))) as i32;
-
-        // not really the effective clipping anymore
-        let bonus = bonus.clamp(-CORRECTION_HISTORY_MAX / 4, CORRECTION_HISTORY_MAX / 4);
 
         let keys = &self.board.state.keys;
 
