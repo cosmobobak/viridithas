@@ -20,6 +20,21 @@ use crate::{
 
 use crate::chess::board::Board;
 
+/// Maximum distinguishable centipawn error.
+///
+/// This is analogous to the delta threshold in Huber loss,
+/// above which the loss is linear (and so the gradient is
+/// constant).
+const CORR_ERR_CLIP: i32 = 256;
+/// Scaling factor for corrections.
+const CORR_GAIN_MUL: i32 = 623;
+/// Value of unity for correction confidence.
+const CORR_GAIN_ONE: i64 = 1024;
+/// Maximal update size in CORR_GAIN_ONE-ths of the error.
+const CORR_GAIN_MAX: i32 = 768;
+
+const CORR_READ_SCALE: i64 = 0x40000;
+
 #[derive(Clone, Copy)]
 pub struct UpdateCtx<'a> {
     pub board: &'a Board,
@@ -200,15 +215,38 @@ impl ThreadData<'_> {
         let us = self.board.turn();
         let height = self.board.height();
 
+        let conf = &self.info.conf;
+
         // wow! floating point in a chess engine!
         let tt_complexity_factor =
             ((1.0 + (tt_complexity as f32 + 1.0).log2() / 10.0) * 8.0) as i32;
 
-        let bonus = i32::clamp(
-            diff * depth * tt_complexity_factor / 64,
-            -CORRECTION_HISTORY_MAX / 4,
-            CORRECTION_HISTORY_MAX / 4,
-        );
+        let err = diff.clamp(-CORR_ERR_CLIP, CORR_ERR_CLIP);
+
+        // update “confidence” where 0 is none
+        // and CORR_GAIN_ONE is maximal.
+        // capped at CORR_GAIN_MAX.
+        let gain = (depth * tt_complexity_factor * CORR_GAIN_MUL / 64).min(CORR_GAIN_MAX);
+
+        // sum weights so that we know how much a change affects correction
+        let mut weight_sum = conf.pawn_corrhist_weight
+            + conf.major_corrhist_weight
+            + conf.minor_corrhist_weight
+            + 2 * conf.nonpawn_corrhist_weight;
+        if height > 2 {
+            weight_sum += conf.continuation_12_corrhist_weight;
+        }
+        if height > 4 {
+            weight_sum += conf.continuation_14_corrhist_weight;
+        }
+
+        // scale error by confidence
+        let dc = i64::from(err) * i64::from(gain);
+        // scale s.t. we attempt to recover some proportion of the error
+        let bonus = (dc * (CORR_READ_SCALE / CORR_GAIN_ONE) / (12 * i64::from(weight_sum))) as i32;
+
+        // not really the effective clipping anymore
+        let bonus = bonus.clamp(-CORRECTION_HISTORY_MAX / 4, CORRECTION_HISTORY_MAX / 4);
 
         let keys = &self.board.state.keys;
 
@@ -277,7 +315,7 @@ impl ThreadData<'_> {
             + cont12 * i64::from(self.info.conf.continuation_12_corrhist_weight)
             + cont14 * i64::from(self.info.conf.continuation_14_corrhist_weight);
 
-        (adjustment * 12 / 0x40000) as i32
+        (adjustment * 12 / CORR_READ_SCALE) as i32
     }
 }
 
