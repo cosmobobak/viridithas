@@ -300,14 +300,23 @@ impl CorrectionHistoryTable {
         self.table.as_flattened_mut().fill(0);
     }
 
-    #[allow(clippy::cast_possible_truncation)]
-    pub fn get(&self, side: Colour, key: u64) -> i64 {
-        i64::from(self.table[(key % CORRECTION_HISTORY_SIZE as u64) as usize][side])
+    /// Use the top bit to construct a sign.
+    ///
+    /// Removes collision bias as in <https://arxiv.org/pdf/0902.2206>
+    const fn sign(key: u64) -> i64 {
+        1 - 2 * (key >> 63).cast_signed()
     }
 
-    #[allow(clippy::cast_possible_truncation)]
-    pub fn get_mut(&mut self, side: Colour, key: u64) -> &mut i16 {
-        &mut self.table[(key % CORRECTION_HISTORY_SIZE as u64) as usize][side]
+    #[expect(clippy::cast_possible_truncation)]
+    pub fn get(&self, side: Colour, key: u64) -> i64 {
+        i64::from(self.table[(key % CORRECTION_HISTORY_SIZE as u64) as usize][side])
+            * Self::sign(key)
+    }
+
+    #[expect(clippy::cast_possible_truncation)]
+    pub fn update(&mut self, side: Colour, key: u64, bonus: i32) {
+        let entry = &mut self.table[(key % CORRECTION_HISTORY_SIZE as u64) as usize][side];
+        update_correction(entry, bonus * Self::sign(key) as i32);
     }
 }
 
