@@ -1746,7 +1746,7 @@ mod tests {
         };
 
         let serial = relabel_with(1);
-        assert!(!serial.is_empty());
+        assert_ne!(serial, []);
         for threads in [2, 3, 8] {
             assert_eq!(
                 serial,

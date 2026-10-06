@@ -12,6 +12,35 @@ pub const INFINITY: i32 = MATE_SCORE + 1;
 pub const VALUE_NONE: i32 = INFINITY + 1;
 pub const MEGABYTE: usize = 1024 * 1024;
 
+pub trait ArrayChunks<T, const N: usize> {
+    fn chunks_exact_const<const M: usize>(&self) -> &[[T; M]];
+    fn chunks_exact_const_mut<const M: usize>(&mut self) -> &mut [[T; M]];
+}
+
+impl<T, const N: usize> ArrayChunks<T, N> for [T; N] {
+    fn chunks_exact_const<const M: usize>(&self) -> &[[T; M]] {
+        const {
+            assert!(
+                M != 0 && N.is_multiple_of(M),
+                "array length must be a multiple of the chunk size"
+            );
+        };
+        // SAFETY: `M` divides `N` by the assertion above.
+        unsafe { self.as_chunks_unchecked() }
+    }
+
+    fn chunks_exact_const_mut<const M: usize>(&mut self) -> &mut [[T; M]] {
+        const {
+            assert!(
+                M != 0 && N.is_multiple_of(M),
+                "array length must be a multiple of the chunk size"
+            );
+        };
+        // SAFETY: `M` divides `N` by the assertion above.
+        unsafe { self.as_chunks_unchecked_mut() }
+    }
+}
+
 /// A flushing atomic counter to reduce contention.
 #[derive(Debug, Clone, Copy)]
 pub struct BatchedAtomicCounter<'a> {
