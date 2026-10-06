@@ -568,8 +568,12 @@ impl QuantisedNetwork {
     fn permute(&self, use_simd: bool) -> Box<NNUEParams> {
         let mut net = NNUEParams::zeroed();
         // permute the feature transformer weights
-        let src_buckets = self.l0_weights.chunks_exact_const();
-        let tgt_buckets = net.l0_weights.chunks_exact_const_mut();
+        let src_buckets = self
+            .l0_weights
+            .chunks_exact_const::<{ PSQT_FEATURES * L0_OUT }>();
+        let tgt_buckets = net
+            .l0_weights
+            .chunks_exact_const_mut::<{ PSQT_FEATURES * L0_OUT }>();
         for (src_bucket, tgt_bucket) in src_buckets.iter().zip(tgt_buckets) {
             repermute_l0_psqt_bucket(tgt_bucket, src_bucket);
         }
@@ -584,10 +588,16 @@ impl QuantisedNetwork {
         if use_simd {
             type PermChunk<I> = [I; 8];
             // reinterpret as data of size __m128i
-            let mut weights: Vec<&mut PermChunk<i16>> =
-                net.l0_weights.chunks_exact_const_mut().iter_mut().collect();
-            let mut biases: Vec<&mut PermChunk<i16>> =
-                net.l0_biases.chunks_exact_const_mut().iter_mut().collect();
+            let mut weights: Vec<&mut PermChunk<i16>> = net
+                .l0_weights
+                .chunks_exact_const_mut::<8>()
+                .iter_mut()
+                .collect();
+            let mut biases: Vec<&mut PermChunk<i16>> = net
+                .l0_biases
+                .chunks_exact_const_mut::<8>()
+                .iter_mut()
+                .collect();
             let num_chunks = size_of::<PermChunk<i16>>() / size_of::<i16>();
 
             let num_regs = PACK_REGS;

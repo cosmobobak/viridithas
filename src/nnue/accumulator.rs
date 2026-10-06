@@ -226,6 +226,7 @@ mod simd {
             _mm512_xor_si512,
         };
 
+        use crate::chess::types::File;
         use crate::nnue::network::feature::pawn_compressed_index;
 
         let orient = (if colour == Colour::Black { 56 } else { 0 })
