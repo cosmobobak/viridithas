@@ -1412,12 +1412,7 @@ pub fn alpha_beta<NT: NodeType>(
 
             // history pruning
             // if this move's history score is too low, we start skipping moves.
-            if is_quiet
-                && (Some(m) != killer)
-                && lmr_depth < 7
-                && stat_score < t.info.conf.history_pruning_margin * (depth - 1)
-            {
-                move_picker.skip_quiets = true;
+            if is_quiet && stat_score < t.info.conf.history_pruning_margin * (depth - 1) {
                 continue;
             }
 
