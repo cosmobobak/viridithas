@@ -70,13 +70,18 @@ fxhash = "0.2.1"
 term_size = "0.3.2"
 vec1 = "1.12.1"
 
-# for coloured terminal output
+# for hugepages on linux
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+
+# for terminal output and hugepages on windows
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 version = "0.61"
 features = [
     "Win32_Foundation",
     "Win32_Security",
     "Win32_System_Threading",
+    "Win32_System_Memory",
     "Win32_UI_WindowsAndMessaging",
     "Win32_Storage",
     "Win32_Storage_FileSystem",

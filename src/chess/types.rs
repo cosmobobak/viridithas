@@ -457,6 +457,8 @@ pub struct State {
     pub ep_square: Option<Square>,
     /// The number of half moves made since the last capture or pawn advance.
     pub fifty_move_counter: u8,
+    /// The number of half moves made since the last null move.
+    pub plies_from_null: u8,
     /// Squares that the opponent attacks.
     pub threats: Threats,
     /// The square-sets of all the pieces on the board.
@@ -476,6 +478,7 @@ impl Default for State {
             castle_perm: CastlingRights::default(),
             ep_square: None,
             fifty_move_counter: 0,
+            plies_from_null: 0,
             threats: Threats::default(),
             bbs: PieceLayout::default(),
             pinned: <[SquareSet; 2]>::default(),

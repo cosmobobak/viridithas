@@ -9,7 +9,7 @@ use crate::{
     },
     historytable::{
         CORRECTION_HISTORY_MAX, HASH_HISTORY_SIZE, history_delta, update_cont_history,
-        update_correction, update_history,
+        update_history,
     },
     lookups::PIECE_KEYS,
     searchinfo::SearchInfo,
@@ -212,31 +212,20 @@ impl ThreadData<'_> {
 
         let keys = &self.board.state.keys;
 
-        let pawn = self.pawn_corrhist.get_mut(us, keys.pawn);
-        let [nonpawn_white, nonpawn_black] = &mut self.nonpawn_corrhist;
-        let nonpawn_white = nonpawn_white.get_mut(us, keys.non_pawn[White]);
-        let nonpawn_black = nonpawn_black.get_mut(us, keys.non_pawn[Black]);
-        let minor = self.minor_corrhist.get_mut(us, keys.minor);
-        let major = self.major_corrhist.get_mut(us, keys.major);
-
-        let update = move |entry: &mut i16| {
-            update_correction(entry, bonus);
-        };
-
-        update(pawn);
-        update(nonpawn_white);
-        update(nonpawn_black);
-        update(minor);
-        update(major);
+        self.pawn_corrhist.update(us, keys.pawn, bonus);
+        self.nonpawn_corrhist[White].update(us, keys.non_pawn[White], bonus);
+        self.nonpawn_corrhist[Black].update(us, keys.non_pawn[Black], bonus);
+        self.minor_corrhist.update(us, keys.minor, bonus);
+        self.major_corrhist.update(us, keys.major, bonus);
 
         if height > 2 {
             let index = cont_corrhist_index(&self.ss, height, 2);
-            update(self.cont_corrhist.get_mut(us, index));
+            self.cont_corrhist.update(us, index, bonus);
         }
 
         if height > 4 {
             let index = cont_corrhist_index(&self.ss, height, 4);
-            update(self.cont_corrhist.get_mut(us, index));
+            self.cont_corrhist.update(us, index, bonus);
         }
     }
 

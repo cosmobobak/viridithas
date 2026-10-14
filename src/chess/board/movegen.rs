@@ -401,18 +401,10 @@ impl Board {
         let valid_targets = bbs.colours[!C::COLOUR] & valid_target_squares;
         let promo_rank = [SquareSet::RANK_7, SquareSet::RANK_2][C::COLOUR];
 
-        let attacking_west;
-        let attacking_east;
-
         // to determine which pawns can capture,
         // we shift the opponent's pieces backwards and find the intersection.
-        if C::WHITE {
-            attacking_west = valid_targets.south_east_one() & our_pawns;
-            attacking_east = valid_targets.south_west_one() & our_pawns;
-        } else {
-            attacking_west = valid_targets.north_east_one() & our_pawns;
-            attacking_east = valid_targets.north_west_one() & our_pawns;
-        }
+        let attacking_west = valid_targets.back_east_one::<C>() & our_pawns;
+        let attacking_east = valid_targets.back_west_one::<C>() & our_pawns;
 
         for from in attacking_west & !promo_rank {
             // SAFETY: masking guarantees a valid square
@@ -460,11 +452,7 @@ impl Board {
 
         let ep_bb = ep_sq.as_set();
         let our_pawns = self.state.bbs.pieces[PieceType::Pawn] & self.state.bbs.colours[C::COLOUR];
-        let attacks = if C::WHITE {
-            ep_bb.south_east_one() | ep_bb.south_west_one()
-        } else {
-            ep_bb.north_east_one() | ep_bb.north_west_one()
-        } & our_pawns;
+        let attacks = (ep_bb.back_east_one::<C>() | ep_bb.back_west_one::<C>()) & our_pawns;
 
         for from_sq in attacks {
             move_list.push(Move::new_with_flags(from_sq, ep_sq, MoveFlags::EnPassant));
@@ -486,22 +474,11 @@ impl Board {
         let our_pawns = bbs.pieces[Pawn] & bbs.colours[C::COLOUR];
         let empty = bbs.empty();
 
-        let shifted_valid_squares;
-        let double_shifted_valid_squares;
-        let pushable_pawns;
-        let double_pushable_pawns;
-
-        if C::WHITE {
-            shifted_valid_squares = valid_target_squares.south_one();
-            double_shifted_valid_squares = valid_target_squares.south_one().south_one();
-            pushable_pawns = our_pawns & empty.south_one();
-            double_pushable_pawns = pushable_pawns & empty.south_one().south_one() & start_rank;
-        } else {
-            shifted_valid_squares = valid_target_squares.north_one();
-            double_shifted_valid_squares = valid_target_squares.north_one().north_one();
-            pushable_pawns = our_pawns & empty.north_one();
-            double_pushable_pawns = pushable_pawns & empty.north_one().north_one() & start_rank;
-        }
+        let shifted_valid_squares = valid_target_squares.back_one::<C>();
+        let double_shifted_valid_squares = valid_target_squares.back_one::<C>().back_one::<C>();
+        let pushable_pawns = our_pawns & empty.back_one::<C>();
+        let double_pushable_pawns =
+            pushable_pawns & empty.back_one::<C>().back_one::<C>() & start_rank;
 
         for from in pushable_pawns & !promo_rank & shifted_valid_squares {
             // SAFETY: masking guarantees a valid square
@@ -855,22 +832,10 @@ impl Board {
         let start_rank = SquareSet::RANK_2.relative_to(C::COLOUR);
         let promo_rank = SquareSet::RANK_7.relative_to(C::COLOUR);
 
-        let shifted_empty_squares;
-        let double_shifted_empty;
-        let shifted_valid;
-        let double_shifted_valid;
-
-        if C::WHITE {
-            shifted_empty_squares = bbs.empty().south_one();
-            double_shifted_empty = bbs.empty().south_one().south_one();
-            shifted_valid = valid_target.south_one();
-            double_shifted_valid = valid_target.south_one().south_one();
-        } else {
-            shifted_empty_squares = bbs.empty().north_one();
-            double_shifted_empty = bbs.empty().north_one().north_one();
-            shifted_valid = valid_target.north_one();
-            double_shifted_valid = valid_target.north_one().north_one();
-        }
+        let shifted_empty_squares = bbs.empty().back_one::<C>();
+        let double_shifted_empty = shifted_empty_squares.back_one::<C>();
+        let shifted_valid = valid_target.back_one::<C>();
+        let double_shifted_valid = shifted_valid.back_one::<C>();
 
         let pushable = bbs.pieces[Pawn] & bbs.colours[C::COLOUR] & shifted_empty_squares;
         for from in pushable & !promo_rank & shifted_valid {

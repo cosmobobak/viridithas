@@ -223,7 +223,6 @@ mod vbmi {
     }
 }
 
-#[expect(clippy::useless_let_if_seq)]
 #[cfg(not(target_feature = "avx512vbmi"))]
 mod generic {
     use crate::{
@@ -268,21 +267,11 @@ mod generic {
                 // The 0×80 sentinels in empty slots aren’t selected.
                 let other_sq = Square::new_unchecked(other_sqs[i]);
 
-                let attacker;
-                let from;
-                let victim;
-                let to;
-                if Dir::OUTGOING {
-                    attacker = piece;
-                    from = sq;
-                    victim = other;
-                    to = other_sq;
+                let (attacker, from, victim, to) = if Dir::OUTGOING {
+                    (piece, sq, other, other_sq)
                 } else {
-                    attacker = other;
-                    from = other_sq;
-                    victim = piece;
-                    to = sq;
-                }
+                    (other, other_sq, piece, sq)
+                };
 
                 let feature = ThreatFeatureUpdate {
                     attacker,

@@ -26,7 +26,7 @@ use crate::{
     },
     image::{self, Image},
     nnue,
-    util::{Align, MAX_DEPTH},
+    util::{Align, ArrayChunks, MAX_DEPTH, MEGABYTE},
 };
 
 use super::accumulator::{self, Accumulator};
@@ -278,18 +278,19 @@ impl UnquantisedNetwork {
         #![allow(clippy::similar_names)]
 
         let mut net = MergedNetwork::zeroed();
-        let mut buckets = self.l0_weights.chunks_exact(12 * 64 * L0_OUT);
-        let factoriser;
+        let buckets = self.l0_weights.chunks_exact_const::<{ 12 * 64 * L0_OUT }>();
+
         let alternate_buffer;
-        if UNQUANTISED_HAS_FACTORISER {
-            factoriser = buckets.next().unwrap();
+        let (factoriser, buckets) = if UNQUANTISED_HAS_FACTORISER {
+            buckets.split_first().unwrap()
         } else {
             alternate_buffer = vec![0.0; 12 * 64 * L0_OUT];
-            factoriser = &alternate_buffer;
-        }
-        for (src_bucket, tgt_bucket) in
-            buckets.zip(net.l0_weights.chunks_exact_mut(12 * 64 * L0_OUT))
-        {
+            (alternate_buffer.as_array().unwrap(), buckets)
+        };
+        let target_buckets = net
+            .l0_weights
+            .chunks_exact_const_mut::<{ 12 * 64 * L0_OUT }>();
+        for (src_bucket, tgt_bucket) in buckets.iter().zip(target_buckets) {
             for piece in Piece::all() {
                 for sq in Square::all() {
                     let i = feature::psqt_index_full(
@@ -501,11 +502,12 @@ impl MergedNetwork {
 
         let mut net = QuantisedNetwork::zeroed();
         // quantise the feature transformer weights.
-        let buckets = self.l0_weights.chunks_exact(12 * 64 * L0_OUT);
+        let buckets = self.l0_weights.chunks_exact_const::<{ 12 * 64 * L0_OUT }>();
+        let target_buckets = net
+            .l0_weights
+            .chunks_exact_const_mut::<{ PSQT_FEATURES * L0_OUT }>();
 
-        for (bucket_idx, (src_bucket, tgt_bucket)) in buckets
-            .zip(net.l0_weights.chunks_exact_mut(PSQT_FEATURES * L0_OUT))
-            .enumerate()
+        for (bucket_idx, (src_bucket, tgt_bucket)) in buckets.iter().zip(target_buckets).enumerate()
         {
             // for repermuting the weights.
             let mut things_written = 0;
@@ -604,9 +606,13 @@ impl QuantisedNetwork {
     fn permute(&self, use_simd: bool) -> Box<NNUEParams> {
         let mut net = NNUEParams::zeroed();
         // permute the feature transformer weights
-        let src_buckets = self.l0_weights.chunks_exact(PSQT_FEATURES * L0_OUT);
-        let tgt_buckets = net.l0_weights.chunks_exact_mut(PSQT_FEATURES * L0_OUT);
-        for (src_bucket, tgt_bucket) in src_buckets.zip(tgt_buckets) {
+        let src_buckets = self
+            .l0_weights
+            .chunks_exact_const::<{ PSQT_FEATURES * L0_OUT }>();
+        let tgt_buckets = net
+            .l0_weights
+            .chunks_exact_const_mut::<{ PSQT_FEATURES * L0_OUT }>();
+        for (src_bucket, tgt_bucket) in src_buckets.iter().zip(tgt_buckets) {
             repermute_l0_psqt_bucket(tgt_bucket, src_bucket);
         }
 
@@ -622,13 +628,13 @@ impl QuantisedNetwork {
             // reinterpret as data of size __m128i
             let mut weights: Vec<&mut PermChunk<i16>> = net
                 .l0_weights
-                .chunks_exact_mut(8)
-                .map(|a| a.try_into().unwrap())
+                .chunks_exact_const_mut::<8>()
+                .iter_mut()
                 .collect();
             let mut biases: Vec<&mut PermChunk<i16>> = net
                 .l0_biases
-                .chunks_exact_mut(8)
-                .map(|a| a.try_into().unwrap())
+                .chunks_exact_const_mut::<8>()
+                .iter_mut()
                 .collect();
             let num_chunks = size_of::<PermChunk<i16>>() / size_of::<i16>();
 
@@ -666,7 +672,7 @@ impl QuantisedNetwork {
 
             // now the same for the threat plane weights
             let mut threat_weights: Vec<&mut PermChunk<i8>> =
-                net.l0_aux.as_chunks_mut::<8>().0.iter_mut().collect();
+                net.l0_aux.chunks_exact_const_mut().iter_mut().collect();
             for row in 0..AUX_FEATURES {
                 let base = row * L0_OUT / num_chunks;
                 for i in (0..L1_IN / num_chunks).step_by(num_regs) {
@@ -789,7 +795,10 @@ fn repermute_l0_bias(feature_bias: &mut [i16; L0_OUT], unsorted: &[i16; L0_OUT])
     }
 }
 
-fn repermute_l0_psqt_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
+fn repermute_l0_psqt_bucket(
+    tgt_bucket: &mut [i16; PSQT_FEATURES * L0_OUT],
+    unsorted: &[i16; PSQT_FEATURES * L0_OUT],
+) {
     // for each input feature,
     for i in 0..PSQT_FEATURES {
         let feature = i * L0_OUT;
@@ -827,6 +836,9 @@ fn repermute_l0_aux(
 }
 
 impl NNUEParams {
+    /// Size of the mapped network, padded to 2MB.
+    const WEIGHT_FILE_LEN: usize = size_of::<Self>().next_multiple_of(2 * MEGABYTE);
+
     #[allow(clippy::too_many_lines)]
     pub fn decompress_and_alloc() -> anyhow::Result<&'static Self> {
         #[cfg(not(feature = "zstd"))]
@@ -885,7 +897,7 @@ impl NNUEParams {
         }
 
         let weights_file_name = format!(
-            "viridithas-shared-network-weights-{}-{}-{}-{:X}.bin",
+            "viridithas-shared-network-weights-v2-{}-{}-{}-{:X}.bin",
             std::env::consts::ARCH,
             std::env::consts::OS,
             // target cpu
@@ -964,13 +976,14 @@ impl NNUEParams {
             .with_context(|| format!("Failed to open temporary file at {}", temp_path.display()))?;
 
         // Allocate the file to the right size
-        let size = size_of::<Self>();
-        file.set_len(size as u64).with_context(|| {
-            format!(
-                "Failed to set length of file at {} to {size}",
-                temp_path.display()
-            )
-        })?;
+        file.set_len(Self::WEIGHT_FILE_LEN as u64)
+            .with_context(|| {
+                format!(
+                    "Failed to set length of file at {} to {}",
+                    temp_path.display(),
+                    Self::WEIGHT_FILE_LEN,
+                )
+            })?;
 
         // SAFETY: This file must not be modified while we have a reference to it.
         // we avoid doing this ourselves, but we can't defend against other processes.
@@ -979,6 +992,9 @@ impl NNUEParams {
                 .map_mut(&file)
                 .with_context(|| format!("Failed to map temp file at {}", temp_path.display()))?
         };
+
+        #[cfg(target_os = "linux")]
+        let _ = mmap.advise(memmap2::Advice::HugePage);
 
         // Verify that the pointer is aligned to 64 bytes
         anyhow::ensure!(
@@ -1099,10 +1115,27 @@ impl NNUEParams {
             })?
         };
 
+        #[cfg(target_os = "linux")]
+        {
+            // https://man7.org/linux/man-pages/man2/madvise.2.html
+            // MADV_COLLAPSE (since Linux 6.1)
+            // > Perform a best-effort synchronous collapse of the native
+            // > pages mapped by the memory range into Transparent Huge
+            // > Pages (THPs).  MADV_COLLAPSE operates on the current state
+            // > of memory of the calling process and makes no persistent
+            // > changes or guarantees on how pages will be mapped,
+            // > constructed, or faulted in the future.
+            const MADV_COLLAPSE: libc::c_int = 25;
+            let _ = mmap.advise(memmap2::Advice::HugePage);
+            // SAFETY: AIUI it is hard to misuse madvise().
+            //         We pass a valid range of memory.
+            unsafe { libc::madvise(mmap.as_ptr().cast_mut().cast(), mmap.len(), MADV_COLLAPSE) };
+        }
+
         anyhow::ensure!(
-            mmap.len() == size_of::<Self>(),
+            mmap.len() == Self::WEIGHT_FILE_LEN,
             "Wrong number of bytes: expected {}, got {}",
-            size_of::<Self>(),
+            Self::WEIGHT_FILE_LEN,
             mmap.len()
         );
 

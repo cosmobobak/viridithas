@@ -8,7 +8,7 @@ use std::{
     },
 };
 
-use crate::chess::types::Square;
+use crate::chess::{piece::Col, types::Square};
 
 use super::piece::Colour;
 
@@ -201,6 +201,30 @@ impl SquareSet {
             inner: self.inner >> 9 & !Self::FILE_H.inner,
         }
     }
+    pub const fn fwd_east_one<C: Col>(self) -> Self {
+        match C::COLOUR {
+            Colour::White => self.north_east_one(),
+            Colour::Black => self.south_east_one(),
+        }
+    }
+    pub const fn fwd_west_one<C: Col>(self) -> Self {
+        match C::COLOUR {
+            Colour::White => self.north_west_one(),
+            Colour::Black => self.south_west_one(),
+        }
+    }
+    pub const fn back_east_one<C: Col>(self) -> Self {
+        match C::COLOUR {
+            Colour::White => self.south_east_one(),
+            Colour::Black => self.north_east_one(),
+        }
+    }
+    pub const fn back_west_one<C: Col>(self) -> Self {
+        match C::COLOUR {
+            Colour::White => self.south_west_one(),
+            Colour::Black => self.north_west_one(),
+        }
+    }
     pub const fn east_one(self) -> Self {
         Self {
             inner: self.inner << 1 & !Self::FILE_A.inner,
@@ -219,6 +243,18 @@ impl SquareSet {
     pub const fn south_one(self) -> Self {
         Self {
             inner: self.inner >> 8,
+        }
+    }
+    pub const fn fwd_one<C: Col>(self) -> Self {
+        match C::COLOUR {
+            Colour::White => self.north_one(),
+            Colour::Black => self.south_one(),
+        }
+    }
+    pub const fn back_one<C: Col>(self) -> Self {
+        match C::COLOUR {
+            Colour::White => self.south_one(),
+            Colour::Black => self.north_one(),
         }
     }
 
