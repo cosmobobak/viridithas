@@ -1440,10 +1440,7 @@ pub fn alpha_beta<NT: NodeType>(
         if !NT::ROOT
             && (!NT::PV || !cfg!(feature = "datagen"))
             && best_score > -MINIMUM_TB_WIN_SCORE
-            && depth < 10
             && move_picker.stage > Stage::YieldGoodCaptures
-            && t.board.state.threats.all.contains_square(m.to())
-            && t.ss[height - 1].searching.is_some()
             && !static_exchange_eval(
                 &t.board,
                 &t.info.conf,
