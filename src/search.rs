@@ -1445,7 +1445,7 @@ pub fn alpha_beta<NT: NodeType>(
                 &t.board,
                 &t.info.conf,
                 m,
-                see_table[usize::from(is_quiet)]
+                see_table[usize::from(is_quiet && !t.board.gives_check(m))]
                     - stat_score * t.info.conf.see_stat_score_mul / 1024,
             )
         {
