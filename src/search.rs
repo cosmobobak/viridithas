@@ -1427,7 +1427,7 @@ pub fn alpha_beta<NT: NodeType>(
                 + t.info.conf.futility_coeff_0
                 + stat_score / 128;
             if is_quiet
-                && lmr_depth < 6
+                && lmr_depth < 12
                 && static_eval + fp_margin <= alpha
                 && !t.board.gives_check(m)
             {
