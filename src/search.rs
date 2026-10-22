@@ -65,7 +65,7 @@ const RFP_IMPROVING_MARGIN: i32 = 76;
 const NMP_IMPROVING_MARGIN: i32 = 132;
 const NMP_DEPTH_MUL: i32 = -8;
 const NMP_REDUCTION_EVAL_DIVISOR: i32 = 174;
-const SEE_QUIET_MARGIN: i32 = -62;
+const SEE_QUIET_MARGIN: i32 = -25;
 const SEE_TACTICAL_MARGIN: i32 = -28;
 const FUTILITY_COEFF_0: i32 = 86;
 const FUTILITY_COEFF_1: i32 = 70;
@@ -1167,12 +1167,6 @@ pub fn alpha_beta<NT: NodeType>(
         depth -= i32::from(depth >= 8);
     }
 
-    // the margins for static-exchange-evaluation pruning for tactical and quiet moves.
-    let see_table = [
-        t.info.conf.see_tactical_margin * depth * depth,
-        t.info.conf.see_quiet_margin * depth,
-    ];
-
     // probcut:
     let mut pc_beta = std::cmp::min(
         beta + t.info.conf.probcut_margin
@@ -1437,17 +1431,17 @@ pub fn alpha_beta<NT: NodeType>(
 
         // static exchange evaluation pruning
         // simulate all captures flowing onto the target square, and if we come out badly, we skip the move.
+        let see_margin = if is_quiet && !t.board.gives_check(m) {
+            t.info.conf.see_quiet_margin * lmr_depth * lmr_depth
+        } else {
+            t.info.conf.see_tactical_margin * depth * depth
+                - stat_score * t.info.conf.see_stat_score_mul / 1024
+        };
         if !NT::ROOT
             && (!NT::PV || !cfg!(feature = "datagen"))
             && best_score > -MINIMUM_TB_WIN_SCORE
             && move_picker.stage > Stage::YieldGoodCaptures
-            && !static_exchange_eval(
-                &t.board,
-                &t.info.conf,
-                m,
-                see_table[usize::from(is_quiet && !t.board.gives_check(m))]
-                    - stat_score * t.info.conf.see_stat_score_mul / 1024,
-            )
+            && !static_exchange_eval(&t.board, &t.info.conf, m, see_margin)
         {
             continue;
         }
