@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 use std::sync::{
-    Mutex,
+    Mutex, RwLock,
     atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicU64, AtomicUsize, Ordering},
     mpsc,
 };
 
 use crate::{
+    chess::chessmove::Move,
     search::{LMTable, parameters::Config},
     timemgmt::{SearchLimit, TimeManager},
     util::{BatchedAtomicCounter, MAX_DEPTH},
@@ -71,6 +72,7 @@ pub struct Control {
     pub syzygy_probe_limit: AtomicU8,
     pub syzygy_probe_depth: AtomicI32,
     pub contempt: AtomicI32,
+    pub search_moves: RwLock<Vec<Move>>,
 }
 
 impl Default for Control {
@@ -85,7 +87,15 @@ impl Default for Control {
             syzygy_probe_limit: AtomicU8::new(7),
             syzygy_probe_depth: AtomicI32::new(1),
             contempt: AtomicI32::new(0),
+            search_moves: RwLock::new(Vec::new()),
         }
+    }
+}
+
+impl Control {
+    pub fn set_moves(&self, moves: Vec<Move>) {
+        let mut guard = self.search_moves.write().unwrap();
+        *guard = moves;
     }
 }
 

@@ -515,7 +515,7 @@ fn generate_on_thread<'a>(
 
         // STEP 2: evaluate the exit position with reasonable
         // effort to make sure that it's worth learning from.
-        let temp_limit = td.info.clock.limits().clone();
+        let temp_limit = td.info.clock.limits.clone();
         td.info.clock.set_limits(
             SearchLimit::SoftNodes {
                 soft_limit: 50_000,

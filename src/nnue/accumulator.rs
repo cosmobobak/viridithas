@@ -232,7 +232,8 @@ mod simd {
         let orient = (if colour == Colour::Black { 56 } else { 0 })
             | (if king.file() >= File::E { 7 } else { 0 });
 
-        // SAFETY: TODO
+        // SAFETY: We only have at most 16 pawns on the board,
+        // and they are never on the back-ranks.
         unsafe {
             #[rustfmt::skip]
             let iota = _mm512_set_epi8(

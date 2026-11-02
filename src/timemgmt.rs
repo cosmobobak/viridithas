@@ -71,8 +71,6 @@ pub enum SearchLimit {
     /// explored and a depth has been cleared.
     #[cfg(feature = "datagen")]
     SoftNodes { soft_limit: u64, hard_limit: u64 },
-    /// restrict search to these moves only
-    Moves(Vec<Move>),
 }
 
 impl SearchLimit {
@@ -97,10 +95,6 @@ impl SearchLimit {
             Self::SoftNodes { hard_limit, .. } => {
                 // this should never *really* return true, but we do this in case of search explosions.
                 nodes_so_far >= hard_limit
-            }
-            Self::Moves(_) => {
-                /* nothing to do */
-                false
             } //
               // TODO: reïmplement Ponder.
               // SearchLimit::Pondering { .. } => false,

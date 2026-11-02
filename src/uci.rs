@@ -29,6 +29,7 @@ use crate::{
             Board,
             movegen::{self, MoveList},
         },
+        chessmove::Move,
         fen::Fen,
         quick::Quick,
     },
@@ -493,6 +494,7 @@ fn parse_go(text: &str, pos: &Board, control: &Control) -> Result<Limits, GoPars
     let mut incs: [Option<i64>; 2] = [None, None];
     let mut nodes: Option<u64> = None;
     let mut mate: Option<usize> = None;
+    let mut searchmoves: Option<Vec<Move>> = None;
     let mut limits = Limits::infinite();
     // let mut ponder = false;
 
@@ -528,7 +530,7 @@ fn parse_go(text: &str, pos: &Board, control: &Control) -> Result<Limits, GoPars
                     moves.push(mv);
                     let _ = parts.next();
                 }
-                limits.push(SearchLimit::Moves(moves));
+                searchmoves = Some(moves);
             }
             other => return Err(GoParseError::UnknownSubcommand(other.to_string())),
         }
@@ -545,6 +547,11 @@ fn parse_go(text: &str, pos: &Board, control: &Control) -> Result<Limits, GoPars
         control.go_mate_max_depth.store(ply, Ordering::SeqCst);
     } else {
         control.go_mate_max_depth.store(MAX_DEPTH, Ordering::SeqCst);
+    }
+    if let Some(moves) = searchmoves {
+        control.set_moves(moves);
+    } else {
+        control.set_moves(Vec::new());
     }
 
     if let [Some(our_clock), Some(their_clock)] = clocks {
@@ -870,7 +877,7 @@ fn print_uci_response(info: &SearchInfo, full: bool) {
     println!("option name SyzygyProbeLimit type spin default 7 min 0 max 7");
     println!("option name SyzygyProbeDepth type spin default 1 min 1 max 100");
     println!("option name Contempt type spin default 0 min -10000 max 10000");
-    println!("option name Ponder type check default false");
+    // println!("option name Ponder type check default false");
     println!("option name UCI_Chess960 type check default false");
     if full {
         for (id, default, min, max, _) in info.conf.base_config() {

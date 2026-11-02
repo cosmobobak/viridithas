@@ -489,7 +489,12 @@ fn default_move(t: &ThreadData) -> Move {
 
     let mut mp = MovePicker::new(tt_move, t.killer_move_table[t.board.height()], 0);
 
+    let sm = t.info.control.search_moves.read().unwrap();
+
+    let filter = |m: &Move| sm.is_empty() || sm.contains(m);
+
     std::iter::from_fn(|| mp.next(t))
+        .filter(filter)
         .find(|&m| t.board.is_legal(m))
         .expect("Board::default_move called on a position with no legal moves")
 }
@@ -1342,6 +1347,13 @@ pub fn alpha_beta<NT: NodeType>(
     while let Some(m) = move_picker.next(t) {
         if excluded == Some(m) {
             continue;
+        }
+
+        if NT::ROOT {
+            let search_moves = t.info.control.search_moves.read().unwrap();
+            if !search_moves.is_empty() && !search_moves.contains(&m) {
+                continue;
+            }
         }
 
         t.cache.prefetch(t.board.key_after(m));
