@@ -6,6 +6,7 @@ use crate::{
     chess::{
         piece::{Colour, Piece, PieceType},
         piecelayout::PieceLayout,
+        squareset::SquareSet,
         types::{CastlingRights, File, Square},
     },
     errors::QuickParseError,
@@ -171,6 +172,25 @@ impl Quick {
         }
 
         // TODO check that the position is legal
+
+        // pawns are on sensible squares
+        if layout.pieces[PieceType::Pawn] & SquareSet::BACK_RANKS != SquareSet::EMPTY {
+            return Err(QuickParseError::PawnsOnBackranks);
+        }
+
+        // there are a sensible number of them
+        if layout.pieces[PieceType::Pawn].count() > 16 {
+            return Err(QuickParseError::TooManyPawns);
+        }
+
+        // check king counts
+        for colour in Colour::all() {
+            match (layout.pieces[PieceType::King] & layout.colours[colour]).count() {
+                0 => return Err(QuickParseError::MissingKing { colour }),
+                2.. => return Err(QuickParseError::DuplicateKings { colour }),
+                1 => (),
+            }
+        }
 
         Ok(Self {
             board: layout,

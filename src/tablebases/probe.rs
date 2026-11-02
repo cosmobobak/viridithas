@@ -190,6 +190,13 @@ pub fn get_tablebase_move(board: &Board, control: &Control) -> Option<(Move, i32
 
     let result = get_root_wdl_dtz(board)?;
 
+    // if result is outwith searchmoves, do nothing.
+    let guard = control.search_moves.read().unwrap();
+    if !guard.is_empty() && !guard.contains(&result.best_move) {
+        return None;
+    }
+    drop(guard);
+
     let score = match result.wdl {
         WDL::Win => TB_WIN_SCORE,
         WDL::Draw => 0,

@@ -181,6 +181,11 @@ impl Fen {
             return Err(FenParseError::PawnsOnBackranks);
         }
 
+        // there are a sensible number of them
+        if layout.pieces[PieceType::Pawn].count() > 16 {
+            return Err(FenParseError::TooManyPawns);
+        }
+
         // check king counts
         for colour in Colour::all() {
             match (layout.pieces[PieceType::King] & layout.colours[colour]).count() {

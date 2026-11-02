@@ -515,13 +515,16 @@ fn generate_on_thread<'a>(
 
         // STEP 2: evaluate the exit position with reasonable
         // effort to make sure that it's worth learning from.
-        let temp_limit = td.info.clock.limit().clone();
-        td.info.clock.set_limit(SearchLimit::SoftNodes {
-            soft_limit: 50_000,
-            hard_limit: 50_000 * 8,
-        });
+        let temp_limit = td.info.clock.limits.clone();
+        td.info.clock.set_limits(
+            SearchLimit::SoftNodes {
+                soft_limit: 50_000,
+                hard_limit: 50_000 * 8,
+            }
+            .into(),
+        );
         let eval = search_position(from_ref(&worker_thread), from_mut(td)).0;
-        td.info.clock.set_limit(temp_limit);
+        td.info.clock.set_limits(temp_limit);
         if eval.abs() > 1000 {
             // if the position is too good or too bad, we don't want it
             continue 'generation_main_loop;
