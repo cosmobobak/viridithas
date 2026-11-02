@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 use std::{
+    ops::Deref,
     sync::atomic::{AtomicBool, Ordering},
     time::{Duration, Instant},
 };
@@ -45,94 +46,186 @@ impl Forcedness {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Debug, Default)]
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct Dynamic {
+    pub our_clock: u64,
+    pub their_clock: u64,
+    pub our_inc: u64,
+    pub their_inc: u64,
+    pub moves_to_go: Option<u64>,
+}
+
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum SearchLimit {
-    #[default]
-    Infinite,
+    /// search ⟨x⟩ plies only.
     Depth(usize),
+    /// search for ⟨x⟩ milliseconds only.
     Time(u64),
+    /// search ⟨x⟩ nodes only.
     Nodes(u64),
-    Mate {
-        ply: usize,
-    },
-    Dynamic {
-        our_clock: u64,
-        their_clock: u64,
-        our_inc: u64,
-        their_inc: u64,
-        moves_to_go: Option<u64>,
-    },
+    /// search until a mate in ⟨x⟩ or fewer ply is found.
+    Mate { ply: usize },
+    /// search according to a clock.
+    Dynamic(Dynamic),
+    /// search until ⟨x⟩ nodes have been
+    /// explored and a depth has been cleared.
     #[cfg(feature = "datagen")]
-    SoftNodes {
-        soft_limit: u64,
-        hard_limit: u64,
-    },
-    Pondering {
-        saved_limit: Box<Self>,
-    },
+    SoftNodes { soft_limit: u64, hard_limit: u64 },
+    /// restrict search to these moves only
+    Moves(Vec<Move>),
 }
 
 impl SearchLimit {
-    #[expect(clippy::wrong_self_convention)]
-    pub fn to_pondering(self) -> Self {
-        Self::Pondering {
-            saved_limit: Box::new(self),
-        }
-    }
-
-    #[expect(clippy::wrong_self_convention)]
-    pub fn from_pondering(self) -> Self {
-        match self {
-            Self::Pondering { saved_limit } => *saved_limit,
-            other => other,
-        }
-    }
-
-    pub const fn depth(&self) -> Option<usize> {
-        match self {
-            Self::Depth(d) => Some(*d),
-            _ => None,
-        }
-    }
-
-    pub fn compute_time_windows(
-        our_clock: u64,
-        moves_to_go: Option<u64>,
-        our_inc: u64,
-        conf: &Config,
-    ) -> (u64, u64, u64) {
-        // The very highest amount of time we are willing to search in a position, ever.
-        let max_time = (our_clock * MAX_BANK_USABLE / 1000).saturating_sub(MOVE_OVERHEAD);
-
-        // The maximum time we can spend searching before forcibly stopping:
-        let hard_time_window = (our_clock * u64::from(conf.hard_window_frac) / 100).min(max_time);
-
-        // If we have a moves to go, we can use that to compute a time window.
-        if let Some(moves_to_go) = moves_to_go {
-            // Use more time if we have fewer moves to go, but not more than default_moves_to_go.
-            let divisor = moves_to_go.clamp(2, u64::from(conf.default_moves_to_go));
-            let computed_time_window = our_clock / divisor;
-            let optimal_time_window =
-                computed_time_window.min(max_time) * u64::from(conf.optimal_window_frac) / 100;
-            return (optimal_time_window, hard_time_window, max_time);
-        }
-
-        // Otherwise, we use default_moves_to_go.
-        let computed_time_window = our_clock / u64::from(conf.default_moves_to_go)
-            + our_inc * u64::from(conf.increment_frac) / 100
-            - MOVE_OVERHEAD;
-
-        let optimal_time_window =
-            (computed_time_window.min(max_time) * u64::from(conf.optimal_window_frac) / 100)
-                .min(hard_time_window);
-
-        (optimal_time_window, hard_time_window, max_time)
-    }
-
     #[cfg(test)]
     pub const fn mate_in(moves: usize) -> Self {
         Self::Mate { ply: moves * 2 }
     }
+
+    pub fn check_up(
+        &self,
+        start_time: Instant,
+        // TODO: this is weird to pass unconditionally.
+        hard_time: Duration,
+        nodes_so_far: u64,
+    ) -> bool {
+        match *self {
+            Self::Depth(_) | Self::Mate { .. } => false, // depth & mate are checked externally.
+            Self::Nodes(nodes) => nodes_so_far >= nodes,
+            Self::Time(millis) => start_time.elapsed().as_millis() >= u128::from(millis),
+            Self::Dynamic { .. } => start_time.elapsed() >= hard_time,
+            #[cfg(feature = "datagen")]
+            Self::SoftNodes { hard_limit, .. } => {
+                // this should never *really* return true, but we do this in case of search explosions.
+                nodes_so_far >= hard_limit
+            }
+            Self::Moves(_) => {
+                /* nothing to do */
+                false
+            } //
+              // TODO: reïmplement Ponder.
+              // SearchLimit::Pondering { .. } => false,
+        }
+    }
+
+    /// If we have used enough time that stopping after finishing a depth would be good here.
+    #[allow(unused_variables)]
+    pub fn is_past_opt_time(&self, nodes: u64, start_time: Instant, opt_time: Duration) -> bool {
+        match *self {
+            Self::Dynamic { .. } => start_time.elapsed() >= opt_time,
+            #[cfg(feature = "datagen")]
+            Self::SoftNodes { soft_limit, .. } => nodes >= soft_limit,
+            _ => false,
+        }
+    }
+
+    pub const fn is_dynamic(&self) -> bool {
+        matches!(*self, Self::Dynamic { .. })
+    }
+}
+
+/// A conjunctive set of limits to the search.
+///
+/// Causes search to terminate when one or more limits apply.
+///
+/// A command like “`go depth 8 nodes 25000`” should terminate
+/// the search when depth 8 has been reached or 25000 nodes have
+/// been searched, whichever comes first.
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct Limits {
+    limits: Vec<SearchLimit>,
+}
+
+impl Deref for Limits {
+    type Target = [SearchLimit];
+
+    fn deref(&self) -> &Self::Target {
+        &self.limits
+    }
+}
+
+impl From<SearchLimit> for Limits {
+    fn from(value: SearchLimit) -> Self {
+        Self {
+            limits: vec![value],
+        }
+    }
+}
+
+impl Limits {
+    pub fn infinite() -> Self {
+        Self { limits: Vec::new() }
+    }
+
+    pub fn dynamic(&self) -> Option<Dynamic> {
+        for limit in self.iter() {
+            if let SearchLimit::Dynamic(limit) = limit {
+                return Some(limit.clone());
+            }
+        }
+
+        None
+    }
+
+    pub fn depth(&self) -> Option<usize> {
+        for limit in self.iter() {
+            if let SearchLimit::Depth(limit) = limit {
+                return Some(*limit);
+            }
+        }
+
+        None
+    }
+
+    pub fn mate(&self) -> Option<usize> {
+        for limit in self.iter() {
+            if let SearchLimit::Mate { ply } = limit {
+                return Some(*ply);
+            }
+        }
+
+        None
+    }
+
+    /// Add a new limit.
+    pub fn push(&mut self, limit: SearchLimit) {
+        // note: we might consider deduplicating equal
+        //       limit types here, but presently don’t.
+        self.limits.push(limit);
+    }
+}
+
+pub fn compute_time_windows(
+    our_clock: u64,
+    moves_to_go: Option<u64>,
+    our_inc: u64,
+    conf: &Config,
+) -> (u64, u64, u64) {
+    // The very highest amount of time we are willing to search in a position, ever.
+    let max_time = (our_clock * MAX_BANK_USABLE / 1000).saturating_sub(MOVE_OVERHEAD);
+
+    // The maximum time we can spend searching before forcibly stopping:
+    let hard_time_window = (our_clock * u64::from(conf.hard_window_frac) / 100).min(max_time);
+
+    // If we have a moves to go, we can use that to compute a time window.
+    if let Some(moves_to_go) = moves_to_go {
+        // Use more time if we have fewer moves to go, but not more than default_moves_to_go.
+        let divisor = moves_to_go.clamp(2, u64::from(conf.default_moves_to_go));
+        let computed_time_window = our_clock / divisor;
+        let optimal_time_window =
+            computed_time_window.min(max_time) * u64::from(conf.optimal_window_frac) / 100;
+        return (optimal_time_window, hard_time_window, max_time);
+    }
+
+    // Otherwise, we use default_moves_to_go.
+    let computed_time_window = our_clock / u64::from(conf.default_moves_to_go)
+        + our_inc * u64::from(conf.increment_frac) / 100
+        - MOVE_OVERHEAD;
+
+    let optimal_time_window =
+        (computed_time_window.min(max_time) * u64::from(conf.optimal_window_frac) / 100)
+            .min(hard_time_window);
+
+    (optimal_time_window, hard_time_window, max_time)
 }
 
 #[derive(Clone, Debug)]
@@ -140,9 +233,7 @@ pub struct TimeManager {
     /// The starting time of the search.
     start_time: Instant,
     /// The limit on the search.
-    limit: SearchLimit,
-    /// The maximum time that the search may last for without losing on the clock.
-    max_time: Duration,
+    pub limits: Limits,
     /// The time after which search will be halted even mid-search.
     hard_time: Duration,
     /// The time after which we will stop upon completing a depth.
@@ -169,8 +260,7 @@ impl Default for TimeManager {
     fn default() -> Self {
         Self {
             start_time: Instant::now(),
-            limit: SearchLimit::Infinite,
-            max_time: Duration::from_secs(0),
+            limits: Limits::infinite(),
             hard_time: Duration::from_secs(0),
             opt_time: Duration::from_secs(0),
             prev_score: 0,
@@ -186,8 +276,8 @@ impl Default for TimeManager {
 }
 
 impl TimeManager {
-    pub fn set_limit(&mut self, limit: SearchLimit) {
-        self.limit = limit;
+    pub fn set_limits(&mut self, limits: Limits) {
+        self.limits = limits;
     }
 
     pub fn start(&mut self) {
@@ -198,16 +288,55 @@ impl TimeManager {
         self.start_time.elapsed()
     }
 
-    pub const fn limit(&self) -> &SearchLimit {
-        &self.limit
-    }
-
     #[allow(dead_code)]
     pub fn default_with_limit(limit: SearchLimit) -> Self {
         Self {
-            limit,
+            limits: limit.into(),
             ..Default::default()
         }
+    }
+
+    pub fn check_up(&self, stopped: &AtomicBool, nodes_so_far: u64) -> bool {
+        let start_time = self.start_time;
+        let hard_time = self.hard_time;
+        let hit_limit = self
+            .limits
+            .iter()
+            .any(|l| l.check_up(start_time, hard_time, nodes_so_far));
+
+        if hit_limit {
+            stopped.store(true, Ordering::Relaxed);
+            true
+        } else {
+            stopped.load(Ordering::Relaxed)
+        }
+    }
+
+    pub fn is_past_opt_time(&self, nodes: u64) -> bool {
+        self.limits
+            .iter()
+            .any(|l| l.is_past_opt_time(nodes, self.start_time, self.opt_time))
+    }
+
+    pub fn solved_or_mating(&mut self, score: i32) -> bool {
+        if let Some(ply) = self.limits.mate()
+            && score.abs() >= mate_in(ply)
+        {
+            return true;
+        }
+
+        if self.limits.dynamic().is_some() {
+            if is_mate_score(score) {
+                self.mate_counter += 1;
+                if self.mate_counter >= 3 {
+                    return true;
+                }
+            } else {
+                self.mate_counter = 0;
+            }
+        }
+
+        false
     }
 
     pub fn reset_for_id(&mut self, conf: &Config) {
@@ -220,105 +349,23 @@ impl TimeManager {
         self.last_factors = [1.0, 1.0];
         self.best_move_nodes_fraction = None;
 
-        if let SearchLimit::Dynamic {
+        if let Some(Dynamic {
             our_clock,
             our_inc,
             moves_to_go,
             ..
-        } = self.limit.clone().from_pondering()
+        }) = self.limits.dynamic()
         {
-            let (opt_time, mut hard_time, max_time) =
-                SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc, conf);
+            let (opt_time, hard_time, _) =
+                compute_time_windows(our_clock, moves_to_go, our_inc, conf);
+            // TODO: reïmplement Ponder.
             // deal with "ponderhit" arriving while we're stuck on a depth:
-            if matches!(self.limit, SearchLimit::Pondering { .. }) {
-                hard_time = opt_time;
-            }
-            self.max_time = Duration::from_millis(max_time);
+            // if matches!(self.limit, SearchLimit::Pondering { .. }) {
+            //     hard_time = opt_time;
+            // }
             self.hard_time = Duration::from_millis(hard_time);
             self.opt_time = Duration::from_millis(opt_time);
         }
-    }
-
-    pub fn check_up(&self, stopped: &AtomicBool, nodes_so_far: u64) -> bool {
-        match self.limit {
-            SearchLimit::Depth(_) | SearchLimit::Mate { .. } | SearchLimit::Infinite => {
-                stopped.load(Ordering::SeqCst)
-            }
-            SearchLimit::Nodes(nodes) => {
-                let past_limit = nodes_so_far >= nodes;
-                if past_limit {
-                    stopped.store(true, Ordering::SeqCst);
-                }
-                past_limit
-            }
-            SearchLimit::Time(millis) => {
-                let elapsed = self.start_time.elapsed();
-                // this cast is safe to do, because u64::MAX milliseconds is 585K centuries.
-                #[allow(clippy::cast_possible_truncation)]
-                let elapsed_millis = elapsed.as_millis() as u64;
-                let past_limit = elapsed_millis >= millis;
-                if past_limit {
-                    stopped.store(true, Ordering::SeqCst);
-                }
-                past_limit
-            }
-            SearchLimit::Dynamic { .. } => {
-                let past_limit = self.time_since_start() >= self.hard_time;
-                if past_limit {
-                    stopped.store(true, Ordering::SeqCst);
-                }
-                past_limit
-            }
-            #[cfg(feature = "datagen")]
-            SearchLimit::SoftNodes { hard_limit, .. } => {
-                // this should never *really* return true, but we do this in case of search explosions.
-                let past_limit = nodes_so_far >= hard_limit;
-                if past_limit {
-                    stopped.store(true, Ordering::SeqCst);
-                }
-                past_limit
-            }
-            SearchLimit::Pondering { .. } => false,
-        }
-    }
-
-    /// If we have used enough time that stopping after finishing a depth would be good here.
-    #[allow(unused_variables)]
-    pub fn is_past_opt_time(&self, nodes: u64) -> bool {
-        match self.limit {
-            SearchLimit::Dynamic { .. } => self.time_since_start() >= self.opt_time,
-            #[cfg(feature = "datagen")]
-            SearchLimit::SoftNodes { soft_limit, .. } => nodes >= soft_limit,
-            _ => false,
-        }
-    }
-
-    pub fn time_since_start(&self) -> Duration {
-        self.start_time.elapsed()
-    }
-
-    pub const fn is_dynamic(&self) -> bool {
-        matches!(self.limit, SearchLimit::Dynamic { .. })
-    }
-
-    pub const fn solved_breaker(&self, value: i32) -> bool {
-        if let SearchLimit::Mate { ply } = self.limit {
-            value.abs() >= mate_in(ply)
-        } else {
-            false
-        }
-    }
-
-    pub fn mate_found_breaker(&mut self, value: i32) -> bool {
-        if matches!(self.limit, SearchLimit::Dynamic { .. }) && is_mate_score(value) {
-            self.mate_counter += 1;
-            if self.mate_counter >= 3 {
-                return true;
-            }
-        } else {
-            self.mate_counter = 0;
-        }
-        false
     }
 
     const WEAKLY_FORCED: i32 = 12;
@@ -338,7 +385,7 @@ impl TimeManager {
     }
 
     pub fn forcedness_margin(&self, depth: i32) -> Option<i32> {
-        if self.forcedness == Forcedness::None && self.is_dynamic() {
+        if self.forcedness == Forcedness::None && self.limits.iter().any(SearchLimit::is_dynamic) {
             if depth >= Self::WEAKLY_FORCED {
                 Some(170)
             } else if depth >= Self::STRONGLY_FORCED {
@@ -379,15 +426,15 @@ impl TimeManager {
         best_move_nodes_fraction: Option<f64>,
         conf: &Config,
     ) {
-        if let SearchLimit::Dynamic {
+        if let Some(Dynamic {
             our_clock,
             our_inc,
             moves_to_go,
             ..
-        } = self.limit
+        }) = self.limits.dynamic()
         {
             let (opt_time, hard_time, max_time) =
-                SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc, conf);
+                compute_time_windows(our_clock, moves_to_go, our_inc, conf);
             let max_time = Duration::from_millis(max_time);
             let hard_time = Duration::from_millis(hard_time);
             let opt_time = Duration::from_millis(opt_time);
@@ -428,12 +475,12 @@ impl TimeManager {
 
     pub fn report_aspiration_fail(&mut self, depth: i32, bound: Bound, conf: &Config) {
         const FAIL_LOW_UPDATE_THRESHOLD: i32 = 0;
-        let SearchLimit::Dynamic {
+        let Some(Dynamic {
             our_clock,
             our_inc,
             moves_to_go,
             ..
-        } = self.limit
+        }) = self.limits.dynamic()
         else {
             return;
         };
@@ -441,7 +488,7 @@ impl TimeManager {
             self.failed_low += 1;
 
             let (opt_time, hard_time, max_time) =
-                SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc, conf);
+                compute_time_windows(our_clock, moves_to_go, our_inc, conf);
             let max_time = Duration::from_millis(max_time);
             let hard_time = Duration::from_millis(hard_time);
             let opt_time = Duration::from_millis(opt_time);

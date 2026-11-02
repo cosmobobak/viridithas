@@ -34,7 +34,6 @@ use crate::{
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
     threadpool::{self, ScopeExt},
-    timemgmt::SearchLimit,
     transpositiontable::{Bound, CacheResult},
     uci,
     util::{INFINITY, MAX_DEPTH, VALUE_NONE},
@@ -209,7 +208,7 @@ pub fn search_position(
     }
 
     // Probe the tablebases if we're in a TB position and in a game.
-    if thread_headers[0].info.clock.is_dynamic()
+    if thread_headers[0].info.clock.limits.dynamic().is_some()
         && let Some((best_move, score)) = tablebases::probe::get_tablebase_move(
             &thread_headers[0].board,
             thread_headers[0].info.control,
@@ -257,7 +256,7 @@ pub fn search_position(
         for (t, w) in rest.iter_mut().zip(rest_workers) {
             handles.push(s.spawn_into(
                 || {
-                    assert!(matches!(t.info.clock.limit(), SearchLimit::Infinite));
+                    assert!(matches!(*t.info.clock.limits, []));
                     iterative_deepening::<HelperThread>(t);
                 },
                 w,
@@ -468,9 +467,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
             // or if we were told to find a mate and we found one,
             // or if we're on the clock and we've solved a mate.
             if t.info.clock.is_past_opt_time(t.info.nodes.get_global())
-                || (iteration > 10
-                    && (t.info.clock.solved_breaker(t.score_scratch)
-                        || t.info.clock.mate_found_breaker(t.score_scratch)))
+                || (iteration > 10 && t.info.clock.solved_or_mating(t.score_scratch))
             {
                 t.info.stopped.store(true, Ordering::SeqCst);
                 break 'deepening;
@@ -480,7 +477,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
 }
 
 fn dyn_max_depth(t: &ThreadData<'_>) -> usize {
-    t.info.clock.limit().depth().unwrap_or(MAX_DEPTH - 1)
+    t.info.clock.limits.depth().unwrap_or(MAX_DEPTH - 1)
 }
 
 /// Give a legal default move in the case where we don't have enough time to search.

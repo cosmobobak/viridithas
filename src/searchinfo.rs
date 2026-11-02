@@ -8,7 +8,7 @@ use std::sync::{
 
 use crate::{
     search::{LMTable, parameters::Config},
-    timemgmt::TimeManager,
+    timemgmt::{SearchLimit, TimeManager},
     util::{BatchedAtomicCounter, MAX_DEPTH},
 };
 
@@ -146,7 +146,7 @@ impl<'a> SearchInfo<'a> {
         self.stdin_rx = Some(stdin_rx);
     }
 
-    pub fn check_up(&mut self) -> bool {
+    pub fn check_up(&self) -> bool {
         let already_stopped = self.stopped.load(Ordering::SeqCst);
         if already_stopped {
             return true;
@@ -154,14 +154,15 @@ impl<'a> SearchInfo<'a> {
         let res = self.clock.check_up(self.stopped, self.nodes.get_global());
         if let Some(Ok(cmd)) = self.stdin_rx.map(|m| m.lock().unwrap().try_recv()) {
             let cmd = cmd.trim();
-            if cmd == "ponderhit" {
-                println!("info string limit was {:?}", self.clock.limit());
-                let unpondering_limit = self.clock.limit().clone().from_pondering();
-                println!("info string unpondering limit is {unpondering_limit:?}");
-                self.clock.set_limit(unpondering_limit);
-                self.clock.start();
-                return self.clock.check_up(self.stopped, self.nodes.get_global());
-            }
+            // TODO: reïmplement Ponder.
+            // if cmd == "ponderhit" {
+            //     println!("info string limit was {:?}", self.clock.limit());
+            //     let unpondering_limit = self.clock.limit().clone().from_pondering();
+            //     println!("info string unpondering limit is {unpondering_limit:?}");
+            //     self.clock.set_limit(unpondering_limit);
+            //     self.clock.start();
+            //     return self.clock.check_up(self.stopped, self.nodes.get_global());
+            // }
             self.stopped.store(true, Ordering::SeqCst);
             if cmd == "quit" {
                 self.control.quit.store(true, Ordering::SeqCst);
@@ -173,7 +174,8 @@ impl<'a> SearchInfo<'a> {
     }
 
     pub fn skip_print(&self) -> bool {
-        self.clock.is_dynamic() && self.clock.time_since_start().as_millis() < 50
+        self.clock.limits.iter().any(SearchLimit::is_dynamic)
+            && self.clock.elapsed().as_millis() < 50
     }
 
     pub fn stopped(&self) -> bool {

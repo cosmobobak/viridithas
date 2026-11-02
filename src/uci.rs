@@ -30,7 +30,6 @@ use crate::{
             movegen::{self, MoveList},
         },
         fen::Fen,
-        piece::Colour,
         quick::Quick,
     },
     cuckoo,
@@ -43,7 +42,7 @@ use crate::{
     tablebases, term,
     threadlocal::{ThreadData, make_thread_data},
     threadpool,
-    timemgmt::SearchLimit,
+    timemgmt::{Dynamic, Limits, SearchLimit},
     transpositiontable::Cache,
     util::{MAX_DEPTH, MEGABYTE},
 };
@@ -166,7 +165,6 @@ pub fn main_loop() -> Result<(), UciError> {
                 } else {
                     let eval = evaluate(t, 0);
                     adj_shuffle(t, eval, t.board.fifty_move_counter(), 0)
-
                 };
                 println!("{eval}");
                 Ok(())
@@ -300,9 +298,9 @@ pub fn main_loop() -> Result<(), UciError> {
                     });
                 }
 
-                match parse_go(input, thread_data[0].board.turn(), &control) {
+                match parse_go(input, &thread_data[0].board, &control) {
                     Ok(search_limit) => {
-                        thread_data[0].info.clock.set_limit(search_limit);
+                        thread_data[0].info.clock.set_limits(search_limit);
                         cache.increase_age();
                         search_position(&worker_threads, &mut thread_data);
                         Ok(())
@@ -483,8 +481,10 @@ fn parse_position(text: &str, pos: &mut Board) -> Result<(), PositionParseError>
     Ok(())
 }
 
-fn parse_go(text: &str, stm: Colour, control: &Control) -> Result<SearchLimit, GoParseError> {
+fn parse_go(text: &str, pos: &Board, control: &Control) -> Result<Limits, GoParseError> {
     #![allow(clippy::too_many_lines)]
+
+    let stm = pos.turn();
 
     let mut depth: Option<usize> = None;
     let mut moves_to_go: Option<u64> = None;
@@ -492,10 +492,11 @@ fn parse_go(text: &str, stm: Colour, control: &Control) -> Result<SearchLimit, G
     let mut clocks: [Option<i64>; 2] = [None, None];
     let mut incs: [Option<i64>; 2] = [None, None];
     let mut nodes: Option<u64> = None;
-    let mut limit = SearchLimit::Infinite;
-    let mut ponder = false;
+    let mut mate: Option<usize> = None;
+    let mut limits = Limits::infinite();
+    // let mut ponder = false;
 
-    let mut parts = text.split_ascii_whitespace();
+    let mut parts = text.split_ascii_whitespace().peekable();
     let command = parts.next().ok_or(GoParseError::EmptyCommand)?;
     debug_assert_eq!(command, "go", "parse_go called with non-go command");
 
@@ -508,27 +509,42 @@ fn parse_go(text: &str, stm: Colour, control: &Control) -> Result<SearchLimit, G
             "btime" => clocks[stm.flip()] = Some(go_part_parse("btime", parts.next())?),
             "winc" => incs[stm] = Some(go_part_parse("winc", parts.next())?),
             "binc" => incs[stm.flip()] = Some(go_part_parse("binc", parts.next())?),
-            "infinite" => limit = SearchLimit::Infinite,
+            "infinite" => { /* no need to do anything */ }
             "mate" => {
                 let mate_distance: usize = go_part_parse("mate", parts.next())?;
-                let ply = mate_distance * 2; // gives padding when we're giving mate, but whatever
-                control.go_mate_max_depth.store(ply, Ordering::SeqCst);
-                limit = SearchLimit::Mate { ply };
+                // gives padding when we're giving mate, but whatever
+                mate = Some(mate_distance * 2);
             }
             "nodes" => nodes = Some(go_part_parse("nodes", parts.next())?),
-            "ponder" => ponder = true,
+            // "ponder" => ponder = true,
+            "searchmoves" => {
+                let parse_move = |tok| pos.parse_uci(tok).or_else(|_| pos.parse_san(tok));
+                let mut moves = Vec::new();
+                // peek to avoid consuming tokens like this:
+                //                            vvvvv
+                // > go searchmoves e4 d4 Nf3 depth 10
+                //                            ^^^^^
+                while let Some(Ok(mv)) = parts.peek().copied().map(parse_move) {
+                    moves.push(mv);
+                    let _ = parts.next();
+                }
+                limits.push(SearchLimit::Moves(moves));
+            }
             other => return Err(GoParseError::UnknownSubcommand(other.to_string())),
         }
     }
-    if !matches!(limit, SearchLimit::Mate { .. }) {
-        control.go_mate_max_depth.store(MAX_DEPTH, Ordering::SeqCst);
-    }
 
     if let Some(movetime) = movetime {
-        limit = SearchLimit::Time(movetime);
+        limits.push(SearchLimit::Time(movetime));
     }
     if let Some(depth) = depth {
-        limit = SearchLimit::Depth(depth);
+        limits.push(SearchLimit::Depth(depth));
+    }
+    if let Some(ply) = mate {
+        limits.push(SearchLimit::Mate { ply });
+        control.go_mate_max_depth.store(ply, Ordering::SeqCst);
+    } else {
+        control.go_mate_max_depth.store(MAX_DEPTH, Ordering::SeqCst);
     }
 
     if let [Some(our_clock), Some(their_clock)] = clocks {
@@ -537,26 +553,27 @@ fn parse_go(text: &str, stm: Colour, control: &Control) -> Result<SearchLimit, G
         let their_clock: u64 = their_clock.try_into().unwrap_or(0);
         let our_inc: u64 = our_inc.try_into().unwrap_or(0);
         let their_inc: u64 = their_inc.try_into().unwrap_or(0);
-        limit = SearchLimit::Dynamic {
+        limits.push(SearchLimit::Dynamic(Dynamic {
             our_clock,
             their_clock,
             our_inc,
             their_inc,
             moves_to_go,
-        };
+        }));
     } else if clocks.iter().chain(incs.iter()).any(Option::is_some) {
         return Err(GoParseError::IncompleteTimeControl);
     }
 
     if let Some(nodes) = nodes {
-        limit = SearchLimit::Nodes(nodes);
+        limits.push(SearchLimit::Nodes(nodes));
     }
 
-    if ponder {
-        limit = limit.to_pondering();
-    }
+    // TODO: reïmplement Ponder.
+    // if ponder {
+    //     limit = limit.to_pondering();
+    // }
 
-    Ok(limit)
+    Ok(limits)
 }
 
 fn go_part_parse<T>(param: &'static str, next_part: Option<&str>) -> Result<T, GoParseError>
@@ -910,9 +927,9 @@ pub fn bench(
             t.nnue.reïnit_from(&t.board, nnue_params);
         }
         thread_data[0].info.clock.start();
-        let res = parse_go(&bench_string, thread_data[0].board.turn(), &control);
+        let res = parse_go(&bench_string, &thread_data[0].board, &control);
         match res {
-            Ok(limit) => thread_data[0].info.clock.set_limit(limit),
+            Ok(limit) => thread_data[0].info.clock.set_limits(limit),
             Err(e) => {
                 thread_data[0].info.print_to_stdout = true;
                 return Err(e.into());
@@ -1002,10 +1019,10 @@ pub fn go_benchmark(nnue_params: &'static NNUEParams) -> Result<(), UciError> {
         thread_data[0].info.clock.start();
         let limit = parse_go(
             std::hint::black_box("go wtime 0 btime 0 winc 0 binc 0"),
-            thread_data[0].board.turn(),
+            &thread_data[0].board,
             &control,
         )?;
-        thread_data[0].info.clock.set_limit(limit);
+        thread_data[0].info.clock.set_limits(limit);
         cache.increase_age();
         std::hint::black_box(search_position(&pool, &mut thread_data));
     }

@@ -232,6 +232,7 @@ mod simd {
         let orient = (if colour == Colour::Black { 56 } else { 0 })
             | (if king.file() >= File::E { 7 } else { 0 });
 
+        // SAFETY: TODO
         unsafe {
             #[rustfmt::skip]
             let iota = _mm512_set_epi8(
@@ -271,6 +272,7 @@ mod simd {
                 // hi * (hi - 1) / 2 + lo
                 let prod = _mm512_mullo_epi16(hi, _mm512_sub_epi16(hi, _mm512_set1_epi16(1)));
                 let idx = _mm512_add_epi16(_mm512_srli_epi16(prod, 1), lo);
+                #[expect(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
                 let off = _mm512_mullo_epi32(
                     _mm512_cvtepu16_epi32(_mm512_castsi512_si256(idx)),
                     _mm512_set1_epi32(ACC_LEN as i32),

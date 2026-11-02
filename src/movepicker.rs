@@ -61,7 +61,6 @@ fn fast_select(entries: &[Cell<MoveListEntry>]) -> Option<&Cell<MoveListEntry>> 
     // We do load OOB, but mask.
     let best = unsafe {
         // base ptr
-        #[expect(clippy::cast_ptr_alignment, reason = "unaligned loads are fine")]
         let base = entries.as_ptr().cast::<u64>();
         let sign = simd::splat_u64(1 << 63);
         let step = simd::splat_u64(simd::U64_CHUNK as u64);
@@ -98,7 +97,6 @@ fn fast_select(entries: &[Cell<MoveListEntry>]) -> Option<&Cell<MoveListEntry>> 
         simd::reduce_max_u64(best)
     };
 
-    #[expect(clippy::cast_possible_truncation)]
     let best_idx = (best & 0xFFFF_FFFF) as usize;
     // SAFETY: by construction, the low bits are a valid index.
     unsafe { Some(entries.get_unchecked(best_idx)) }
