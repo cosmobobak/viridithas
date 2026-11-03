@@ -127,6 +127,7 @@ const EVAL_POLICY_UPDATE_MAX: i32 = 94;
 const PROBCUT_SEE_SCALE: i32 = 266;
 const PROBCUT_ADA_OFFSET: i32 = 50;
 const PROBCUT_ADA_DIV: i32 = 300;
+const PROBCUT_MIN_DEPTH: i32 = 3;
 const QUIET_CHECK_SEE_MARGIN: i32 = 175;
 
 pub trait NodeType {
@@ -1176,7 +1177,7 @@ pub fn alpha_beta<NT: NodeType>(
     ];
 
     // probcut:
-    let mut pc_beta = std::cmp::min(
+    let pc_beta = std::cmp::min(
         beta + t.info.conf.probcut_margin
             - i32::from(improving) * t.info.conf.probcut_improving_margin,
         MINIMUM_TB_WIN_SCORE - 1,
@@ -1187,7 +1188,7 @@ pub fn alpha_beta<NT: NodeType>(
     if cut_node
         && !in_check
         && excluded.is_none()
-        && depth >= 3
+        && depth >= PROBCUT_MIN_DEPTH
         && !is_decisive(beta)
         // don't probcut if we have a tthit with value < pcbeta
         && cached.is_none_or(|ce| ce.value >= pc_beta)
@@ -1211,42 +1212,54 @@ pub fn alpha_beta<NT: NodeType>(
             };
             t.board.make_move(m, &mut t.nnue);
 
-            let mut value = -quiescence::<OffPV>(t, -pc_beta, -pc_beta + 1);
+            let qs_value = -quiescence::<OffPV>(t, -pc_beta, -pc_beta + 1);
 
+            // the base probcut depth we’d use if we weren't adapting to
+            // the QS result.
+            let base_depth = depth_base.clamp(0, depth - 1);
             // the full adaptive probcut depth: if QS kicked out a really
             // high value compared to pc_beta, we assume we can slice off
             // more of the tree. the idea of adaptive probcut comes from
             // https://github.com/cj5716.
-            let mut pc_depth = (depth_base
-                - ((value - pc_beta - t.info.conf.probcut_ada_offset)
+            let ada_depth = (depth_base
+                - ((qs_value - pc_beta - t.info.conf.probcut_ada_offset)
                     / t.info.conf.probcut_ada_div)
-                    .clamp(0, 3))
+                    .clamp(0, PROBCUT_MIN_DEPTH))
             .clamp(0, depth - 1);
-            // the base probcut depth we'd use if we weren't adapting to
-            // the QS result.
-            let base_pc_depth = depth_base.clamp(0, depth - 1);
-            // we compute a higher beta if we're going shallow:
-            let ada_beta = (pc_beta + (base_pc_depth - pc_depth) * t.info.conf.probcut_ada_div)
-                .clamp(-MINIMUM_TB_WIN_SCORE + 1, MINIMUM_TB_WIN_SCORE - 1);
+            // we need a higher beta if we’re searching more shallowly
+            let ada_beta = (pc_beta + (base_depth - ada_depth) * t.info.conf.probcut_ada_div)
+                .min(MINIMUM_TB_WIN_SCORE - 1);
 
-            if value >= pc_beta && pc_depth > 0 {
-                value = -alpha_beta::<OffPV>(t, pc_depth, -ada_beta, -ada_beta + 1, false);
-
-                // if we beat pc_beta, but not ada_beta, and we reduced,
-                // then we have a chance of still being able to cut via
-                // a full-fat probcut search, so kick one off:
-                if value < ada_beta && pc_beta < ada_beta {
-                    pc_depth = base_pc_depth;
-                    value = -alpha_beta::<OffPV>(t, pc_depth, -pc_beta, -pc_beta + 1, false);
-                } else {
-                    // this persists over to the next loop.
-                    pc_beta = ada_beta;
+            // try to find (value, depth, beta).
+            let cut = 'probe: {
+                if qs_value < pc_beta {
+                    break 'probe None;
                 }
-            }
+                // if we go to depth 0, QS is enough.
+                if ada_depth == 0 {
+                    break 'probe Some((qs_value, 0, pc_beta));
+                }
+                // reduced search: if it's enough, cut.
+                let value = -alpha_beta::<OffPV>(t, ada_depth, -ada_beta, -ada_beta + 1, false);
+                if value >= ada_beta {
+                    break 'probe Some((value, ada_depth, ada_beta));
+                }
+                // the reduced search was insufficient. if base probcut
+                // looks deeper, try that.
+                if ada_depth == base_depth {
+                    break 'probe None;
+                }
+                let value = -alpha_beta::<OffPV>(t, base_depth, -pc_beta, -pc_beta + 1, false);
+                if value >= pc_beta {
+                    break 'probe Some((value, base_depth, pc_beta));
+                }
+
+                None
+            };
 
             t.board.unmake_move(&mut t.nnue);
 
-            if value >= pc_beta {
+            if let Some((value, cut_depth, cut_beta)) = cut {
                 t.cache.store(
                     key,
                     height,
@@ -1256,7 +1269,7 @@ pub fn alpha_beta<NT: NodeType>(
                     Bound::Lower,
                     // add one, because we're doing
                     // searches in-place in this node.
-                    pc_depth + 1,
+                    cut_depth + 1,
                     t.ss[height].ttpv,
                 );
 
@@ -1267,7 +1280,7 @@ pub fn alpha_beta<NT: NodeType>(
                     return value;
                 }
 
-                return value - (pc_beta - beta);
+                return value - (cut_beta - beta);
             }
         }
 
