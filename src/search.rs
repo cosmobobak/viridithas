@@ -125,8 +125,8 @@ const OPTIMISM_OFFSET: i32 = 196;
 const OPTIMISM_MATERIAL_BASE: i32 = 1869;
 const EVAL_POLICY_UPDATE_MAX: i32 = 94;
 const PROBCUT_SEE_SCALE: i32 = 266;
-const PROBCUT_ADA_OFFSET: i32 = 50;
-const PROBCUT_ADA_DIV: i32 = 300;
+const PROBCUT_ADA_DIV: i32 = 320;
+const PROBCUT_ADA_MARGIN: i32 = 200;
 const PROBCUT_MIN_DEPTH: i32 = 3;
 const QUIET_CHECK_SEE_MARGIN: i32 = 175;
 
@@ -1222,12 +1222,10 @@ pub fn alpha_beta<NT: NodeType>(
             // more of the tree. the idea of adaptive probcut comes from
             // https://github.com/cj5716.
             let ada_depth = (depth_base
-                - ((qs_value - pc_beta - t.info.conf.probcut_ada_offset)
-                    / t.info.conf.probcut_ada_div)
-                    .clamp(0, PROBCUT_MIN_DEPTH))
+                - ((qs_value - pc_beta) / t.info.conf.probcut_ada_div).clamp(0, PROBCUT_MIN_DEPTH))
             .clamp(0, depth - 1);
             // we need a higher beta if we’re searching more shallowly
-            let ada_beta = (pc_beta + (base_depth - ada_depth) * t.info.conf.probcut_ada_div)
+            let ada_beta = (pc_beta + (base_depth - ada_depth) * t.info.conf.probcut_ada_margin)
                 .min(MINIMUM_TB_WIN_SCORE - 1);
 
             // try to find (value, depth, beta).
