@@ -1221,9 +1221,8 @@ pub fn alpha_beta<NT: NodeType>(
             // high value compared to pc_beta, we assume we can slice off
             // more of the tree. the idea of adaptive probcut comes from
             // https://github.com/cj5716.
-            let ada_depth = (depth_base
-                - ((qs_value - pc_beta) / t.info.conf.probcut_ada_div).clamp(0, PROBCUT_MIN_DEPTH))
-            .clamp(0, depth - 1);
+            let ada_depth = (depth_base - (qs_value - pc_beta) / t.info.conf.probcut_ada_div)
+                .clamp(0, depth - 1);
             // we need a higher beta if we’re searching more shallowly
             let ada_beta = (pc_beta + (base_depth - ada_depth) * t.info.conf.probcut_ada_margin)
                 .min(MINIMUM_TB_WIN_SCORE - 1);
