@@ -1235,11 +1235,7 @@ pub fn alpha_beta<NT: NodeType>(
                 if qs_value < pc_beta {
                     break 'probe None;
                 }
-                // if we go to depth 0, QS is enough.
-                if ada_depth == 0 {
-                    break 'probe Some((qs_value, 0, pc_beta));
-                }
-                // reduced search: if it's enough, cut.
+                // reduced search: if it’s enough, cut.
                 let value = -alpha_beta::<OffPV>(t, ada_depth, -ada_beta, -ada_beta + 1, false);
                 if value >= ada_beta {
                     break 'probe Some((value, ada_depth, ada_beta));
