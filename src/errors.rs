@@ -55,6 +55,14 @@ pub enum QuickParseError {
     DuplicateLocation(Square),
     #[error("invalid variable piece")]
     InvalidVariable,
+    #[error("pawns present on backranks")]
+    PawnsOnBackranks,
+    #[error("more than 16 pawns")]
+    TooManyPawns,
+    #[error("{} king is missing", if *colour == Colour::White { "white" } else { "black" })]
+    MissingKing { colour: Colour },
+    #[error("more than one {} king", if *colour == Colour::White { "white" } else { "black" })]
+    DuplicateKings { colour: Colour },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -77,12 +85,14 @@ pub enum FenParseError {
     MissingCastling,
     #[error("invalid castling format: \"{0}\"")]
     InvalidCastling(String),
-    #[error("{} king is missing", if *colour == Colour::White { "white "} else { "black" })]
+    #[error("{} king is missing", if *colour == Colour::White { "white" } else { "black" })]
     MissingKing { colour: Colour },
-    #[error("more than one {} king", if *colour == Colour::White { "white "} else { "black" })]
+    #[error("more than one {} king", if *colour == Colour::White { "white" } else { "black" })]
     DuplicateKings { colour: Colour },
     #[error("pawns present on backranks")]
     PawnsOnBackranks,
+    #[error("more than 16 pawns")]
+    TooManyPawns,
     #[error("waiting player's king in check")]
     WaitingInCheck,
     #[error(

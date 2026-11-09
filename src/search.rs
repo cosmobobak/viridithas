@@ -34,7 +34,6 @@ use crate::{
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
     threadpool::{self, ScopeExt},
-    timemgmt::SearchLimit,
     transpositiontable::{Bound, CacheResult},
     uci,
     util::{INFINITY, MAX_DEPTH, VALUE_NONE},
@@ -126,8 +125,9 @@ const OPTIMISM_OFFSET: i32 = 196;
 const OPTIMISM_MATERIAL_BASE: i32 = 1869;
 const EVAL_POLICY_UPDATE_MAX: i32 = 94;
 const PROBCUT_SEE_SCALE: i32 = 266;
-const PROBCUT_ADA_OFFSET: i32 = 50;
 const PROBCUT_ADA_DIV: i32 = 300;
+const PROBCUT_ADA_MARGIN: i32 = 300;
+const PROBCUT_MIN_DEPTH: i32 = 3;
 const QUIET_CHECK_SEE_MARGIN: i32 = 175;
 
 pub trait NodeType {
@@ -209,7 +209,7 @@ pub fn search_position(
     }
 
     // Probe the tablebases if we're in a TB position and in a game.
-    if thread_headers[0].info.clock.is_dynamic()
+    if thread_headers[0].info.clock.limits.dynamic().is_some()
         && let Some((best_move, score)) = tablebases::probe::get_tablebase_move(
             &thread_headers[0].board,
             thread_headers[0].info.control,
@@ -257,7 +257,7 @@ pub fn search_position(
         for (t, w) in rest.iter_mut().zip(rest_workers) {
             handles.push(s.spawn_into(
                 || {
-                    assert!(matches!(t.info.clock.limit(), SearchLimit::Infinite));
+                    assert!(matches!(*t.info.clock.limits, []));
                     iterative_deepening::<HelperThread>(t);
                 },
                 w,
@@ -468,9 +468,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
             // or if we were told to find a mate and we found one,
             // or if we're on the clock and we've solved a mate.
             if t.info.clock.is_past_opt_time(t.info.nodes.get_global())
-                || (iteration > 10
-                    && (t.info.clock.solved_breaker(t.score_scratch)
-                        || t.info.clock.mate_found_breaker(t.score_scratch)))
+                || (iteration > 10 && t.info.clock.solved_or_mating(t.score_scratch))
             {
                 t.info.stopped.store(true, Ordering::SeqCst);
                 break 'deepening;
@@ -480,7 +478,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
 }
 
 fn dyn_max_depth(t: &ThreadData<'_>) -> usize {
-    t.info.clock.limit().depth().unwrap_or(MAX_DEPTH - 1)
+    t.info.clock.limits.depth().unwrap_or(MAX_DEPTH - 1)
 }
 
 /// Give a legal default move in the case where we don't have enough time to search.
@@ -492,7 +490,12 @@ fn default_move(t: &ThreadData) -> Move {
 
     let mut mp = MovePicker::new(tt_move, t.killer_move_table[t.board.height()], 0);
 
+    let sm = t.info.control.search_moves.read().unwrap();
+
+    let filter = |m: &Move| sm.is_empty() || sm.contains(m);
+
     std::iter::from_fn(|| mp.next(t))
+        .filter(filter)
         .find(|&m| t.board.is_legal(m))
         .expect("Board::default_move called on a position with no legal moves")
 }
@@ -535,7 +538,7 @@ pub fn quiescence<NT: NodeType>(t: &mut ThreadData, mut alpha: i32, beta: i32) -
     }
 
     // upcoming repetition detection
-    if alpha < 0 && t.board.has_game_cycle(height) {
+    if alpha < 0 && t.board.upcoming_repetition(height) {
         alpha = 0;
         if alpha >= beta {
             return alpha;
@@ -778,6 +781,7 @@ pub fn alpha_beta<NT: NodeType>(
     };
 
     let in_check = t.board.in_check();
+    let clock = t.board.fifty_move_counter();
 
     if !NT::ROOT {
         // check draw
@@ -803,15 +807,21 @@ pub fn alpha_beta<NT: NodeType>(
         }
 
         // upcoming repetition detection
-        if alpha < 0 && t.board.has_game_cycle(height) {
+        if alpha < 0 && t.board.upcoming_repetition(height) {
+            if !in_check {
+                let raw_eval = evaluate(t, t.info.nodes.get_local());
+                let fresh_eval = adj_shuffle(t, raw_eval, clock, t.correction());
+                if fresh_eval < 0 {
+                    t.update_correction_history(depth, 0, -fresh_eval);
+                }
+            }
+
             alpha = 0;
             if alpha >= beta {
                 return alpha;
             }
         }
     }
-
-    let clock = t.board.fifty_move_counter();
 
     let excluded = t.ss[height].excluded;
     let cached = if excluded.is_none()
@@ -821,10 +831,17 @@ pub fn alpha_beta<NT: NodeType>(
             .mov
             .is_some_and(|m| !t.board.is_pseudo_legal(m) || !t.board.is_legal(m));
 
+        // mate scores can be trusted even at low depth
+        let proven = hit.value != VALUE_NONE
+            && ((hit.value >= MINIMUM_TB_WIN_SCORE && hit.bound.is_lower() && hit.value >= beta)
+                || (hit.value <= -MINIMUM_TB_WIN_SCORE
+                    && hit.bound.is_upper()
+                    && hit.value <= alpha));
+
         if !NT::PV
             && !illegal
             && hit.value != VALUE_NONE
-            && hit.depth >= depth + i32::from(hit.value >= beta)
+            && (proven || hit.depth >= depth + i32::from(hit.value >= beta))
             && clock < 90
             && (hit.bound == Bound::Exact
                 || (hit.bound == Bound::Lower && hit.value >= beta)
@@ -1160,7 +1177,7 @@ pub fn alpha_beta<NT: NodeType>(
     ];
 
     // probcut:
-    let mut pc_beta = std::cmp::min(
+    let pc_beta = std::cmp::min(
         beta + t.info.conf.probcut_margin
             - i32::from(improving) * t.info.conf.probcut_improving_margin,
         MINIMUM_TB_WIN_SCORE - 1,
@@ -1171,7 +1188,7 @@ pub fn alpha_beta<NT: NodeType>(
     if cut_node
         && !in_check
         && excluded.is_none()
-        && depth >= 3
+        && depth >= PROBCUT_MIN_DEPTH
         && !is_decisive(beta)
         // don't probcut if we have a tthit with value < pcbeta
         && cached.is_none_or(|ce| ce.value >= pc_beta)
@@ -1195,42 +1212,47 @@ pub fn alpha_beta<NT: NodeType>(
             };
             t.board.make_move(m, &mut t.nnue);
 
-            let mut value = -quiescence::<OffPV>(t, -pc_beta, -pc_beta + 1);
+            let qs_value = -quiescence::<OffPV>(t, -pc_beta, -pc_beta + 1);
 
+            // the base probcut depth we’d use if we weren't adapting to
+            // the QS result.
+            let base_depth = depth_base.clamp(0, depth - 1);
             // the full adaptive probcut depth: if QS kicked out a really
             // high value compared to pc_beta, we assume we can slice off
             // more of the tree. the idea of adaptive probcut comes from
             // https://github.com/cj5716.
-            let mut pc_depth = (depth_base
-                - ((value - pc_beta - t.info.conf.probcut_ada_offset)
-                    / t.info.conf.probcut_ada_div)
-                    .clamp(0, 3))
-            .clamp(0, depth - 1);
-            // the base probcut depth we'd use if we weren't adapting to
-            // the QS result.
-            let base_pc_depth = depth_base.clamp(0, depth - 1);
-            // we compute a higher beta if we're going shallow:
-            let ada_beta = (pc_beta + (base_pc_depth - pc_depth) * t.info.conf.probcut_ada_div)
-                .clamp(-MINIMUM_TB_WIN_SCORE + 1, MINIMUM_TB_WIN_SCORE - 1);
+            let ada_depth = (depth_base - (qs_value - pc_beta) / t.info.conf.probcut_ada_div)
+                .clamp(0, depth - 1);
+            // we need a higher beta if we’re searching more shallowly
+            let ada_beta = (pc_beta + (base_depth - ada_depth) * t.info.conf.probcut_ada_margin)
+                .min(MINIMUM_TB_WIN_SCORE - 1);
 
-            if value >= pc_beta && pc_depth > 0 {
-                value = -alpha_beta::<OffPV>(t, pc_depth, -ada_beta, -ada_beta + 1, false);
-
-                // if we beat pc_beta, but not ada_beta, and we reduced,
-                // then we have a chance of still being able to cut via
-                // a full-fat probcut search, so kick one off:
-                if value < ada_beta && pc_beta < ada_beta {
-                    pc_depth = base_pc_depth;
-                    value = -alpha_beta::<OffPV>(t, pc_depth, -pc_beta, -pc_beta + 1, false);
-                } else {
-                    // this persists over to the next loop.
-                    pc_beta = ada_beta;
+            // try to find (value, depth, beta).
+            let cut = 'probe: {
+                if qs_value < pc_beta {
+                    break 'probe None;
                 }
-            }
+                // reduced search: if it’s enough, cut.
+                let value = -alpha_beta::<OffPV>(t, ada_depth, -ada_beta, -ada_beta + 1, false);
+                if value >= ada_beta {
+                    break 'probe Some((value, ada_depth, ada_beta));
+                }
+                // the reduced search was insufficient. if base probcut
+                // looks deeper, try that.
+                if ada_depth == base_depth {
+                    break 'probe None;
+                }
+                let value = -alpha_beta::<OffPV>(t, base_depth, -pc_beta, -pc_beta + 1, false);
+                if value >= pc_beta {
+                    break 'probe Some((value, base_depth, pc_beta));
+                }
+
+                None
+            };
 
             t.board.unmake_move(&mut t.nnue);
 
-            if value >= pc_beta {
+            if let Some((value, cut_depth, cut_beta)) = cut {
                 t.cache.store(
                     key,
                     height,
@@ -1240,7 +1262,7 @@ pub fn alpha_beta<NT: NodeType>(
                     Bound::Lower,
                     // add one, because we're doing
                     // searches in-place in this node.
-                    pc_depth + 1,
+                    cut_depth + 1,
                     t.ss[height].ttpv,
                 );
 
@@ -1251,7 +1273,7 @@ pub fn alpha_beta<NT: NodeType>(
                     return value;
                 }
 
-                return value - (pc_beta - beta);
+                return value - (cut_beta - beta);
             }
         }
 
@@ -1331,6 +1353,13 @@ pub fn alpha_beta<NT: NodeType>(
     while let Some(m) = move_picker.next(t) {
         if excluded == Some(m) {
             continue;
+        }
+
+        if NT::ROOT {
+            let search_moves = t.info.control.search_moves.read().unwrap();
+            if !search_moves.is_empty() && !search_moves.contains(&m) {
+                continue;
+            }
         }
 
         t.cache.prefetch(t.board.key_after(m));
@@ -1413,7 +1442,7 @@ pub fn alpha_beta<NT: NodeType>(
                 + t.info.conf.futility_coeff_0
                 + stat_score / 128;
             if is_quiet
-                && lmr_depth < 6
+                && lmr_depth < 12
                 && static_eval + fp_margin <= alpha
                 && !t.board.gives_check(m)
             {
@@ -1426,15 +1455,12 @@ pub fn alpha_beta<NT: NodeType>(
         if !NT::ROOT
             && (!NT::PV || !cfg!(feature = "datagen"))
             && best_score > -MINIMUM_TB_WIN_SCORE
-            && depth < 10
             && move_picker.stage > Stage::YieldGoodCaptures
-            && t.board.state.threats.all.contains_square(m.to())
-            && t.ss[height - 1].searching.is_some()
             && !static_exchange_eval(
                 &t.board,
                 &t.info.conf,
                 m,
-                see_table[usize::from(is_quiet)]
+                see_table[usize::from(is_quiet && !t.board.gives_check(m))]
                     - stat_score * t.info.conf.see_stat_score_mul / 1024,
             )
         {
@@ -1507,7 +1533,9 @@ pub fn alpha_beta<NT: NodeType>(
                     1024 * (1 + i32::from(do_shallower_search) - i32::from(do_deeper_search));
                 // check if we're actually going to do a deeper search than before
                 // (no point if the re-search is the same as the normal one lol)
-                if new_depth - 1 > reduced_depth {
+                // we also don’t re-search if the score is decisively winning,
+                // as there’s not much of a point.
+                if new_depth - 1 > reduced_depth && score < MINIMUM_TB_WIN_SCORE {
                     score = -alpha_beta::<OffPV>(t, new_depth - 1, -alpha - 1, -alpha, !cut_node);
                 }
                 t.ss[height].reduction = 1024;

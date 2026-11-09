@@ -32,7 +32,7 @@ mod simd {
         chess::{
             board::{Board, movegen::attacks_by_type},
             piece::{Colour, PieceType},
-            types::{File, Square},
+            types::Square,
         },
         nnue::{
             network::{
@@ -44,6 +44,14 @@ mod simd {
         },
     };
 
+    const MAX_REGISTERS: usize = 16;
+    const REGISTERS: usize = min!(ACC_LEN / I16_CHUNK, MAX_REGISTERS);
+    const UNROLL: usize = I16_CHUNK * REGISTERS;
+    const _: () = assert!(
+        ACC_LEN.is_multiple_of(UNROLL),
+        "ACC_LEN must be a multiple of the unroll"
+    );
+
     /// Apply add/subtract PSQT updates in place.
     pub fn vector_update_inplace_psqt(
         input: &mut Align<[i16; ACC_LEN]>,
@@ -51,8 +59,6 @@ mod simd {
         adds: &[PsqtFeatureIndex],
         subs: &[PsqtFeatureIndex],
     ) {
-        const REGISTERS: usize = 16;
-        const UNROLL: usize = I16_CHUNK * REGISTERS;
         // SAFETY: we never hold multiple mutable references, we never mutate immutable memory,
         // we use iterators to ensure that we're staying in-bounds, etc.
         unsafe {
@@ -108,9 +114,6 @@ mod simd {
     ) {
         #[cfg(target_arch = "x86_64")]
         use std::arch::x86_64::{_MM_HINT_T0, _mm_prefetch};
-
-        const REGISTERS: usize = 16;
-        const UNROLL: usize = I16_CHUNK * REGISTERS;
 
         if updates.add.is_empty() && updates.sub.is_empty() && updates.afore == updates.after {
             dst_acc.copy_from_slice(&**src_acc);
@@ -223,11 +226,14 @@ mod simd {
             _mm512_xor_si512,
         };
 
+        use crate::chess::types::File;
         use crate::nnue::network::feature::pawn_compressed_index;
 
         let orient = (if colour == Colour::Black { 56 } else { 0 })
             | (if king.file() >= File::E { 7 } else { 0 });
 
+        // SAFETY: We only have at most 16 pawns on the board,
+        // and they are never on the back-ranks.
         unsafe {
             #[rustfmt::skip]
             let iota = _mm512_set_epi8(
@@ -267,6 +273,7 @@ mod simd {
                 // hi * (hi - 1) / 2 + lo
                 let prod = _mm512_mullo_epi16(hi, _mm512_sub_epi16(hi, _mm512_set1_epi16(1)));
                 let idx = _mm512_add_epi16(_mm512_srli_epi16(prod, 1), lo);
+                #[expect(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
                 let off = _mm512_mullo_epi32(
                     _mm512_cvtepu16_epi32(_mm512_castsi512_si256(idx)),
                     _mm512_set1_epi32(ACC_LEN as i32),
@@ -369,9 +376,6 @@ mod simd {
     ) {
         #[cfg(target_arch = "x86_64")]
         use std::arch::x86_64::{_MM_HINT_T0, _mm_prefetch};
-
-        const REGISTERS: usize = 16;
-        const UNROLL: usize = I16_CHUNK * REGISTERS;
 
         let bbs = &board.state.bbs;
         let occ = bbs.occupied();

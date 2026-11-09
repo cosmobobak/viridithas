@@ -840,6 +840,7 @@ impl Board {
         }
 
         self.state.fifty_move_counter += 1;
+        self.state.plies_from_null = self.state.plies_from_null.saturating_add(1);
 
         if let Some(captured) = captured {
             self.state.fifty_move_counter = 0;
@@ -1037,6 +1038,7 @@ impl Board {
         self.state.keys.zobrist = key;
 
         self.state.ep_square = None;
+        self.state.plies_from_null = 0;
         self.side = self.side.flip();
         self.ply += 1;
         self.height += 1;
@@ -1057,6 +1059,7 @@ impl Board {
 
         let State {
             ep_square,
+            plies_from_null,
             threats,
             keys,
             pinned,
@@ -1064,6 +1067,7 @@ impl Board {
         } = self.history.last().expect("No move to unmake!");
 
         self.state.ep_square = *ep_square;
+        self.state.plies_from_null = *plies_from_null;
         self.state.threats = *threats;
         self.state.pinned = *pinned;
         self.state.keys.zobrist = keys.zobrist;
@@ -1349,8 +1353,11 @@ impl Board {
         self.ply / 2 + 1
     }
 
-    pub fn has_game_cycle(&self, ply: usize) -> bool {
-        let end = std::cmp::min(self.fifty_move_counter() as usize, self.history.len());
+    pub fn upcoming_repetition(&self, ply: usize) -> bool {
+        // positions before the last irreversible move or null move can't be repeated.
+        let end = (self.fifty_move_counter() as usize)
+            .min(self.state.plies_from_null as usize)
+            .min(self.history.len());
 
         if end < 3 {
             return false;
@@ -1361,17 +1368,16 @@ impl Board {
         let occ = self.state.bbs.occupied();
         let original_key = self.state.keys.zobrist;
 
-        let mut other = !(original_key ^ old_key(1));
+        let mut other = original_key ^ old_key(1) ^ SIDE_KEY;
 
         for i in (3..=end).step_by(2) {
             let curr_key = old_key(i);
 
-            other ^= !(curr_key ^ old_key(i - 1));
+            other ^= curr_key ^ old_key(i - 1) ^ SIDE_KEY;
             if other != 0 {
                 continue;
             }
 
-            #[allow(clippy::cast_possible_truncation)]
             let diff = original_key ^ curr_key;
 
             let mut slot = cuckoo::h1(diff);
@@ -1386,18 +1392,26 @@ impl Board {
 
             let mv = cuckoo::MOVES[slot].unwrap();
 
-            if (occ & RAY_BETWEEN[mv.from()][mv.to()]) == SquareSet::EMPTY {
-                // repetition is after root, done:
-                if ply > i {
-                    return true;
-                }
+            if (occ & RAY_BETWEEN[mv.from()][mv.to()]) != SquareSet::EMPTY {
+                continue;
+            }
 
-                let mut piece = self.state.mailbox[mv.from()];
-                if piece.is_none() {
-                    piece = self.state.mailbox[mv.to()];
-                }
+            // it must be our piece!
+            debug_assert_eq!(
+                self.state.mailbox[mv.from()]
+                    .or_else(|| self.state.mailbox[mv.to()])
+                    .map(Piece::colour),
+                Some(self.side)
+            );
 
-                return piece.unwrap().colour() == self.side;
+            // in-tree twofold
+            if i <= ply {
+                return true;
+            }
+
+            // threefold
+            if (i + 2..=end).step_by(2).any(|j| old_key(j) == curr_key) {
+                return true;
             }
         }
 
@@ -1855,5 +1869,74 @@ mod tests {
         assert!(board.is_legal(castle_move));
 
         board.make_move_simple(castle_move);
+    }
+
+    #[test]
+    fn upcoming_repetition_simple() {
+        let mut board = Board::from_fen("4k3/8/8/8/8/8/8/R3K3 w - - 0 1").unwrap();
+        for (from, to) in [
+            (Square::A1, Square::A3),
+            (Square::E8, Square::D8),
+            (Square::A3, Square::A2),
+            (Square::D8, Square::E7),
+            (Square::A2, Square::A1),
+        ] {
+            board.make_move_simple(Move::new(from, to));
+        }
+        // rook is back on a1 and we could repeat with e7e8
+        assert!(board.upcoming_repetition(5));
+        assert!(!board.upcoming_repetition(4));
+    }
+
+    #[test]
+    fn upcoming_repetition_threefold() {
+        // 1. Nf3 Nc6 2. Ng1: black can play Nb8.
+        let mut board = Board::startpos();
+        for (from, to) in [
+            (Square::G1, Square::F3),
+            (Square::B8, Square::C6),
+            (Square::F3, Square::G1),
+        ] {
+            board.make_move_simple(Move::new(from, to));
+        }
+        // If we include the root in the tree window,
+        // Nb8 gets us a valid twofold.
+        assert!(board.upcoming_repetition(3));
+        // If we don’t, then it’s not valid, as out-of-tree
+        // repetitions must be threefolds.
+        assert!(!board.upcoming_repetition(2));
+
+        // Shuffle some more, s.t. the move *would* be
+        // a threefold:
+        for (from, to) in [
+            (Square::C6, Square::B8),
+            (Square::G1, Square::F3),
+            (Square::B8, Square::C6),
+            (Square::F3, Square::G1),
+        ] {
+            board.make_move_simple(Move::new(from, to));
+        }
+        // yay
+        assert!(board.upcoming_repetition(2));
+    }
+
+    #[test]
+    fn upcoming_repetition_nullmoves() {
+        let mut board = Board::from_fen("4k3/8/8/8/8/8/8/R3K3 w - - 0 1").unwrap();
+        board.make_move_simple(Move::new(Square::A1, Square::A3));
+        board.make_nullmove();
+        board.make_move_simple(Move::new(Square::A3, Square::A2));
+        board.make_move_simple(Move::new(Square::E8, Square::D8));
+        board.make_move_simple(Move::new(Square::A2, Square::A1));
+        // We shouldn’t be able to repeat across nullmoves.
+        // (or, at least, SF doesn’t, and we here in the viri
+        //  project think they probably don’t have completely
+        //  terrible judgement, so, there)
+        assert!(!board.upcoming_repetition(100));
+        for _ in 0..3 {
+            board.unmake_move_base();
+        }
+        board.unmake_nullmove();
+        assert_eq!(board.state.plies_from_null, 1);
     }
 }
