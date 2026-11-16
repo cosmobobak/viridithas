@@ -75,10 +75,6 @@ impl<'a> BatchedAtomicCounter<'a> {
         self.global.load(Ordering::Relaxed) + self.buffer
     }
 
-    pub const fn get_buffer(&self) -> u64 {
-        self.buffer
-    }
-
     pub const fn get_local(&self) -> u64 {
         self.local + self.buffer
     }
