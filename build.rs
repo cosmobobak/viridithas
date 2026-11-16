@@ -24,7 +24,7 @@ fn emit_git_info() {
     println!("cargo:rustc-env=VIRIDITHAS_GIT_DIRTY={}", u8::from(dirty));
 }
 
-const LOCAL_NET_FALLBACK: &str = "/home/cosmo/viridithas/nemmerle-s3-b200.nnue.zst";
+const LOCAL_NET_FALLBACK: &str = "/home/cosmo/viridithas/nemmerle-s4-b200.nnue.zst";
 
 fn prep_net() {
     let net_path = env::var("EVALFILE").unwrap_or_else(|_| "viridithas.nnue.zst".into());
