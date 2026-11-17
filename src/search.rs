@@ -316,11 +316,17 @@ pub fn search_position(
         .stopped
         .store(false, Ordering::Relaxed);
 
+    let score = if best_thread.completed == 0 {
+        0
+    } else {
+        best_thread.score()
+    };
+
     (
         if thread_headers[0].board.turn() == Colour::White {
-            best_thread.score_scratch
+            score
         } else {
-            -best_thread.score_scratch
+            -score
         },
         Some(best_move),
     )
@@ -478,7 +484,11 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
 }
 
 fn dyn_max_depth(t: &ThreadData<'_>) -> usize {
-    t.info.clock.limits.depth().unwrap_or(MAX_DEPTH - 1)
+    t.info
+        .clock
+        .limits
+        .depth()
+        .map_or(MAX_DEPTH - 1, |d| d.min(MAX_DEPTH - 1))
 }
 
 /// Give a legal default move in the case where we don't have enough time to search.
@@ -712,6 +722,10 @@ pub fn quiescence<NT: NodeType>(t: &mut ThreadData, mut alpha: i32, beta: i32) -
         return mated_in(height);
     }
 
+    if t.info.stopped() {
+        return 0;
+    }
+
     if !is_decisive(best_score) && best_score > beta {
         best_score = i32::midpoint(best_score, beta);
     }
@@ -895,7 +909,7 @@ pub fn alpha_beta<NT: NodeType>(
         let tb_value = match wdl {
             WDL::Win => tb_win_in(height),
             WDL::Loss => tb_loss_in(height),
-            WDL::Draw => draw_score(t, t.info.nodes.get_buffer(), t.board.turn()),
+            WDL::Draw => draw_score(t, t.info.nodes.get_local(), t.board.turn()),
         };
 
         let tb_bound = match wdl {
@@ -1251,6 +1265,10 @@ pub fn alpha_beta<NT: NodeType>(
             };
 
             t.board.unmake_move(&mut t.nnue);
+
+            if t.info.stopped() {
+                return 0;
+            }
 
             if let Some((value, cut_depth, cut_beta)) = cut {
                 t.cache.store(
