@@ -377,32 +377,35 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
             }
 
             if t.score_scratch <= alpha {
+                // search failed low, so we might have to
+                // revert a fail-high pv update
+                t.revert_best_line();
+
                 if ThTy::MAIN_THREAD {
                     readout_info(t, &t.info, Bound::Upper, t.info.nodes.get_global(), false);
                     t.info
                         .clock
                         .report_aspiration_fail(t.root_depth, Bound::Upper, &t.info.conf);
                 }
+
                 beta = i32::midpoint(alpha, beta);
                 alpha = (t.score_scratch - delta).max(-INFINITY);
+                // on a fail-low, we return to full depth
                 reduction = 0;
-                // search failed low, so we might have to
-                // revert a fail-high pv update
-                t.revert_best_line();
             } else if t.score_scratch >= beta {
+                // search failed high, so we have a new PV
                 t.update_best_line();
+
                 if ThTy::MAIN_THREAD {
                     readout_info(t, &t.info, Bound::Lower, t.info.nodes.get_global(), false);
                     t.info
                         .clock
                         .report_aspiration_fail(t.root_depth, Bound::Lower, &t.info.conf);
                 }
+
                 beta = (t.score_scratch + delta).min(INFINITY);
+                // on a fail high, we do the next search with reduced depth.
                 reduction += 1;
-                // decrement depth:
-                if !is_decisive(t.score_scratch) {
-                    t.root_depth = (t.root_depth - 1).max(min_depth);
-                }
             } else {
                 t.update_best_line();
                 break;
