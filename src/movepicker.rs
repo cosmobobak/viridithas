@@ -264,7 +264,7 @@ impl MovePicker {
         let height = board.height();
 
         let cont_blocks =
-            [1, 2].map(|i| (height > i).then(|| &histories.continuation[ss[height - i].ch_idx]));
+            [1, 2].map(|i| (height >= i).then(|| &histories.continuation[ss[height - i].ch_idx]));
 
         let threats = board.state.threats.all;
         #[expect(clippy::cast_possible_truncation)]
