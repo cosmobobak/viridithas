@@ -218,12 +218,12 @@ impl ThreadData<'_> {
         self.minor_corrhist.update(us, keys.minor, bonus);
         self.major_corrhist.update(us, keys.major, bonus);
 
-        if height > 2 {
+        if height >= 2 {
             let index = cont_corrhist_index(&self.ss, height, 2);
             self.cont_corrhist.update(us, index, bonus);
         }
 
-        if height > 4 {
+        if height >= 4 {
             let index = cont_corrhist_index(&self.ss, height, 4);
             self.cont_corrhist.update(us, index, bonus);
         }
@@ -245,14 +245,14 @@ impl ThreadData<'_> {
         let minor = self.minor_corrhist.get(us, keys.minor);
         let major = self.major_corrhist.get(us, keys.major);
 
-        let cont12 = if height > 2 {
+        let cont12 = if height >= 2 {
             self.cont_corrhist
                 .get(us, cont_corrhist_index(&self.ss, height, 2))
         } else {
             0
         };
 
-        let cont14 = if height > 4 {
+        let cont14 = if height >= 4 {
             self.cont_corrhist
                 .get(us, cont_corrhist_index(&self.ss, height, 4))
         } else {
