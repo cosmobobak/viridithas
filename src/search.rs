@@ -1842,7 +1842,7 @@ pub fn static_exchange_eval(board: &Board, conf: &Config, m: Move, threshold: i3
     // occupied starts with the position after the move `m` is made.
     let mut occupied = (bbs.occupied() ^ from.as_set()) | to.as_set();
     if m.is_ep() {
-        occupied ^= board.ep_sq().unwrap().as_set();
+        occupied ^= Square::from_rank_file(from.rank(), to.file()).as_set();
     }
 
     // after the move, it's the opponent's turn.
