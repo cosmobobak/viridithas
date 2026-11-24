@@ -86,7 +86,6 @@ const DO_SHALLOWER_MARGIN: i32 = 16;
 const HISTORY_PRUNING_MARGIN: i32 = -3186;
 const QS_FUTILITY: i32 = 350;
 const SEE_STAT_SCORE_MUL: i32 = 25;
-const LMR_REFUTATION_MUL: i32 = 775;
 const LMR_NON_PV_MUL: i32 = 987;
 const LMR_TTPV_MUL: i32 = 1289;
 const LMR_TTPV_FAIL_LOW_MUL: i32 = 1136;
@@ -498,7 +497,7 @@ fn default_move(t: &ThreadData) -> Move {
         .probe_move(t.board.state.keys.zobrist)
         .and_then(|e| e.0);
 
-    let mut mp = MovePicker::new(tt_move, t.killer_move_table[t.board.height()], 0);
+    let mut mp = MovePicker::new(tt_move, 0);
 
     let sm = t.info.control.search_moves.read().unwrap();
 
@@ -645,11 +644,7 @@ pub fn quiescence<NT: NodeType>(t: &mut ThreadData, mut alpha: i32, beta: i32) -
     let mut best_score = stand_pat;
 
     let mut moves_made = 0;
-    let mut move_picker = MovePicker::new(
-        cache_hit.and_then(|e| e.mov),
-        None,
-        t.info.conf.qs_see_bound,
-    );
+    let mut move_picker = MovePicker::new(cache_hit.and_then(|e| e.mov), t.info.conf.qs_see_bound);
     move_picker.skip_quiets = !in_check;
 
     let futility = stand_pat + t.info.conf.qs_futility;
@@ -1061,9 +1056,6 @@ pub fn alpha_beta<NT: NodeType>(
         t.ss[height - 1].dextensions
     };
 
-    // clear out the next killer move.
-    t.killer_move_table[height + 1] = None;
-
     let tt_move = cached.and_then(|e| e.mov);
     let tt_capture = tt_move.filter(|m| t.board.is_tactical(*m));
 
@@ -1210,7 +1202,7 @@ pub fn alpha_beta<NT: NodeType>(
         // base reduced probcut depth
         let depth_base = depth - 3 - (static_eval - beta) / t.info.conf.probcut_eval_div;
         let see_pivot = (pc_beta - static_eval) * t.info.conf.probcut_see_scale / 256;
-        let mut move_picker = MovePicker::new(tt_capture, None, see_pivot);
+        let mut move_picker = MovePicker::new(tt_capture, see_pivot);
         move_picker.skip_quiets = true;
         while let Some(m) = move_picker.next(t) {
             t.cache.prefetch(t.board.key_after(m));
@@ -1307,8 +1299,7 @@ pub fn alpha_beta<NT: NodeType>(
     // number of quiet moves to try before we start pruning
     let lmp_threshold = t.info.lm_table.lmp_movecount(depth, improving);
 
-    let killer = t.killer_move_table[height].filter(|m| !t.board.is_tactical(*m));
-    let mut move_picker = MovePicker::new(tt_move, killer, t.info.conf.main_see_bound);
+    let mut move_picker = MovePicker::new(tt_move, t.info.conf.main_see_bound);
 
     let mut quiets_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
     let mut tacticals_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
@@ -1415,8 +1406,6 @@ pub fn alpha_beta<NT: NodeType>(
         lmr_reduction += i32::from(cut_node) * t.info.conf.lmr_cut_node_mul;
         // extend/reduce using the stat_score of the move
         lmr_reduction -= stat_score * 1024 / t.info.conf.history_lmr_divisor;
-        // reduce refutation moves less
-        lmr_reduction -= i32::from(Some(m) == killer) * t.info.conf.lmr_refutation_mul;
         // reduce more if not improving
         lmr_reduction += i32::from(!improving) * t.info.conf.lmr_non_improving_mul;
         // reduce more if the move from the transposition table is tactical
@@ -1446,7 +1435,6 @@ pub fn alpha_beta<NT: NodeType>(
             // history pruning
             // if this move's history score is too low, we start skipping moves.
             if is_quiet
-                && (Some(m) != killer)
                 && lmr_depth < 7
                 && stat_score < t.info.conf.history_pruning_margin * (depth - 1)
             {
@@ -1647,8 +1635,6 @@ pub fn alpha_beta<NT: NodeType>(
         // so we update history metrics.
         let best_move = best_move.expect("if alpha was raised, we should have a best move.");
         if !t.board.is_tactical(best_move) {
-            t.insert_killer(best_move);
-
             // this heuristic is on the whole unmotivated, beyond mere empiricism.
             // perhaps it's really important to know which quiet moves are good in "bad" positions?
             let low = i32::from(!in_check && static_eval <= best_score);

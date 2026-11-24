@@ -28,7 +28,6 @@ pub enum Stage {
     TTMove,
     GenerateCaptures,
     YieldGoodCaptures,
-    YieldKiller,
     GenerateQuiets,
     YieldRemaining,
     Done,
@@ -40,7 +39,6 @@ pub struct MovePicker {
     index: usize,
     pub stage: Stage,
     tt_move: Option<Move>,
-    killer: Option<Move>,
     pub skip_quiets: bool,
     see_threshold: i32,
 }
@@ -86,7 +84,7 @@ fn fast_select(entries: &[Cell<MoveListEntry>]) -> Option<&Cell<MoveListEntry>> 
             // into the u32 range, which makes it safe to use
             // as the top bits of our comparison target.
             // N.B. we XOR by 1 << 63 instead of subtracting
-            // i32::MIN, which does the same thing.
+            //      i32::MIN, which does the same thing.
             let keys = simd::or_u64(simd::xor_u64(simd::shl_u64::<32>(loaded), sign), index);
             // max the valid lanes
             best = simd::mask_max_u64(best, mask, best, keys);
@@ -118,13 +116,12 @@ fn fast_select(entries: &[Cell<MoveListEntry>]) -> Option<&Cell<MoveListEntry>> 
 }
 
 impl MovePicker {
-    pub fn new(tt_move: Option<Move>, killer: Option<Move>, see_threshold: i32) -> Self {
+    pub fn new(tt_move: Option<Move>, see_threshold: i32) -> Self {
         Self {
             moves: MoveList::new(),
             index: 0,
             stage: Stage::TTMove,
             tt_move,
-            killer,
             skip_quiets: false,
             see_threshold,
         }
@@ -170,19 +167,8 @@ impl MovePicker {
             self.stage = if self.skip_quiets {
                 Stage::Done
             } else {
-                Stage::YieldKiller
+                Stage::GenerateQuiets
             };
-        }
-        if self.stage == Stage::YieldKiller {
-            self.stage = Stage::GenerateQuiets;
-            if !self.skip_quiets
-                && self.killer != self.tt_move
-                && let Some(killer) = self.killer
-                && t.board.is_pseudo_legal(killer)
-            {
-                debug_assert!(!t.board.is_tactical(killer));
-                return Some(killer);
-            }
         }
         if self.stage == Stage::GenerateQuiets {
             self.stage = Stage::YieldRemaining;
@@ -245,7 +231,7 @@ impl MovePicker {
                 // and we're skipping quiet moves, so we're done.
                 return None;
             }
-            if !(Some(best.mov) == self.tt_move || Some(best.mov) == self.killer) {
+            if Some(best.mov) != self.tt_move {
                 return Some(best);
             }
         }

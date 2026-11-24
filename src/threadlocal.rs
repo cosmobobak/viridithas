@@ -10,7 +10,7 @@ use arrayvec::ArrayVec;
 use vec1::Vec1;
 
 use crate::{
-    chess::{board::Board, chessmove::Move, piece::Colour},
+    chess::{board::Board, piece::Colour},
     historytable::{
         CaptureHistoryTable, CorrectionHistoryTable, DoubleHistoryTable, FromToTable,
         HashHistoryTable, PieceToTable, ThreatsHistoryTable,
@@ -62,7 +62,6 @@ pub struct ThreadData<'a> {
     pub nnue_params: &'static NNUEParams,
 
     pub histories: Histories,
-    pub killer_move_table: [Option<Move>; MAX_DEPTH + 1],
     pub pawn_corrhist: Box<CorrectionHistoryTable>,
     pub nonpawn_corrhist: [Box<CorrectionHistoryTable>; 2],
     pub major_corrhist: Box<CorrectionHistoryTable>,
@@ -117,7 +116,6 @@ impl<'a> ThreadData<'a> {
             nnue: nnue::network::NNUEState::new(&board, nnue_params),
             nnue_params,
             histories: Histories::new(),
-            killer_move_table: [None; MAX_DEPTH + 1],
             pawn_corrhist: CorrectionHistoryTable::boxed(),
             nonpawn_corrhist: [
                 CorrectionHistoryTable::boxed(),
@@ -190,14 +188,12 @@ impl<'a> ThreadData<'a> {
         self.major_corrhist.clear();
         self.minor_corrhist.clear();
         self.cont_corrhist.clear();
-        self.killer_move_table.fill(None);
         self.root_depth = 0;
         self.completed = 0;
         self.pvs.fill_with(PVariation::new);
     }
 
     pub fn set_up_for_search(&mut self) {
-        self.killer_move_table.fill(None);
         self.root_depth = 0;
         self.completed = 0;
         self.pvs.fill_with(PVariation::new);

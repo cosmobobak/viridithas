@@ -184,13 +184,6 @@ impl Histories {
 }
 
 impl ThreadData<'_> {
-    /// Add a killer move.
-    pub fn insert_killer(&mut self, m: Move) {
-        debug_assert!(self.board.height() < MAX_DEPTH);
-        let idx = self.board.height();
-        self.killer_move_table[idx] = Some(m);
-    }
-
     /// Update the correction history for a pawn pattern.
     pub fn update_correction_history(&mut self, depth: i32, tt_complexity: i32, diff: i32) {
         #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]

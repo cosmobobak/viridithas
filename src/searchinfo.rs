@@ -234,9 +234,6 @@ impl<'a> SearchInfo<'a> {
             .collect::<Vec<_>>();
         println!("failhigh ttmove        {:5.2}%", type_percentages[0]);
         println!("failhigh good tactical {:5.2}%", type_percentages[1]);
-        println!("failhigh killer1       {:5.2}%", type_percentages[2]);
-        println!("failhigh killer2       {:5.2}%", type_percentages[3]);
-        println!("failhigh countermove   {:5.2}%", type_percentages[4]);
         println!("failhigh good quiet    {:5.2}%", type_percentages[5]);
         println!("failhigh bad quiet     {:5.2}%", type_percentages[6]);
     }
