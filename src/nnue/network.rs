@@ -15,6 +15,7 @@ use std::{
 use anyhow::Context;
 use arrayvec::ArrayVec;
 use memmap2::Mmap;
+use ruzstd::decoding::StreamingDecoder;
 
 use crate::{
     chess::{
@@ -791,11 +792,6 @@ impl NNUEParams {
 
     #[allow(clippy::too_many_lines)]
     pub fn decompress_and_alloc() -> anyhow::Result<&'static Self> {
-        #[cfg(not(feature = "zstd"))]
-        type ZstdDecoder<R, D> = ruzstd::decoding::StreamingDecoder<R, D>;
-        #[cfg(feature = "zstd")]
-        type ZstdDecoder<'a, R> = zstd::stream::Decoder<'a, R>;
-
         // this function is not particularly happy about running in parallel.
         static LOCK: Mutex<()> = Mutex::new(());
         // additionally, we'd quite like to cache the results of this function.
@@ -893,7 +889,7 @@ impl NNUEParams {
         };
         let expected_bytes = mem.len() as u64;
         let decoding_start = std::time::Instant::now();
-        let mut decoder = ZstdDecoder::new(EMBEDDED_NNUE)
+        let mut decoder = StreamingDecoder::new(EMBEDDED_NNUE)
             .with_context(|| "Failed to construct zstd decoder for NNUE weights.")?;
         let bytes_written = std::io::copy(&mut decoder, &mut mem)
             .with_context(|| "Failed to decompress NNUE weights.")?;

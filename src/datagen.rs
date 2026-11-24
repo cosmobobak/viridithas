@@ -26,7 +26,7 @@ use std::{
 use anyhow::{Context, anyhow, bail};
 use bulletformat::ChessBoard;
 use dataformat::Filter;
-use rand::{Rng, rngs::ThreadRng, seq::IndexedRandom};
+use rand::{RngExt, rngs::ThreadRng, seq::IndexedRandom};
 
 use crate::{
     chess::{
@@ -214,7 +214,7 @@ impl StartposGenerator for ClassicalStartposGenerator {
 
 impl StartposGenerator for DFRCStartposGenerator {
     fn generate(&mut self, board: &mut Board, conf: &Config) -> ControlFlow<(), ()> {
-        board.set_dfrc_idx(rand::Rng::random_range(&mut self.rng, 0..960 * 960));
+        board.set_dfrc_idx(self.rng.random_range(0..960 * 960));
 
         for _ in 0..RANDOM_MOVES_ROOT + usize::from(self.rng.random_bool(0.5)) {
             let res = make_random_move(&mut self.rng, board, conf, RANDOM_SEE_THRESHOLD);

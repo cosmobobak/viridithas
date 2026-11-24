@@ -1859,12 +1859,12 @@ mod tests {
         let illegal =
             Board::from_fen("rnbq1bnr/p1ppkppp/8/4p3/1pP5/BP3PP1/P2PP2P/RN1QKBNR b KQ c3 0 5")
                 .unwrap();
-        assert!(illegal.ep_sq().is_none());
+        assert!(illegal.state.ep_square.is_none());
 
         let legal =
             Board::from_fen("r1bqkbnr/pppp1p1p/2n5/4pPp1/4P3/8/PPPP2PP/RNBQKBNR w KQkq g6 0 4")
                 .unwrap();
-        assert_eq!(legal.ep_sq(), Some(Square::G6));
+        assert_eq!(legal.state.ep_square, Some(Square::G6));
     }
 
     #[test]
