@@ -87,6 +87,7 @@ impl Board {
         out
     }
 
+    #[cfg(feature = "datagen")]
     pub const fn ep_sq(&self) -> Option<Square> {
         self.state.ep_square
     }
@@ -1282,8 +1283,25 @@ impl Board {
     }
 
     /// Should we consider the current position a draw?
+    ///
+    /// Notably, this returns false for stalemate positions.
+    /// It is left up to the interpretation of the reader as
+    /// to whether this is a deliberately inflammatory take,
+    /// or merely due to technical circumstance.
     pub fn is_draw(&self) -> bool {
-        (self.state.fifty_move_counter >= 100 || self.is_repetition()) && self.height != 0
+        if self.height == 0 {
+            return false;
+        }
+        if self.state.fifty_move_counter >= 100 {
+            if !self.in_check() {
+                return true;
+            }
+            // make sure we aren’t being mated:
+            let mut moves = MoveList::new();
+            self.generate_moves(&mut moves);
+            return moves.iter_moves().any(|&m| self.is_legal(m));
+        }
+        self.is_repetition()
     }
 
     pub fn pv_san(&self, pv: &PVariation) -> Result<String, fmt::Error> {
@@ -1869,6 +1887,21 @@ mod tests {
         assert!(board.is_legal(castle_move));
 
         board.make_move_simple(castle_move);
+    }
+
+    #[test]
+    fn fifty_move_mate() {
+        // Qg7#
+        let mut board = Board::from_fen("7k/5Q2/6K1/8/8/8/8/8 w - - 99 80").unwrap();
+        board.make_move_simple(Move::new(Square::F7, Square::G7));
+        assert_eq!(board.fifty_move_counter(), 100);
+        assert!(!board.is_draw());
+
+        let mut board = Board::from_fen("7k/5Q2/8/6K1/8/8/8/8 w - - 99 80").unwrap();
+        board.make_move_simple(Move::new(Square::F7, Square::F8));
+        assert_eq!(board.fifty_move_counter(), 100);
+        assert!(board.in_check());
+        assert!(board.is_draw());
     }
 
     #[test]
