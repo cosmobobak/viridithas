@@ -87,7 +87,7 @@ impl Board {
         out
     }
 
-    #[cfg(feature = "datagen")]
+    #[cfg(any(feature = "datagen", feature = "syzygy"))]
     pub const fn ep_sq(&self) -> Option<Square> {
         self.state.ep_square
     }
