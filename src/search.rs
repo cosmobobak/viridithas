@@ -1009,6 +1009,16 @@ pub fn alpha_beta<NT: NodeType>(
         eval = static_eval;
     }
 
+    // if the static evaluation indicates
+    // that null-moving was a good idea,
+    // cut immediately.
+    if !NT::ROOT {
+        let parent = &t.ss[height - 1];
+        if parent.searching.is_none() && (parent.eval + eval) < -16 {
+            return beta;
+        }
+    }
+
     t.ss[height].static_eval = static_eval;
     t.ss[height].eval = eval;
 
