@@ -61,7 +61,7 @@ impl Debug for Board {
             .field("height", &self.height)
             .field("chess960", &self.rules)
             .field("ply", &self.ply)
-            .field("key", &self.state.keys.zobrist)
+            .field("keys", &self.state.keys)
             .field("threats", &self.state.threats)
             .field("castle_perm", &self.state.castle_perm)
             .finish_non_exhaustive()
@@ -1623,6 +1623,31 @@ mod tests {
         chessmove::{Move, MoveFlags},
         types::Square,
     };
+
+    #[test]
+    fn fix_pawn_keys() {
+        // we make the pawn keys a publick interface,
+        // as bullet needs to be able to train tables
+        // indexed by pawn hash.
+
+        // this test exists to prevent cosmo from screwing up.
+        let fen2hash = |fen: &str| Board::from_fen(fen).unwrap().state.keys.pawn;
+
+        assert_eq!(
+            fen2hash("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"),
+            0x881a_32c1_2a57_22d5
+        );
+
+        assert_eq!(
+            fen2hash("r1bq1b1r/ppp3pp/2n1k3/3np3/2B5/5Q2/PPPP1PPP/RNB1K2R w KQ - 2 8"),
+            0x5307_ae74_49a2_f7ba
+        );
+
+        assert_eq!(
+            fen2hash("2k5/8/p1P5/P2K4/8/8/8/8 w - - 0 1"),
+            0xd76b_9f5e_de3b_5316
+        );
+    }
 
     #[test]
     fn game_end_states() {

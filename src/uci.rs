@@ -187,7 +187,7 @@ pub fn main_loop() -> Result<(), UciError> {
             }
             "d" | "debug" => {
                 let t = thread_data.first_mut();
-                println!("{:?}", t.board);
+                println!("{:#?}", t.board);
                 Ok(())
             }
             "license" => {
