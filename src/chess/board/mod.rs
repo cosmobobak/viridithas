@@ -1268,8 +1268,8 @@ impl Board {
             .step_by(2)
         {
             if u.keys.zobrist == self.state.keys.zobrist {
-                // in-tree, can twofold:
-                if dist_back < self.height {
+                // hypothetical, can twofold
+                if dist_back + 1 < self.height {
                     return true;
                 }
                 // partially materialised, proper threefold:
@@ -1422,8 +1422,8 @@ impl Board {
                 Some(self.side)
             );
 
-            // in-tree twofold
-            if i <= ply {
+            // twofold for unmaterialised positions
+            if i < ply {
                 return true;
             }
 
@@ -1916,8 +1916,11 @@ mod tests {
         ] {
             board.make_move_simple(Move::new(from, to));
         }
+
         // rook is back on a1 and we could repeat with e7e8
-        assert!(board.upcoming_repetition(5));
+        assert!(board.upcoming_repetition(6));
+
+        assert!(!board.upcoming_repetition(5));
         assert!(!board.upcoming_repetition(4));
     }
 
@@ -1934,9 +1937,10 @@ mod tests {
         }
         // If we include the root in the tree window,
         // Nb8 gets us a valid twofold.
-        assert!(board.upcoming_repetition(3));
+        assert!(board.upcoming_repetition(4));
         // If we don’t, then it’s not valid, as out-of-tree
         // repetitions must be threefolds.
+        assert!(!board.upcoming_repetition(3));
         assert!(!board.upcoming_repetition(2));
 
         // Shuffle some more, s.t. the move *would* be
